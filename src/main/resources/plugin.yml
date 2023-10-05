@@ -1,0 +1,24 @@
+name: QuantumPlugin
+version: '${project.version}'
+main: vip.qoriginal.quantumplugin.QuantumPlugin
+api-version: 1.19
+prefix: QuantumPlugin
+authors: [ MineCreeper2086 ]
+description: Plugin for Quantum Original
+website: https://minecreeper.top/
+commands:
+  suicide:
+    description: Kill oneself
+    usage: /<command>
+  shutup:
+    description: Tell the server to shut up
+    usage: /<command> [enable|disable|query]
+  myloc:
+    description: Share your location to everyone
+    usage: /<command>
+  highlight:
+    description: Highlight a location with particle
+    usage: /<command> [x] [y] [z]
+  showitem:
+    description: Show the item on hand
+    usage: /<command>
