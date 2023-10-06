@@ -16,7 +16,7 @@ public class JoinLeaveListener implements Listener {
         event.getPlayer().sendMessage(Component.text("请稍等，我们需要对您的身份进行验证"));
         BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://127.0.0.1:8080/qo/download/registry?name="+event.getPlayer().getName()),BindResponse.class);
         if(relationship.code==1) {
-            event.getPlayer().kick(Component.text("验证失败，请在QQ群下载QOapp并且进入 ").append(Component.text("bind界面绑定你的游戏名:"+event.getPlayer().getName()).decorate(TextDecoration.BOLD)).append(Component.text(" 并重试！")));
+            event.getPlayer().kick(Component.text("验证失败，请在QQ群:870346322下载QCommunity并且进入 ").append(Component.text("bind界面绑定你的游戏名:"+event.getPlayer().getName()).decorate(TextDecoration.BOLD)).append(Component.text(" 并重试！")));
         } else if (event.getPlayer().getName().contentEquals("MineCreeper2086")){
             event.getPlayer().kick(Component.text("验证失败，原因：您的账户已经被冻结！您的游戏名：MineCreeper2086 \n").append(Component.text(" 原因：请私聊1294915648解冻账户。")));
         } else if(relationship.frozen) {

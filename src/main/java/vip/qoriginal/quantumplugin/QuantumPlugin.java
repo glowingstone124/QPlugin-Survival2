@@ -18,6 +18,7 @@ import org.bukkit.event.block.BlockDamageAbortEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffectType;
+import org.checkerframework.checker.units.qual.C;
 import org.jetbrains.annotations.NotNull;
 import vip.qoriginal.quantumplugin.industry.BoneMealFlowery;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
@@ -44,6 +45,7 @@ public final class QuantumPlugin extends JavaPlugin {
 
         Timer timer = new Timer();
         timer.schedule(new StatusUpload(), 1000, 3000);
+        timer.schedule(new ChatSync(), 1000, 3000);
         Block b = Bukkit.getWorld("world").getBlockAt(-1782,68,720);
         if(b.getChunk().load()) {
             if(b.getType() == Material.LEVER) {
