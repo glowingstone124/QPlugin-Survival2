@@ -21,7 +21,7 @@ public class ChatSync extends TimerTask implements Listener{
     public void run() {
         try {
             String result = Request.sendGetRequest("http://localhost:8080/qo/creative/msgdownload");
-            Bukkit.broadcastMessage(result);
+            if(result != null&& !result.equals("")) Bukkit.broadcastMessage(result);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
