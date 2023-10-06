@@ -42,7 +42,7 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new BoneMealFlowery(),this);
         getServer().getPluginManager().registerEvents(new StoneFarm(),this);
         getServer().getPluginManager().registerEvents(new NamePrefix(),this);
-
+        getServer().getPluginManager().registerEvents(new ChatSync(),this);
         Timer timer = new Timer();
         timer.schedule(new StatusUpload(), 1000, 3000);
         timer.schedule(new ChatSync(), 1000, 3000);

@@ -12,7 +12,7 @@ public class NamePrefix implements Listener {
         String newName;
         switch (player.getName()){
             case "MineCreeper2086":
-                newName = "§a[Master§f" +  player.getName();
+                newName = "§a[Master]§f" +  player.getName();
                 break;
             case "glowingstone124":
                 newName = "§a[ADMIN]§f" +  player.getName();
