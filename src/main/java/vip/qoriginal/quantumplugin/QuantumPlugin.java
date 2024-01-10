@@ -45,7 +45,6 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ChatSync(),this);
         Timer timer = new Timer();
         timer.schedule(new StatusUpload(), 1000, 3000);
-        timer.schedule(new ChatSync(), 1000, 3000);
         Block b = Bukkit.getWorld("world").getBlockAt(-1782,68,720);
         if(b.getChunk().load()) {
             if(b.getType() == Material.LEVER) {

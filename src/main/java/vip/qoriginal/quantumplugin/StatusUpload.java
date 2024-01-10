@@ -156,7 +156,7 @@ public class StatusUpload extends TimerTask {
         totalUser = allPlayers.length;
         String data = gson.toJson(playerStats);
         try {
-            Request.sendPostRequest("http://127.0.0.1:8080/qo/upload/stats",data);
+            Request.sendPostRequest("http://127.0.0.1:8080/qo/upload/status",data);
         } catch (Exception e) {
             Bukkit.getLogger().warning("Experienced an exception (on network?) while uploading statistics.\nIf the problem persists, please tell MineCreeper2086 to check if the target host is down.");
         }
