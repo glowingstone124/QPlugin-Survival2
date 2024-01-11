@@ -22,3 +22,6 @@ commands:
   showitem:
     description: Show the item on hand
     usage: /<command>
+  querybind:
+    description: Show one player's information
+    usage: /<command> <player>

@@ -1,30 +1,24 @@
 package vip.qoriginal.quantumplugin;
 
-import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.event.player.PlayerChatEvent;
-import vip.qoriginal.quantumplugin.Request;
 
-import java.util.TimerTask;
-
-public class ChatSync extends TimerTask implements Listener{
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onPlayerChatEvent(AsyncPlayerChatEvent event) throws Exception{
-        StringBuilder sb = new StringBuilder();
-        sb.append("<Survival:").append(event.getPlayer().getName()).append(">").append(event.getMessage());
-        Request.sendPostRequest("http://localhost:8080/qo/survival/msgupload", sb.toString());
+public class ChatSync implements Listener {
+    public ChatSync() {
+        // 可能需要一些初始化操作
     }
 
-    @Override
-    public void run() {
+    @EventHandler
+    public void onPlayerChat(AsyncPlayerChatEvent event) {
         try {
-            String result = Request.sendGetRequest("http://localhost:8080/qo/creative/msgdownload");
-            if(result != null&& !result.equals("")) Bukkit.broadcastMessage(result);
+            String playerName = event.getPlayer().getName();
+            String message = event.getMessage();
+            StringBuilder sb = new StringBuilder();
+            sb.append("<").append(playerName).append(">: ").append(message);
+            Request.sendPostRequest("http://localhost:8080/qo/msglist/upload", sb.toString());
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         }
     }
 }

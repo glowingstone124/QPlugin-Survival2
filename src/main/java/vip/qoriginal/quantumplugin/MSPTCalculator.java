@@ -17,14 +17,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import vip.qoriginal.quantumplugin.industry.BoneMealFlowery;
-import vip.qoriginal.quantumplugin.industry.StoneFarm;
 import vip.qoriginal.quantumplugin.patch.Knowledge;
 
 import java.util.ArrayList;
 import java.util.Calendar;
-
-import static vip.qoriginal.quantumplugin.VillagerCureTimer.zombieVillagers;
 
 public class MSPTCalculator implements Listener {
     /** 最终展现在返回结果的MilliSecond Per Tick值 */
@@ -62,37 +58,6 @@ public class MSPTCalculator implements Listener {
         }
         someExtraWorks();
         //村民治愈进度条更新
-        for(VillagerCureTimer.ZombieVillagerRec zw:zombieVillagers) {
-            if(!zw.entity.isValid()) {
-                zombieVillagers.remove(zw);
-                Bukkit.removeBossBar(new NamespacedKey(Bukkit.getPluginManager().getPlugin("QuantumPlugin"),"zwid"+zw.entity.getUniqueId()));
-            }
-            else if(zw.entity.isConverting()) {
-                if(!zw.converts) {
-                    zw.converts = true;
-                    if(zw.entity.getConversionPlayer().isOnline()) Bukkit.getServer().getPlayer(zw.entity.getConversionPlayer().getUniqueId()).sendMessage(Component.text("本次治愈的所需时间为").append(Component.text(String.format("%.1f",(float)zw.entity.getConversionTime()/20f)).color(TextColor.color(72, 168, 100))).append(Component.text("秒")));
-                    zw.cure_duration = zw.entity.getConversionTime();
-                    Bukkit.createBossBar(new NamespacedKey(Bukkit.getPluginManager().getPlugin("QuantumPlugin"),"zwid"+zw.entity.getUniqueId()),"治疗进度 0%", BarColor.GREEN, BarStyle.SOLID).setProgress(0);
-                    Bukkit.getBossBar(new NamespacedKey(Bukkit.getPluginManager().getPlugin("QuantumPlugin"),"zwid"+zw.entity.getUniqueId())).addPlayer(Bukkit.getServer().getPlayer(zw.entity.getConversionPlayer().getUniqueId()));
-                }
-                zw.entity.customName(Component.text("距离治愈 ").append(Component.text(String.format("%.1f",(float)zw.entity.getConversionTime()/20f)).color(TextColor.color(72, 168, 100))).append(Component.text("秒")));
-                if(zw.entity.getConversionTime()%5==0) {
-                    Bukkit.getBossBar(new NamespacedKey(Bukkit.getPluginManager().getPlugin("QuantumPlugin"),"zwid"+zw.entity.getUniqueId())).setProgress(1f-(float) zw.entity.getConversionTime()/(float) zw.cure_duration);
-                    Bukkit.getBossBar(new NamespacedKey(Bukkit.getPluginManager().getPlugin("QuantumPlugin"),"zwid"+zw.entity.getUniqueId())).setTitle("治疗进度 "+Math.round(100f-(float) zw.entity.getConversionTime()/(float) zw.cure_duration*100)+"%");
-                }
-            }
-        }
-        for(Knowledge.ScheduledStrike strike:Knowledge.strikes) {
-            if(strike.time<System.currentTimeMillis()) {
-                strike.l.getWorld().strikeLightning(strike.l);
-                Knowledge.strikes.remove(strike);
-            }
-        }
-        if(++counter == 10) {
-            BoneMealFlowery.update();
-            StoneFarm.move();
-            counter = 0;
-        }
     }
     /**
      * 监听游戏刻结束
@@ -164,9 +129,6 @@ public class MSPTCalculator implements Listener {
         if(b.getChunk().isLoaded()) {
             if (b.getType() == Material.DARK_OAK_WALL_SIGN) {
                 Sign sign = (Sign) b.getState();
-                sign.line(1,Component.text(String.format("%.2f",BoneMealFlowery.recycle_efficiency+BoneMealFlowery.produce_efficiency) +"/s"));
-                sign.line(2,Component.text("回收 "+String.format("%.2f",BoneMealFlowery.recycle_efficiency) +"/s"));
-                sign.line(3,Component.text("净产出 "+String.format("%.2f",BoneMealFlowery.produce_efficiency) +"/s"));
                 sign.update();
             }
         }

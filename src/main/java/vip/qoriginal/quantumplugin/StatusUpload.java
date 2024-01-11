@@ -55,7 +55,7 @@ public class StatusUpload extends TimerTask {
             }
         }
         try {
-            String msg = Request.sendPostRequest("http://127.0.0.1:8080/qo/upload/status",data);
+            String msg = Request.sendPostRequest("http://qoriginal.vip:8080/qo/upload/status",data);
             Type listType = new TypeToken<ArrayList<MessageQ>>(){}.getType();
             ArrayList<MessageQ> msgs = gson.fromJson(msg, listType);
             if(msgs!=null) for(MessageQ msgq:msgs){
