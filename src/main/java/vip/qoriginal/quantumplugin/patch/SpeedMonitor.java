@@ -46,10 +46,7 @@ public class SpeedMonitor implements Listener {
         }
     }
     private double calculateSpeed(Vehicle vehicle) {
-        double velocityX = vehicle.getVelocity().getX();
-        double velocityY = vehicle.getVelocity().getY();
-        double velocityZ = vehicle.getVelocity().getZ();
-        double speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY + velocityZ * velocityZ);
-        return speed * 3.6 * Bukkit.getServer().getTPS()[0];
+        double speed = vehicle.getVelocity().length();
+        return speed * 3.6 * 20;//TPS
     }
 }
