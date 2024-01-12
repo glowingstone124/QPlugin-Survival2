@@ -21,6 +21,7 @@ import org.checkerframework.checker.units.qual.C;
 import org.jetbrains.annotations.NotNull;
 import vip.qoriginal.quantumplugin.patch.Knowledge;
 import vip.qoriginal.quantumplugin.patch.QueryBind;
+import vip.qoriginal.quantumplugin.patch.SpeedMonitor;
 
 import java.util.List;
 import java.util.Timer;
@@ -36,6 +37,7 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new MSPTCalculator(), this);
         getServer().getPluginManager().registerEvents(new Knowledge(), this);
         getServer().getPluginManager().registerEvents(new ChatSync(), this);
+        getServer().getPluginManager().registerEvents(new SpeedMonitor(), this);
         getServer().getPluginManager().registerEvents(new NamePrefix(), this);
         Timer timer = new Timer();
         timer.schedule(new StatusUpload(), 1000, 3000);
