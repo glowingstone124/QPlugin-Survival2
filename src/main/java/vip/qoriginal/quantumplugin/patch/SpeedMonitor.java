@@ -13,6 +13,8 @@ import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Vector;
+
 
 public class SpeedMonitor implements Listener {
     private final Plugin plugin;
@@ -30,8 +32,7 @@ public class SpeedMonitor implements Listener {
                 @Override
                 public void run() {
                     if (player.isInsideVehicle()) {
-                        Vehicle vehicle = (Vehicle) player.getVehicle();
-                        double speed = calculateSpeed(vehicle);
+                        double speed = calculateSpeed(player.getVelocity());
                         player.sendTitle("", "Speed: " + speed + "KM/H", 0, 20, 0);
                     } else {
                         cancel();
@@ -40,6 +41,12 @@ public class SpeedMonitor implements Listener {
             }.runTaskTimer(plugin, 0, 20);
         }
     }
+
+    private double calculateSpeed(Vector velocity) {
+        double speed = velocity.length();
+        return speed * 3.6 * Bukkit.getServer().getTPS()[0];
+    }
+
     @EventHandler
     public void onVehicleExit(VehicleExitEvent event) {
         Entity entity = event.getExited();
