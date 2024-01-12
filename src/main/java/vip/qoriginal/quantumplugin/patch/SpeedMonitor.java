@@ -48,9 +48,8 @@ public class SpeedMonitor implements Listener {
 
     private double calculateSpeed(Vector velocity) {
         double speed = velocity.length();
-        return speed * 3.6 * Bukkit.getServer().getTPS()[0];
+        return speed * 3.6 * 20;
     }
-
     @EventHandler
     public void onVehicleExit(VehicleExitEvent event) {
         Entity entity = event.getExited();
@@ -58,23 +57,5 @@ public class SpeedMonitor implements Listener {
             Player player = (Player) entity;
             player.resetTitle();
         }
-    }
-    private double calculateSpeed(Vehicle vehicle) {
-        double speed = 0.0;
-        if (vehicle instanceof Boat) {
-            Boat boat = (Boat) vehicle;
-            Location currentLocation = boat.getLocation();
-            Location previousLocation = boat.getMetadata("previousLocation").stream()
-                    .findFirst()
-                    .map(metadataValue -> (Location) metadataValue.value())
-                    .orElse(currentLocation);
-            double distance = currentLocation.distance(previousLocation);
-            speed = distance / 20.0;
-            boat.setMetadata("previousLocation", new FixedMetadataValue(plugin, currentLocation));
-            return speed;
-        } else {
-            speed = vehicle.getVelocity().length();
-        }
-        return speed * 3.6 * 20;
     }
 }
