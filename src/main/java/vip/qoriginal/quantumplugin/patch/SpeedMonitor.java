@@ -15,6 +15,8 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
+import java.text.DecimalFormat;
+
 
 public class SpeedMonitor implements Listener {
     private final Plugin plugin;
@@ -33,7 +35,9 @@ public class SpeedMonitor implements Listener {
                 public void run() {
                     if (player.isInsideVehicle()) {
                         double speed = calculateSpeed(player.getVelocity());
-                        player.sendTitle("", "Speed: " + speed + "KM/H", 0, 20, 0);
+                        DecimalFormat decimalFormat = new DecimalFormat("#.#");
+                        String formattedSpeed = decimalFormat.format(speed);
+                        player.sendTitle("", "Speed: " + formattedSpeed + "KM/H", 0, 20, 0);
                     } else {
                         cancel();
                     }
