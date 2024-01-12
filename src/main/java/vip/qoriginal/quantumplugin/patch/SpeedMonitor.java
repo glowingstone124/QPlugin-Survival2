@@ -12,6 +12,11 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
 public class SpeedMonitor implements Listener {
+    private final Plugin plugin;
+
+    public SpeedMonitor(Plugin plugin) {
+        this.plugin = plugin;
+    }
     @EventHandler
     public void onVehicleEnter(VehicleEnterEvent event) {
         Entity entity = event.getEntered();
@@ -29,7 +34,7 @@ public class SpeedMonitor implements Listener {
                         cancel();
                     }
                 }
-            }.runTaskTimer((Plugin) this, 0, 20);
+            }.runTaskTimer(plugin, 0, 20);
         }
     }
     @EventHandler

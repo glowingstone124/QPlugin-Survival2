@@ -37,7 +37,7 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new MSPTCalculator(), this);
         getServer().getPluginManager().registerEvents(new Knowledge(), this);
         getServer().getPluginManager().registerEvents(new ChatSync(), this);
-        getServer().getPluginManager().registerEvents(new SpeedMonitor(), this);
+        getServer().getPluginManager().registerEvents(new SpeedMonitor(this), this);
         getServer().getPluginManager().registerEvents(new NamePrefix(), this);
         Timer timer = new Timer();
         timer.schedule(new StatusUpload(), 1000, 3000);
