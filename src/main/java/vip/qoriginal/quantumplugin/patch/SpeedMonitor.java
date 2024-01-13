@@ -42,7 +42,7 @@ public class SpeedMonitor implements Listener {
                         cancel();
                     }
                 }
-            }.runTaskTimer(plugin, 0, 1);
+            }.runTaskTimer(plugin, 0, 20); // 每20 tick执行一次
         }
     }
 
@@ -51,7 +51,7 @@ public class SpeedMonitor implements Listener {
         Location previousLocation = previousLocations.getOrDefault(player, currentLocation);
         double horizontalDistance = Math.sqrt(Math.pow(currentLocation.getX() - previousLocation.getX(), 2) +
                 Math.pow(currentLocation.getZ() - previousLocation.getZ(), 2));
-        double timeDelta = 1.0 / 20.0;
+        double timeDelta = 1.0;
 
         // 计算速度
         double speed = horizontalDistance / timeDelta;
