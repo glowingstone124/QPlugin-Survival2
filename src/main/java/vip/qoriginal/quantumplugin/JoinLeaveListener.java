@@ -19,6 +19,7 @@ import java.util.Map;
 
 public class JoinLeaveListener implements Listener {
     private Map<Player, Long> sessionStartTimes = new HashMap<>();
+    ChatSync cs = new ChatSync();
     public static final String[] prolist = {"MineCreeper2086", "Wsiogn82", "glowingstone124"};
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) throws Exception {
@@ -31,11 +32,13 @@ public class JoinLeaveListener implements Listener {
             } else if (relationship.frozen) {
                 event.getPlayer().kick(Component.text("验证失败，原因：您的账户已经被冻结！ ").append(Component.text("您的游戏名：" + event.getPlayer().getName()).decorate(TextDecoration.BOLD)).append(Component.text(" 请私聊群主：1294915648了解更多")));
             } else {
+                cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
                 event.getPlayer().sendMessage(Component.text("验证通过，欢迎回到Quantum Original！").appendNewline().append(Component.text("QQ: " + relationship.qq).color(TextColor.color(114, 114, 114))));
                 sessionStartTimes.put(player, System.currentTimeMillis());
             }
         } else {
             event.getPlayer().sendMessage(Component.text(String.format("您好， %s， 您享有免验证权", player.getName())));
+            cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
         }
     }
     @EventHandler
@@ -46,6 +49,7 @@ public class JoinLeaveListener implements Listener {
             long sessionDuration = System.currentTimeMillis() - sessionStartTime;
             long minutesPlayed = sessionDuration / (1000 * 60);
             player.sendMessage("你的本次游玩时长为: " + minutesPlayed + " 分钟");
+            cs.sendChatMsg("玩家" + event.getPlayer().getName() + "退出了服务器，本次游玩时间 " + minutesPlayed + "分钟");
             Request.sendPostRequest("http://qoriginal.vip:8080/qo/upload/gametimerecord?name=" + player.getName() + "&time=" + minutesPlayed, "");
             sessionStartTimes.remove(player);
         }

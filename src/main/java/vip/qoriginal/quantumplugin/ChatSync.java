@@ -27,4 +27,16 @@ public class ChatSync implements Listener {
             e.printStackTrace();
         }
     }
+    public void sendChatMsg(String message){
+        try {
+            StringBuilder sb = new StringBuilder();
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            String currentTime = sdf.format(new Date());
+            sb.append("[" + currentTime + "]").append(message);
+            String encodedMessage = new String(sb.toString().getBytes("UTF-8"), "ISO-8859-1");
+            Request.sendPostRequest("http://localhost:8080/qo/msglist/upload", encodedMessage);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }

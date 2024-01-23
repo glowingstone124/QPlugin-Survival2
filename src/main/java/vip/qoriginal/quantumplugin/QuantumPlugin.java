@@ -79,6 +79,8 @@ public final class QuantumPlugin extends JavaPlugin {
                     .append(Component.text("[" + s.getName() + "]").color(TextColor.color(128, 212, 28)))
                     .append(Component.text("发布了自己的位置：")).appendNewline()
                     .append(Component.text("x: " + s.getLocation().getBlockX() + ", y: " + s.getLocation().getBlockY() + ", z: " + s.getLocation().getBlockZ() + " (" + world_name + ")"));
+            ChatSync cs = new ChatSync();
+            cs.sendChatMsg("玩家" + s.getName() + "发布了自己的位置：" + "x: " + s.getLocation().getBlockX() + ", y: " + s.getLocation().getBlockY() + ", z: " + s.getLocation().getBlockZ() + " (" + world_name + ")");
             for (Player player : Bukkit.getOnlinePlayers()) {
                 if (world_name.equals(player.getWorld().getName())) {
                     player.sendMessage(common_component.append(Component.text("[" + Math.round(player.getLocation().distance(s.getLocation()) * 100) / 100f + "方块外]").color(TextColor.color(192, 168, 216))));
