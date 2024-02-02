@@ -22,6 +22,8 @@ import org.jetbrains.annotations.NotNull;
 import vip.qoriginal.quantumplugin.patch.Knowledge;
 import vip.qoriginal.quantumplugin.patch.QueryBind;
 import vip.qoriginal.quantumplugin.patch.SpeedMonitor;
+import vip.qoriginal.quantumplugin.industry.BoneMealFlowery;
+import vip.qoriginal.quantumplugin.industry.StoneFarm;
 
 import java.util.List;
 import java.util.Timer;
@@ -41,6 +43,13 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new NamePrefix(), this);
         Timer timer = new Timer();
         timer.schedule(new StatusUpload(), 1000, 3000);
+        Block b = Bukkit.getWorld("world").getBlockAt(-1782,68,720);
+        if(b.getChunk().load()) {
+            if(b.getType() == Material.LEVER) {
+                BlockData data = b.getBlockData();
+                if(data.getAsString().contains("powered=true")) StoneFarm.console_state = 10;
+            }
+        }
     }
 
     @Override
