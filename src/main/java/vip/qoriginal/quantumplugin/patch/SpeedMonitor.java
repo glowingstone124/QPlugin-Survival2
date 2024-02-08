@@ -32,7 +32,7 @@ public class SpeedMonitor implements Listener {
             if (event.getVehicle() instanceof Boat) {
                 coloredActionbar = ChatColor.GREEN + "QO交通委提醒您，行船不规范，亲人两行泪。 欢迎您，高级船长 " + player.getDisplayName();
             } else if (event.getVehicle() instanceof Minecart) {
-                coloredActionbar = ChatColor.GREEN + "感谢您选择OO铁路，QO高速铁路现已全面普及108km/h高速 ";
+                coloredActionbar = ChatColor.GREEN + "感谢您选择QO铁路，QO高速铁路现已全面普及108km/h高速 ";
             } else {
                 coloredActionbar = "";     
             }
