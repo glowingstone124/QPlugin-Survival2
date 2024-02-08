@@ -10,7 +10,7 @@ import org.bukkit.event.vehicle.VehicleEnterEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
-
+import org.bukkit.entity.*;
 import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Map;
@@ -28,7 +28,14 @@ public class SpeedMonitor implements Listener {
         Entity entity = event.getEntered();
         if (entity instanceof Player) {
             Player player = (Player) entity;
-            String coloredActionbar = ChatColor.GREEN + "QO交通委提醒您，行船不规范，亲人两行泪。 欢迎您，高级驾驶员 " +player.getDisplayName();
+            String coloredActionbar;
+            if (event.getVehicle() instanceof Boat) {
+                coloredActionbar = ChatColor.GREEN + "QO交通委提醒您，行船不规范，亲人两行泪。 欢迎您，高级船长 " + player.getDisplayName();
+            } else if (event.getVehicle() instanceof Minecart) {
+                coloredActionbar = ChatColor.GREEN + "感谢您选择OO铁路，QO高速铁路现已全面普及108km/h高速 ";
+            } else {
+                coloredActionbar = "";     
+            }
             new BukkitRunnable() {
                 @Override
                 public void run() {

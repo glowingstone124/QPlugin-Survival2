@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Timer;
 
 public final class QuantumPlugin extends JavaPlugin {
-    boolean enableMetro = false;
+    boolean enableMetro = true;
     @Override
     public void onEnable() {
         // Plugin startup logic
@@ -45,7 +45,7 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new NamePrefix(), this);
         if (enableMetro){
             getServer().getPluginManager().registerEvents(new Speed(), this);
-            getServer().getPluginManager().registerEvents(new LoadChunk(), this);
+            getServer().getPluginManager().registerEvents(new LoadChunk(this), this);
         }
         Timer timer = new Timer();
         timer.schedule(new StatusUpload(), 1000, 3000);
