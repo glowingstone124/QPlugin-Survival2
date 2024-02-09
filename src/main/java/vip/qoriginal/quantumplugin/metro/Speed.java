@@ -16,8 +16,10 @@ public class Speed implements Listener{
     public void onMinecartCreate(VehicleCreateEvent event) {
         if (event.getVehicle() instanceof Minecart) {
             Minecart minecart = (Minecart) event.getVehicle();
-            double maxSpeed = targetSpeedMS;
-            minecart.setMaxSpeed(maxSpeed);
+            if (minecart.getType() == EntityType.MINECART) {
+                double maxSpeed = targetSpeedMS;
+                minecart.setMaxSpeed(maxSpeed);
+            }
         }
     }
     @EventHandler
