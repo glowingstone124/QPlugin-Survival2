@@ -7,6 +7,8 @@ import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.util.Vector;
 import org.bukkit.event.vehicle.VehicleCreateEvent;
 import org.bukkit.Material;
+import org.bukkit.entity.EntityType;
+
 
 
 public class Speed implements Listener{
@@ -26,7 +28,8 @@ public class Speed implements Listener{
     public void onMinecartMove(VehicleMoveEvent event) {
         if (event.getVehicle() instanceof Minecart) {
             Minecart minecart = (Minecart) event.getVehicle();
-            Material blockTypeBelow = minecart.getLocation().subtract(0, 1, 0). getBlock().getType();
+            Material blockTypeBelow = minecart.getLocation().subtract(0, 1, 0).
+            getBlock().getType();
 
         if (blockTypeBelow == Material.SMOOTH_STONE) {
             minecart.setMaxSpeed(28.8 * 1000 / 3600);
