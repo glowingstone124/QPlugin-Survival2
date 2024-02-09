@@ -24,10 +24,16 @@ public class LoadChunk implements Listener {
             Minecart minecart = (Minecart) event.getVehicle();
             Block blockBelow = minecart.getLocation().subtract(0, 1, 0).getBlock();
 
-            if (blockBelow.getType() == Material.EMERALD_BLOCK) {
-                minecart.getPersistentDataContainer().set(new NamespacedKey(plugin, "load"), PersistentDataType.BYTE, (byte) 1);
+            if (blockBelow.getType() == Material.DIAMOND_BLOCK) {
+                minecart.addScoreboardTag("accel");
+                minecart.addScoreboardTag("cr200j");
+                minecart.setMaxSpeed(2.4D);
+            } else if (blockBelow.getType() == Material.EMERALD_BLOCK) {
+                minecart.addScoreboardTag("accel");
+                minecart.setMaxSpeed(2D);
             } else if (blockBelow.getType() == Material.IRON_BLOCK) {
-                minecart.getPersistentDataContainer().remove(new NamespacedKey(plugin, "load"));
+                minecart.removeScoreboardTag("accel");
+                minecart.setMaxSpeed(0.4D);
             }
 
             int chunkX = minecart.getLocation().getBlockX() >> 4;
