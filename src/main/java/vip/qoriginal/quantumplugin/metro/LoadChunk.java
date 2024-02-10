@@ -27,10 +27,11 @@ public class LoadChunk implements Listener {
             if (blockBelow.getType() == Material.DIAMOND_BLOCK) {
                 minecart.addScoreboardTag("accel");
                 minecart.addScoreboardTag("cr200j");
-                minecart.setMaxSpeed(2.4D);
+                minecart.setMaxSpeed(1.6D);
             } else if (blockBelow.getType() == Material.EMERALD_BLOCK) {
                 minecart.addScoreboardTag("accel");
-                minecart.setMaxSpeed(2D);
+                minecart.removeScoreboardTag("cr200j");
+                minecart.setMaxSpeed(1.2D);
             } else if (blockBelow.getType() == Material.IRON_BLOCK) {
                 minecart.removeScoreboardTag("accel");
                 minecart.setMaxSpeed(0.4D);

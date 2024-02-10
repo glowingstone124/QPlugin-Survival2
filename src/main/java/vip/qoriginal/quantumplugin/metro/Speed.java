@@ -21,14 +21,16 @@ public class Speed implements Listener{
             Material blockTypeBelow = minecart.getLocation().subtract(0, 1, 0). getBlock().getType();
             if (minecart.getScoreboardTags().contains("accel")) {
                 if (blockTypeBelow == Material.SMOOTH_STONE) {
-                    boost(minecart, .4d);
+                    boost(minecart, .4d,.005);
+                } else if (blockTypeBelow == Material.SMOOTH_STONE_SLAB){
+                    boost(minecart, .1d, .02);
                 } else {
-                    boost(minecart, minecart.getScoreboardTags().contains("cr200j")?2.23d:1.5d);
+                    boost(minecart, minecart.getScoreboardTags().contains("cr200j")?1.5d:0.9d,.005);
                 }
             }
         }
     }
-    private void boost(Minecart minecart, double ts) {
+    private void boost(Minecart minecart, double ts, double a) {
         if (minecart.getLocation().getBlock().isBlockPowered()) {
 
             Vector currentVelocity = minecart.getVelocity();
@@ -36,7 +38,7 @@ public class Speed implements Listener{
 
             if (cs > 0) {
                 // ns = Computed Next Speed
-                double ns = ts>cs?Math.min(cs+.01,cs*.7+ts*.3):Math.max(cs-.01,cs*.7+ts*.3);
+                double ns = ts>cs?Math.min(cs+a,cs*.7+ts*.3):Math.max(cs-a,cs*.7+ts*.3);
                 double factor = ns / cs;
                 Vector newVelocity = currentVelocity.multiply(factor);
                 minecart.setVelocity(newVelocity);
