@@ -27,7 +27,6 @@ public class JoinLeaveListener implements Listener {
         String playerName = event.getName();
 
         if (!Arrays.asList(prolist).contains(playerName)) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("请稍等，我们需要对您的身份进行验证"));
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://127.0.0.1:8080/qo/download/registry?name=" + playerName), BindResponse.class);
             if (relationship.code == 1) {
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("验证失败，请在群：946085440中下载QCommunity").append(Component.text("并绑定你的游戏名：" + playerName).decorate(TextDecoration.BOLD)).append(Component.text(" 之后重试！")));
