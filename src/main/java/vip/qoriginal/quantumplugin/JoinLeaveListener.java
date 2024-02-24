@@ -32,9 +32,14 @@ public class JoinLeaveListener implements Listener {
             } else if (relationship.frozen) {
                 event.getPlayer().kick(Component.text("验证失败，原因：您的账户已经被冻结！ ").append(Component.text("您的游戏名：" + event.getPlayer().getName()).decorate(TextDecoration.BOLD)).append(Component.text(" 请私聊群主：1294915648了解更多")));
             } else {
-                cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
-                event.getPlayer().sendMessage(Component.text("验证通过，欢迎回到Quantum Original！").appendNewline().append(Component.text("QQ: " + relationship.qq).color(TextColor.color(114, 114, 114))));
-                sessionStartTimes.put(player, System.currentTimeMillis());
+                if (relationship.qq != 10000) {
+                    cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
+                    event.getPlayer().sendMessage(Component.text("验证通过，欢迎回到Quantum Original！").appendNewline().append(Component.text("QQ: " + relationship.qq).color(TextColor.color(114, 114, 114))));
+                    sessionStartTimes.put(player, System.currentTimeMillis());
+                } else {
+                    cs.sendChatMsg("机器人 " + event.getPlayer().getName() + " 加入了服务器。");
+                    event.getPlayer().sendMessage(Component.text("您正在使用一个机器人账号。").color(TextColor.color(255,255,0)));
+                }
             }
         } else {
             event.getPlayer().sendMessage(Component.text(String.format("您好， %s， 您享有免验证权", player.getName())));
