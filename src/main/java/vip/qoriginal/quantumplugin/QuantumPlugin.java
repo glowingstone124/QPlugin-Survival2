@@ -60,6 +60,7 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        ChatSync.exit();
         System.out.println("Ended.");
     }
 
