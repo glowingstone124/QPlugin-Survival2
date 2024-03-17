@@ -29,9 +29,9 @@ public class JoinLeaveListener implements Listener {
         if (!Arrays.asList(prolist).contains(playerName)) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://127.0.0.1:8080/qo/download/registry?name=" + playerName), BindResponse.class);
             if (relationship.code == 1) {
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("验证失败，请在群：946085440中下载QCommunity").append(Component.text("并绑定你的游戏名：" + playerName).decorate(TextDecoration.BOLD)).append(Component.text(" 之后重试！")));
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[401 Unauthorized]验证失败，请在群：946085440中下载QCommunity").append(Component.text("并绑定你的游戏名：" + playerName).decorate(TextDecoration.BOLD)).append(Component.text(" 之后重试！")));
             } else if (relationship.frozen) {
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("验证失败，原因：您的账户已经被冻结！ ").append(Component.text("您的游戏名：" + playerName).decorate(TextDecoration.BOLD)).append(Component.text(" 请私聊群主：1294915648了解更多")));
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[403 Forbidden]验证失败，原因：您的账户已经被冻结！ ").append(Component.text("您的游戏名：" + playerName).decorate(TextDecoration.BOLD)).append(Component.text(" 请私聊群主：1294915648了解更多")));
             }
         }
     }
