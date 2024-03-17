@@ -3,9 +3,9 @@ version: '${project.version}'
 main: vip.qoriginal.quantumplugin.QuantumPlugin
 api-version: 1.19
 prefix: QuantumPlugin
-authors: [ MineCreeper2086 ]
+authors: [ glowingstone124 ]
 description: Plugin for Quantum Original
-website: https://minecreeper.top/
+website: https://glowingstone.cn/
 commands:
   suicide:
     description: Kill oneself
