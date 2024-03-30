@@ -1,5 +1,6 @@
 package vip.qoriginal.quantumplugin;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -167,9 +168,9 @@ public final class QuantumPlugin extends JavaPlugin {
                     .append(s.getInventory().getItemInMainHand().displayName());
             s.sendMessage(common_component);
             s.setMetadata("need_confirm_binding", new FixedMetadataValue(this, args[1]));
-        } else if(command.getName().equalsIgnoreCase("bindauth") && args.length == 1){
+        } else if (command.getName().equalsIgnoreCase("bindauth") && args.length == 1) {
             Player s = (Player) sender;
-            if (s.hasMetadata("need_confirm_binding")){
+            if (s.hasMetadata("need_confirm_binding")) {
                 List<MetadataValue> values = s.getMetadata("need_confirm_binding");
                 String forumAccount = values.get(0).asString();
                 try {
@@ -182,53 +183,30 @@ public final class QuantumPlugin extends JavaPlugin {
             } else {
                 s.sendMessage("没有需要确认的绑定。");
             }
-        }  else if(command.getName().equalsIgnoreCase("querybind") && args.length == 1) {
-            if (args.length != 1) {
-                sender.sendMessage("usage: /<command> <player>");
-                return true;
-            }
+        } else if (command.getName().equalsIgnoreCase("querybind") && args.length == 1) {
             Player s = (Player) sender;
-            JsonObject result = null;
+            String name = args[0];
+            String result = null;
             try {
-                result = QueryBind.queryPlayer(args[0]);
+                result = Request.sendGetRequest("http://127.0.0.1:8080/qo/download/registry?name=" + name);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-            try {
-                if (result.get("name").getAsString().equals("You should not see this because this name is too long to be seen")){
-                    s.sendMessage("你查询的用户名不存在");
-                } else {
-                    if (result.get("qq").getAsInt() != -1){
-                        String message = """
-                                ==============================
-                                查询结果
-                                ==============================
-                                用户名: %s
-                                
-                                qq号: %s
-                                
-                                """;
-                        s.sendMessage(String.format(message, result.get("name").getAsString(), result.get("qq").getAsInt()));
-                    } else {
-                        String message = """
-                                ==============================
-                                
-                                查询结果
-                                ==============================
-                                
-                                用户名: %s
-                                
-                                qq号: 此用户使用了Quantum(R) Privacy Protection(TM)技术来保护隐私，您无法查询。
-                                
-                                """;
-                        s.sendMessage(String.format(message, result.get("name").getAsString()));
-                    }
-                }
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+            BindResponse relationship = new Gson().fromJson(result, BindResponse.class);
+            if (relationship.code == 1) {
+                s.sendMessage("你查询的用户名不存在");
+            } else {
+                String message = """
+                        ==============================
+                        查询结果
+                        ==============================
+                        用户名: %s
+                                                        
+                        qq号: %s
+                                                        
+                        """;
+                s.sendMessage(String.format(message, name, relationship.qq));
             }
-        } else {
-            return false;
         }
         return false;
     }
