@@ -32,11 +32,16 @@ import java.util.List;
 import java.util.Timer;
 
 public final class QuantumPlugin extends JavaPlugin {
+    private WebMsgGetter webMsgGetterTask;
     boolean enableMetro = true;
     @Override
     public void onEnable() {
         // Plugin startup logic
         System.out.println("1.14.5.15 Started.");
+        webMsgGetterTask = new WebMsgGetter();
+        int delay = 0;
+        int period = 20;
+        getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
         getServer().getPluginManager().registerEvents(new JoinLeaveListener(), this);
         getServer().getPluginManager().registerEvents(new ChatCommandListener(), this);
         getServer().getPluginManager().registerEvents(new MSPTCalculator(), this);
@@ -44,12 +49,13 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ChatSync(), this);
         getServer().getPluginManager().registerEvents(new SpeedMonitor(this), this);
         getServer().getPluginManager().registerEvents(new NamePrefix(), this);
+        ChatSync cs = new ChatSync();
         if (enableMetro){
             getServer().getPluginManager().registerEvents(new Speed(), this);
             getServer().getPluginManager().registerEvents(new LoadChunk(this), this);
         }
         Timer timer = new Timer();
-        timer.schedule(new StatusUpload(), 1000, 3000);
+        timer.schedule(new StatusUpload(), 1000, 2000);
         Block b = Bukkit.getWorld("world").getBlockAt(-1782,68,720);
         if(b.getChunk().load()) {
             if(b.getType() == Material.LEVER) {
@@ -61,7 +67,7 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        ChatSync.exit();
+        webMsgGetterTask.cancel();
         System.out.println("Ended.");
     }
 
