@@ -11,6 +11,7 @@ import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.checkerframework.checker.units.qual.A;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,6 +42,12 @@ public class JoinLeaveListener implements Listener {
         if (!Arrays.asList(prolist).contains(player.getName())) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://127.0.0.1:8080/qo/download/registry?name=" + event.getPlayer().getName()), BindResponse.class);
             if (relationship.qq != 10000) {
+                String ip = player.getAddress().getHostString();
+                JSONObject playerObj = new JSONObject(Request.sendGetRequest("http://qoriginal.vip:8080/qo/loginip/download?username=" + player.getName()));
+                if (!playerObj.get("message").equals(ip) || !playerObj.get("code").equals(0)){
+                    player.sendMessage("您正在使用一个新的ip登录，此ip已经被保存到数据库留档。");
+                }
+                Request.sendPostRequest("http://qoriginal.vip:8080/qo/loginip/upload?username=" + player.getName() + "&ip=" + ip + "&auth=2djg45uifjs034","");
                 cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
                 event.getPlayer().sendMessage(Component.text("验证通过，欢迎回到Quantum Original！").appendNewline().append(Component.text("QQ: " + relationship.qq).color(TextColor.color(114, 114, 114))));
                 sessionStartTimes.put(player, System.currentTimeMillis());
