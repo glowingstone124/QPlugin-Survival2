@@ -20,6 +20,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffectType;
 import org.checkerframework.checker.units.qual.C;
 import org.jetbrains.annotations.NotNull;
+import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.patch.Knowledge;
 import vip.qoriginal.quantumplugin.patch.QueryBind;
 import vip.qoriginal.quantumplugin.patch.SpeedMonitor;
@@ -68,6 +69,14 @@ public final class QuantumPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         webMsgGetterTask.cancel();
+        JSONObject stopObj = new JSONObject();
+        stopObj.put("timestamp", System.currentTimeMillis());
+        stopObj.put("stat", -1);
+        try {
+            Request.sendPostRequest("http://qoriginal.vip:8080/qo/alive/upload", "");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
         System.out.println("Ended.");
     }
 
