@@ -1,5 +1,7 @@
 package vip.qoriginal.quantumplugin;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.json.JSONArray;
@@ -25,8 +27,9 @@ public class WebMsgGetter extends TimerTask{
                     }
                 }
                 for (String msg : newMessages) {
-                    if (!msg.startsWith("[SERVER]")) {
-                        for(Player player : Bukkit.getOnlinePlayers()) player.sendMessage(msg);
+                    if (msg.startsWith("[QQ]")) {
+                        Component msgComponent = Component.text(msg).color(TextColor.color(113, 159, 165));
+                        for(Player player : Bukkit.getOnlinePlayers()) player.sendMessage(msgComponent);
                     }
                 }
                 buffer = remoteArr;

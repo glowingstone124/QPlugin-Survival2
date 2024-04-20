@@ -3,8 +3,12 @@ package vip.qoriginal.quantumplugin;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
@@ -24,7 +28,7 @@ public class ChatSync implements Listener {
     public static void exit(){
         scheduler.shutdown();
     }
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         try {
             String playerName = event.getPlayer().getName();
@@ -34,7 +38,7 @@ public class ChatSync implements Listener {
             String currentTime = sdf.format(new Date());
             sb.append("[" + currentTime + "]").append("<").append(playerName).append(">: ").append(message);
             String encodedMessage = new String(sb.toString().getBytes("UTF-8"), "ISO-8859-1");
-            Request.sendPostRequest("http://localhost:8080/qo/msglist/upload", encodedMessage);
+            Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -46,7 +50,7 @@ public class ChatSync implements Listener {
             String currentTime = sdf.format(new Date());
             sb.append("[" + currentTime + "]").append(message);
             String encodedMessage = new String(sb.toString().getBytes("UTF-8"), "ISO-8859-1");
-            Request.sendPostRequest("http://localhost:8080/qo/msglist/upload", encodedMessage);
+            Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -64,7 +68,11 @@ public class ChatSync implements Listener {
                     if (msgObj.get("code").getAsInt() == 0){
                         String content = msgObj.get("content").getAsString();
                         if (!content.equals(buffer)){
-                            Bukkit.getServer().broadcastMessage("[QC]" + content);
+                            Component msgComponent = Component.text(content).color(TextColor.color(113, 159, 165));
+                            for (Player p : Bukkit.getOnlinePlayers()) {
+                                p.sendMessage(msgComponent);
+                            }
+
                         }
                     }
                 }
