@@ -18,6 +18,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import static vip.qoriginal.quantumplugin.QuantumPlugin.isShutup;
+
 public class ChatSync implements Listener {
     private static WebMsgGetter webMsgGetter;
     static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -30,17 +32,19 @@ public class ChatSync implements Listener {
     }
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerChat(AsyncPlayerChatEvent event) {
-        try {
-            String playerName = event.getPlayer().getName();
-            String message = event.getMessage();
-            StringBuilder sb = new StringBuilder();
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            String currentTime = sdf.format(new Date());
-            sb.append("[" + currentTime + "]").append("<").append(playerName).append(">: ").append(message);
-            String encodedMessage = new String(sb.toString().getBytes("UTF-8"), "ISO-8859-1");
-            Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
-        } catch (Exception e) {
-            e.printStackTrace();
+        if (!isShutup(event.getPlayer())) {
+            try {
+                String playerName = event.getPlayer().getName();
+                String message = event.getMessage();
+                StringBuilder sb = new StringBuilder();
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                String currentTime = sdf.format(new Date());
+                sb.append("[" + currentTime + "]").append("<").append(playerName).append(">: ").append(message);
+                String encodedMessage = new String(sb.toString().getBytes("UTF-8"), "ISO-8859-1");
+                Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
     public void sendChatMsg(String message){
