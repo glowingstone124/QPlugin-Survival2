@@ -24,10 +24,13 @@ public class JoinLeaveListener implements Listener {
     private Map<Player, Long> sessionStartTimes = new HashMap<>();
     ChatSync cs = new ChatSync();
     public static final String[] prolist = {"MineCreeper2086", "Wsiogn82", "glowingstone124"};
+    public static final String[] blocklist = {"ServerSeeker.net"};
     @EventHandler
     public void onPlayerPreLogin(AsyncPlayerPreLoginEvent event) throws Exception {
         String playerName = event.getName();
-
+        if (Arrays.asList(blocklist).contains(playerName)){
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[403 Forbidden]").append(Component.text("this server doesn't allows ServerSeeker.").decorate(TextDecoration.BOLD)));
+        }
         if (!Arrays.asList(prolist).contains(playerName)) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://127.0.0.1:8080/qo/download/registry?name=" + playerName), BindResponse.class);
             if (relationship.code == 1) {
