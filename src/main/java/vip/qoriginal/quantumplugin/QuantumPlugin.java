@@ -33,11 +33,14 @@ import java.util.List;
 import java.util.Timer;
 
 public final class QuantumPlugin extends JavaPlugin {
+
     private WebMsgGetter webMsgGetterTask;
     boolean enableMetro = true;
+    private static QuantumPlugin instance;
+
     @Override
     public void onEnable() {
-        // Plugin startup logic
+        instance = this;
         System.out.println("1.14.5.15 Started.");
         webMsgGetterTask = new WebMsgGetter();
         int delay = 0;
@@ -66,7 +69,9 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         }
     }
-
+    public static QuantumPlugin getInstance() {
+        return instance;
+    }
     @Override
     public void onDisable() {
         webMsgGetterTask.cancel();

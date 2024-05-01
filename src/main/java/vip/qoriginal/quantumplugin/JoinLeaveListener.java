@@ -39,7 +39,7 @@ public class JoinLeaveListener implements Listener {
     }
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) throws Exception {
-        QuantumPlugin quantumPlugin = new QuantumPlugin();
+        QuantumPlugin quantumPlugin = QuantumPlugin.getInstance();
         Player player = event.getPlayer();
         IPUtils.locIsCn(event,quantumPlugin);
         if (!Arrays.asList(prolist).contains(player.getName())) {
