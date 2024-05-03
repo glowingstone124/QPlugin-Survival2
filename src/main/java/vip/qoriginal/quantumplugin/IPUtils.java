@@ -12,9 +12,9 @@ public class IPUtils{
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 ChatSync cs = new ChatSync();
-                String ip = player.getAddress().getHostString();
-                JSONObject ipLocObj = new JSONObject(Request.sendGetRequest("https://api.ip.sb/geoip/" + ip));
-                if (!ipLocObj.getString("country").equals("China")) {
+                String ip = player.getAddress().getAddress().getHostAddress();
+                JSONObject ipLocObj = new JSONObject(Request.sendGetRequest("https://db-ip.com/demo/home.php?s=" + ip));
+                if (!ipLocObj.getJSONObject("demoInfo").getString("countryCode").equals("CN")) {
                     player.sendMessage("你正在使用一个非中国大陆ip登录。");
                     cs.sendChatMsg("玩家" + player.getName() + "正在使用一个非中国大陆ip登录. (" + ip + ")");
                 }
