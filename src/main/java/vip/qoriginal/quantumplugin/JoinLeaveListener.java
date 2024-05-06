@@ -32,7 +32,7 @@ public class JoinLeaveListener implements Listener {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[403 Forbidden]").append(Component.text("this server doesn't allows ServerSeeker.").decorate(TextDecoration.BOLD)));
         }
         if (!Arrays.asList(prolist).contains(playerName)) {
-            BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://127.0.0.1:8080/qo/download/registry?name=" + playerName), BindResponse.class);
+            BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + playerName), BindResponse.class);
             if (relationship.code == 1) {
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[401 Unauthorized]验证失败，请在群：946085440中下载QCommunity").append(Component.text("并绑定你的游戏名：" + playerName).decorate(TextDecoration.BOLD)).append(Component.text(" 之后重试！")));
             } else if (relationship.frozen) {
@@ -46,7 +46,7 @@ public class JoinLeaveListener implements Listener {
         Player player = event.getPlayer();
         IPUtils.locIsCn(event,quantumPlugin);
         if (!Arrays.asList(prolist).contains(player.getName())) {
-            BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://127.0.0.1:8080/qo/download/registry?name=" + event.getPlayer().getName()), BindResponse.class);
+            BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + event.getPlayer().getName()), BindResponse.class);
             if (relationship.qq != 10000) {
                 cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
                 event.getPlayer().sendMessage(Component.text("验证通过，欢迎回到Quantum Original！").appendNewline().append(Component.text("QQ: " + relationship.qq).color(TextColor.color(114, 114, 114))));
