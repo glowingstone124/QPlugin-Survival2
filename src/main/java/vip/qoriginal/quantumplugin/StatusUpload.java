@@ -42,6 +42,8 @@ public class StatusUpload extends TimerTask {
         }
         status.totalcount = totalUser;
         status.mspt = Float.isNaN(MSPTCalculator.mspt)?0:MSPTCalculator.mspt;
+        status.recent60 = MSPTCalculator.getRecent60t();
+        //getR3S will clear msptList so invoke recent60 before R3S.
         float mspt_3s = MSPTCalculator.getR3s();
         status.mspt_3s = Float.isNaN(mspt_3s)?0:mspt_3s;
         String data = gson.toJson(status);
@@ -81,6 +83,7 @@ public class StatusUpload extends TimerTask {
         int totalcount = 0;
         ArrayList<BriefPlayerInfo> players = new ArrayList<>();
         long timestamp = 0;
+        ArrayList<Long> recent60 = new ArrayList<>();
         Statistics total = null;
         float mspt = 0;
         float mspt_3s = 0;

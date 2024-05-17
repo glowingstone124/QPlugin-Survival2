@@ -93,7 +93,9 @@ public class MSPTCalculator implements Listener {
         recent_60tick.clear();
         return result;
     }
-
+    public static ArrayList<Long> getRecent60t(){
+        return recent_60tick;
+    }
     private static String f(int i) {
         if(i>=10) return i+"";
         else return "0"+i;
