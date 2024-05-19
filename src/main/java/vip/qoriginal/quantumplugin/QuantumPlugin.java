@@ -77,7 +77,7 @@ public final class QuantumPlugin extends JavaPlugin {
         webMsgGetterTask.cancel();
         JSONObject stopObj = new JSONObject();
         stopObj.put("timestamp", System.currentTimeMillis());
-        stopObj.put("stat", -1);
+        stopObj.put("stat", 1);
         try {
             Request.sendPostRequest("http://qoriginal.vip:8080/qo/alive/upload", stopObj.toString());
         } catch (Exception e) {
