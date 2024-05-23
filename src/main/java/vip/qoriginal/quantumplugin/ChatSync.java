@@ -62,7 +62,7 @@ public class ChatSync implements Listener {
         @Override
         public void run() {
             try {
-                String response = Request.sendGetRequest("http://localhost:8080/qo/msglist/download");
+                String response = Request.sendGetRequest("http://qoriginal.vip:8080/qo/msglist/download");
                 JsonParser parser = new JsonParser();
                 JsonElement jsonElement = parser.parse(response);
                 if (jsonElement.isJsonObject()) {

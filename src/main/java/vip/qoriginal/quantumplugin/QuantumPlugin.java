@@ -45,6 +45,14 @@ public final class QuantumPlugin extends JavaPlugin {
         webMsgGetterTask = new WebMsgGetter();
         int delay = 0;
         int period = 20;
+        JSONObject stopObj = new JSONObject();
+        stopObj.put("timestamp", System.currentTimeMillis());
+        stopObj.put("stat", 0);
+        try {
+            Request.sendPostRequest("http://qoriginal.vip:8080/qo/alive/upload", stopObj.toString());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
         getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
         getServer().getPluginManager().registerEvents(new JoinLeaveListener(), this);
         getServer().getPluginManager().registerEvents(new ChatCommandListener(), this);
