@@ -21,6 +21,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.checkerframework.checker.units.qual.C;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
+import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.Knowledge;
 import vip.qoriginal.quantumplugin.patch.QueryBind;
 import vip.qoriginal.quantumplugin.patch.SpeedMonitor;
@@ -41,7 +42,7 @@ public final class QuantumPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
-        System.out.println("1.14.5.15 Started.");
+        System.out.println("1.14.5.5.1 Started.");
         webMsgGetterTask = new WebMsgGetter();
         int delay = 0;
         int period = 20;
@@ -76,6 +77,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 if(data.getAsString().contains("powered=true")) StoneFarm.console_state = 10;
             }
         }
+        SegmentMap.init();
     }
     public static QuantumPlugin getInstance() {
         return instance;

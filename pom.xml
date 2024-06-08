@@ -6,7 +6,7 @@
 
     <groupId>vip.qoriginal</groupId>
     <artifactId>QuantumPlugin</artifactId>
-    <version>1.14.5.4.2</version>
+    <version>1.14.5.5.1</version>
     <packaging>jar</packaging>
 
     <name>QuantumPlugin</name>
