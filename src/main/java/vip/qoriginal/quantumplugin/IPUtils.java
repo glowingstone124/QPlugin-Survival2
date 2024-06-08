@@ -13,8 +13,8 @@ public class IPUtils{
             try {
                 ChatSync cs = new ChatSync();
                 String ip = player.getAddress().getAddress().getHostAddress();
-                JSONObject ipLocObj = new JSONObject(Request.sendGetRequest("https://db-ip.com/demo/home.php?s=" + ip));
-                if (!ipLocObj.getJSONObject("demoInfo").getString("countryCode").equals("CN")) {
+                JSONObject ipLocObj = new JSONObject(Request.sendGetRequest("https://ip.shakaianee.top/" + ip + "?f=json"));
+                if (!ipLocObj.getString("country_code").equals("CN")) {
                     player.sendMessage("你正在使用一个非中国大陆ip登录。");
                     cs.sendChatMsg("玩家" + player.getName() + "正在使用一个非中国大陆ip登录. (" + ip + ")");
                 }
