@@ -40,7 +40,7 @@ public class LoadChunk implements Listener {
                 minecart.setMaxSpeed(0.4D);
             } else if (blockBelow.getType() == Material.GOLD_BLOCK) {
                 minecart.addScoreboardTag("curve");
-                minecart.setMaxSpeed(1D);
+                minecart.setMaxSpeed(0.89D);
             }
 
             int chunkX = minecart.getLocation().getBlockX() >> 4;
@@ -55,6 +55,32 @@ public class LoadChunk implements Listener {
                         }
                     }
                 }
+            }
+
+            if (blockBelow.getType() == Material.WHITE_TERRACOTTA || blockBelow.getType() == Material.BLACK_TERRACOTTA) {
+                String p = "";
+                for(int i=0;i<4;i++) {
+                    switch (minecart.getLocation().subtract(0, 2+i, 0).getBlock().getType()) {
+                        case WHITE_WOOL -> p = p + 0;
+                        case LIGHT_GRAY_WOOL -> p = p + 1;
+                        case GRAY_WOOL -> p = p + 2;
+                        case BLACK_WOOL -> p = p + 3;
+                        case BROWN_WOOL -> p = p + 4;
+                        case RED_WOOL -> p = p + 5;
+                        case ORANGE_WOOL -> p = p + 6;
+                        case YELLOW_WOOL -> p = p + 7;
+                        case LIME_WOOL -> p = p + 8;
+                        case GREEN_WOOL -> p = p + 9;
+                        case CYAN_WOOL -> p = p + "a";
+                        case LIGHT_BLUE_WOOL -> p = p + "b";
+                        case BLUE_WOOL -> p = p + "c";
+                        case PURPLE_WOOL -> p = p + "d";
+                        case MAGENTA_WOOL -> p = p + "e";
+                        case PINK_WOOL -> p = p + "f";
+                    }
+                }
+                if(blockBelow.getType() == Material.WHITE_TERRACOTTA) SegmentMap.enter(p,minecart);
+                if(blockBelow.getType() == Material.BLACK_TERRACOTTA) SegmentMap.leave(p,minecart);
             }
         }
     }

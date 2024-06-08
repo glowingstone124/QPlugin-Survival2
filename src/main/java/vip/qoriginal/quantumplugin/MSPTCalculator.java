@@ -17,6 +17,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.Knowledge;
 
 import java.util.ArrayList;
@@ -135,6 +136,6 @@ public class MSPTCalculator implements Listener {
             }
         }
 
-
+        SegmentMap.refresh();
     }
 }
