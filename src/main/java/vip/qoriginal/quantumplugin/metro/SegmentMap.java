@@ -77,7 +77,7 @@ public class SegmentMap {
         public boolean station;
         public String dummy;
         public Minecart occupied = null;
-        public ArrayList<Minecart> queueing = null;
+        public ArrayList<Minecart> queueing = new ArrayList<>();
         public Location[] signal;
 
         Segment(int lid, boolean station, String dummy, Location[] signal) {
