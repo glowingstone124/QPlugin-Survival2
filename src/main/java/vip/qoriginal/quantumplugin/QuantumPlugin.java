@@ -39,7 +39,7 @@ public final class QuantumPlugin extends JavaPlugin {
     private WebMsgGetter webMsgGetterTask;
     boolean enableMetro = true;
     private static QuantumPlugin instance;
-    //PlayerInventoryViewer piv = new PlayerInventoryViewer();
+    PlayerInventoryViewer piv = new PlayerInventoryViewer();
     @Override
     public void onEnable() {
         instance = this;
@@ -55,7 +55,7 @@ public final class QuantumPlugin extends JavaPlugin {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        //piv.init();
+        piv.init();
         getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
         getServer().getPluginManager().registerEvents(new JoinLeaveListener(), this);
         getServer().getPluginManager().registerEvents(new ChatCommandListener(), this);
@@ -253,9 +253,15 @@ public final class QuantumPlugin extends JavaPlugin {
                     sender.sendMessage("该玩家不存在！");
                     return true;
                 }
-                String key = JsonParser.parseString(Request.sendGetRequest("http://qoriginal.vip:8080/qo/inventory/request?name=" + args[0] + "&from=" + sender.getName())).getAsJsonObject().get("key").getAsString();
-                //piv.insertKey(args[0], key);
-                sender.sendMessage(Component.text("已经发送请求，请等待对方验证。").color(TextColor.color(67,205,128)));
+                String res2 = Request.sendGetRequest("http://qoriginal.vip:8080/qo/inventory/request?name=" + args[0] + "&from=" + sender.getName());
+                if (JsonParser.parseString(res2).getAsJsonObject().get("code").getAsInt() == 0) {
+                    String key = JsonParser.parseString(res2).getAsJsonObject().get("key").getAsString();
+                    sender.sendMessage(Component.text("已经发送请求，请等待对方验证。").color(TextColor.color(67,205,128)));
+                    piv.insertKey(args[0], key);
+                } else {
+                    sender.sendMessage(Component.text("请求未通过。可能你之前已经发送了请求，也可能当前的请求数已经过多。").color(TextColor.color(67,205,128)));
+                }
+
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
