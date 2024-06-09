@@ -39,7 +39,7 @@ public final class QuantumPlugin extends JavaPlugin {
     private WebMsgGetter webMsgGetterTask;
     boolean enableMetro = true;
     private static QuantumPlugin instance;
-    PlayerInventoryViewer piv = new PlayerInventoryViewer();
+    //PlayerInventoryViewer piv = new PlayerInventoryViewer();
     @Override
     public void onEnable() {
         instance = this;
@@ -55,7 +55,7 @@ public final class QuantumPlugin extends JavaPlugin {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        piv.init();
+        //piv.init();
         getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
         getServer().getPluginManager().registerEvents(new JoinLeaveListener(), this);
         getServer().getPluginManager().registerEvents(new ChatCommandListener(), this);
@@ -65,7 +65,7 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new SpeedMonitor(this), this);
         getServer().getPluginManager().registerEvents(new NamePrefix(), this);
         getServer().getPluginManager().registerEvents(new PlayerEventListener(), this);
-        getServer().getPluginManager().registerEvents(new PlayerInventoryViewer(), this);
+        //getServer().getPluginManager().registerEvents(new PlayerInventoryViewer(), this);
         ChatSync cs = new ChatSync();
         if (enableMetro){
             getServer().getPluginManager().registerEvents(new Speed(), this);
@@ -254,7 +254,7 @@ public final class QuantumPlugin extends JavaPlugin {
                     return true;
                 }
                 String key = JsonParser.parseString(Request.sendGetRequest("http://qoriginal.vip:8080/qo/inventory/request?name=" + args[0] + "&from=" + sender.getName())).getAsJsonObject().get("key").getAsString();
-                piv.insertKey(args[0], key);
+                //piv.insertKey(args[0], key);
                 sender.sendMessage(Component.text("已经发送请求，请等待对方验证。").color(TextColor.color(67,205,128)));
             } catch (Exception e) {
                 throw new RuntimeException(e);

@@ -1,6 +1,7 @@
 package vip.qoriginal.quantumplugin.patch;
 
 import org.bukkit.ChatColor;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -30,7 +31,7 @@ public class SpeedMonitor implements Listener {
             Player player = (Player) entity;
             String coloredActionbar;
             if (event.getVehicle() instanceof Boat) {
-                coloredActionbar = ChatColor.GREEN + "QO交通委提醒您，行船不规范，亲人两行泪。 欢迎您，高级船长 " + player.getDisplayName();
+                coloredActionbar = ChatColor.GREEN + "QO交通委提醒您，行船不规范，亲人两行泪。 欢迎您，高级驾驶员 " + player.getDisplayName();
             } else if (event.getVehicle() instanceof Minecart) {
                 coloredActionbar = ChatColor.GREEN + "感谢您选择QO铁路，QO高速铁路现已全面普及108km/h高速 ";
             } else {
@@ -44,7 +45,10 @@ public class SpeedMonitor implements Listener {
                         DecimalFormat decimalFormat = new DecimalFormat("#.#");
                         String formattedSpeed = decimalFormat.format(speed);
                         player.sendActionBar(coloredActionbar);
-                        player.sendTitle("", "Speed: " + formattedSpeed + "KM/H", 0, 20, 0);
+                        String template = "Speed: " + formattedSpeed + "KM/H";
+                        if (speed <= 40) player.sendTitle("", Color.BLUE + template, 0, 20, 0);
+                        if (speed < 80 && speed > 40) player.sendTitle("", Color.YELLOW + template, 0, 20, 0);
+                        if (speed > 80 && speed < 140) player.sendTitle("", Color.GREEN + template, 0, 20, 0);
                     } else {
                         cancel();
                     }
