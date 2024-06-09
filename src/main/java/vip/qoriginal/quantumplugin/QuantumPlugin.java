@@ -2,6 +2,7 @@ package vip.qoriginal.quantumplugin;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.TextColor;
@@ -38,7 +39,7 @@ public final class QuantumPlugin extends JavaPlugin {
     private WebMsgGetter webMsgGetterTask;
     boolean enableMetro = true;
     private static QuantumPlugin instance;
-
+    PlayerInventoryViewer piv = new PlayerInventoryViewer();
     @Override
     public void onEnable() {
         instance = this;
@@ -54,6 +55,7 @@ public final class QuantumPlugin extends JavaPlugin {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+        piv.init();
         getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
         getServer().getPluginManager().registerEvents(new JoinLeaveListener(), this);
         getServer().getPluginManager().registerEvents(new ChatCommandListener(), this);
@@ -63,6 +65,7 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new SpeedMonitor(this), this);
         getServer().getPluginManager().registerEvents(new NamePrefix(), this);
         getServer().getPluginManager().registerEvents(new PlayerEventListener(), this);
+        getServer().getPluginManager().registerEvents(new PlayerInventoryViewer(), this);
         ChatSync cs = new ChatSync();
         if (enableMetro){
             getServer().getPluginManager().registerEvents(new Speed(), this);
@@ -219,7 +222,7 @@ public final class QuantumPlugin extends JavaPlugin {
             String name = args[0];
             String result = null;
             try {
-                result = Request.sendGetRequest("http://127.0.0.1:8080/qo/download/registry?name=" + name);
+                result = Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + name);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -237,6 +240,24 @@ public final class QuantumPlugin extends JavaPlugin {
                                                         
                         """;
                 s.sendMessage(String.format(message, name, relationship.qq));
+            }
+        } else if (command.getName().equalsIgnoreCase("viewInventory") && args.length == 1){
+            if (!(sender instanceof Player)) {
+                sender.sendMessage("Only players can use this command!");
+                return true;
+            }
+            try {
+                String result = Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + args[0]);
+                JsonObject queryObj = (JsonObject) JsonParser.parseString(result);
+                if (queryObj.get("code").getAsInt() != 0){
+                    sender.sendMessage("该玩家不存在！");
+                    return true;
+                }
+                String key = JsonParser.parseString(Request.sendGetRequest("http://qoriginal.vip:8080/qo/inventory/request?name=" + args[0] + "&from=" + sender.getName())).getAsJsonObject().get("key").getAsString();
+                piv.insertKey(args[0], key);
+                sender.sendMessage(Component.text("已经发送请求，请等待对方验证。").color(TextColor.color(67,205,128)));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         }
         return false;
