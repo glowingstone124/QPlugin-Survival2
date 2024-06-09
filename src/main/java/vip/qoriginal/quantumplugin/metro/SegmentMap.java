@@ -21,34 +21,51 @@ public class SegmentMap {
     public static World ov = Bukkit.getWorld("world");
     public static void init() {
         lineMap.put(0, new Line("C1 Monorail","#c73532"));
-        lineMap.put(3, new Line("QO Line 3","#fcd600"));
+        lineMap.put(6, new Line("QO Line 3","#fcd600"));
+        lineMap.put(7, new Line("QO Line 3","#fcd600"));
 
         segMap.put("0001",
                 new Segment(0, false, "C1上/下行区段0001", new Location[]{
                         new Location(ov, -8, 69, 304),
                         new Location(ov, 343, 63, 187)
                 }));
-        segMap.put("0002", new Segment(3, true, "出生点", new Location[]{}));
-        segMap.put("0003", new Segment(3, true, "出生点", new Location[]{}));
-        segMap.put("0004", new Segment(3, true, "清水河", new Location[]{}));
-        segMap.put("0005", new Segment(3, true, "清水河", new Location[]{}));
-        segMap.put("0006", new Segment(3, true, "高铁出生点站", new Location[]{}));
-        segMap.put("0007", new Segment(3, true, "高铁出生点站", new Location[]{}));
+        segMap.put("0002", new Segment(6, true, "出生点", new Location[]{}));
+        segMap.put("0003", new Segment(7, true, "出生点", new Location[]{}));
+        segMap.put("0004", new Segment(6, true, "清水河", new Location[]{}));
+        segMap.put("0005", new Segment(7, true, "清水河", new Location[]{}));
+        segMap.put("0006", new Segment(6, true, "高铁出生点站", new Location[]{}));
+        segMap.put("0007", new Segment(7, true, "高铁出生点站", new Location[]{}));
         segMap.put("0008",
-                new Segment(0, false, "L3上行至清水河区段0008", new Location[]{
+                new Segment(6, false, "L3上行至清水河区段0008", new Location[]{
                         new Location(ov, -43, 84, 534),
                 }));
         segMap.put("0009",
-                new Segment(0, false, "L3上行至清水河区段0009", new Location[]{
+                new Segment(6, false, "L3上行至清水河区段0009", new Location[]{
                         new Location(ov, -8, 83, 430),
                 }));
         segMap.put("000a",
-                new Segment(0, false, "L3上行至出生点区段000a", new Location[]{
+                new Segment(6, false, "L3上行至出生点区段000a", new Location[]{
                         new Location(ov, -8, 84, 303),
                 }));
         segMap.put("000b",
-                new Segment(0, false, "L3上行至出生点区段000b", new Location[]{
+                new Segment(6, false, "L3上行至出生点区段000b", new Location[]{
                         new Location(ov, -8, 65, 146),
+                }));
+        segMap.put("000c",
+                new Segment(7, false, "L3下行至清水河区段000c", new Location[]{
+                        new Location(ov, -16, 65, 20),
+                }));
+        segMap.put("000d",
+                new Segment(7, false, "L3下行至清水河区段000d", new Location[]{
+                        new Location(ov, -18, 65, 146),
+                }));
+        segMap.put("000e",
+                new Segment(7, false, "L3下行至清水河区段000e", new Location[]{
+                        new Location(ov, -18, 84, 316),
+                }));
+        segMap.put("000f",
+                new Segment(7, false, "L3下行至清水河区段000f", new Location[]{
+                        new Location(ov, -18, 83, 427),
                 }));
     }
 
