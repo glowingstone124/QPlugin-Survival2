@@ -49,7 +49,7 @@ public class Speed implements Listener{
                     calc = boost(minecart, flag?0.5:0.72, flag?.015:.0008, f, t);
                     minecart.setMaxSpeed(flag?0.6:0.72);
                 } else {
-                    calc = boost(minecart, minecart.getScoreboardTags().contains("cr200j") ? 1.5d : 0.9d, .005, f, t);
+                    calc = boost(minecart, minecart.getScoreboardTags().contains("cr200j") ? 1.6d : 0.9d, .005, f, t);
                 }
                 if(calc!=null) {
                     minecart.teleport(event.getFrom().add(calc));
@@ -61,6 +61,13 @@ public class Speed implements Listener{
     private Vector boost(Minecart minecart, double ts, double a, Location from, Location to) {
         Vector currentVelocity = to.toVector().subtract(from.toVector());
         double cs = currentVelocity.length();
+        for (String str: minecart.getScoreboardTags()) {
+            if (str.indexOf("queueing-") == 0) {
+                ts = 0;
+                a = -0.1;
+                break;
+            }
+        }
         if (cs > 0 && minecart.getLocation().getBlock().isBlockPowered() && !minecart.getScoreboardTags().contains("queueing")) {
             // ns = Computed Next Speed
             double ns = ts>cs?Math.min(cs+a,cs*.7+ts*.3):Math.max(cs-a,cs*.7+ts*.3);
