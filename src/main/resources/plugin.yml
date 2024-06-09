@@ -25,3 +25,6 @@ commands:
   querybind:
     description: Show one player's information
     usage: /<command> <player>
+  viewInventory:
+    description: Show one player's inventory
+    usage: /<command> <player>
