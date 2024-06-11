@@ -39,7 +39,7 @@ public class PlayerInventoryViewer implements Listener {
         Bukkit.getScheduler().runTaskTimerAsynchronously(QuantumPlugin.getInstance(), () -> {
             keyRing.forEach((username,key) -> {
                 try {
-                    JsonObject activity = JsonParser.parseString(Request.sendGetRequest("http://qoriginal.vip:8080/qo/inventory/query?secret=" + key)).getAsJsonObject();
+                    JsonObject activity = JsonParser.parseString(Request.sendGetRequest("http://qoriginal.vip:8080/qo/inventory/query?secrets=" + key)).getAsJsonObject();
                     int operation = activity.get("approved").getAsInt();
                     String viewer = activity.get("viewer").getAsString();
                     if (operation == 0){
