@@ -256,7 +256,13 @@ public final class QuantumPlugin extends JavaPlugin {
                 String res2 = Request.sendGetRequest("http://qoriginal.vip:8080/qo/inventory/request?name=" + args[0] + "&from=" + sender.getName());
                 if (JsonParser.parseString(res2).getAsJsonObject().get("code").getAsInt() == 0) {
                     String key = JsonParser.parseString(res2).getAsJsonObject().get("key").getAsString();
-                    sender.sendMessage(Component.text("已经发送请求，请等待对方验证。").color(TextColor.color(67,205,128)));
+                    sender.sendMessage(Component.text("已经发送请求，请等待对方验证。")
+                            .color(TextColor.color(67, 205, 128))
+                            .append(Component.text("\n"))
+                            .append(Component.text("保管好你的Key: " + key)
+                                    .clickEvent(ClickEvent.copyToClipboard(key))
+                            )
+                    );
                     piv.insertKey(args[0], key);
                 } else {
                     sender.sendMessage(Component.text("请求未通过。可能你之前已经发送了请求，也可能当前的请求数已经过多。").color(TextColor.color(67,205,128)));
