@@ -46,9 +46,7 @@ public class SpeedMonitor implements Listener {
                         String formattedSpeed = decimalFormat.format(speed);
                         player.sendActionBar(coloredActionbar);
                         String template = "Speed: " + formattedSpeed + "KM/H";
-                        if (speed <= 40) player.sendTitle("", Color.BLUE + template, 0, 20, 0);
-                        if (speed < 80 && speed > 40) player.sendTitle("", Color.YELLOW + template, 0, 20, 0);
-                        if (speed > 80 && speed < 140) player.sendTitle("", Color.GREEN + template, 0, 20, 0);
+                        player.sendTitle("", template, 0, 20, 0);
                     } else {
                         cancel();
                     }
