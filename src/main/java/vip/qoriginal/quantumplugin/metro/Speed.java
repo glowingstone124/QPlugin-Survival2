@@ -26,7 +26,7 @@ public class Speed implements Listener{
     public void onMinecartMove(VehicleMoveEvent event) {
         Location f = event.getFrom();
         Location t = event.getTo();
-        Vector calc = null;
+        Vector calc;
         int tryTimes = 0;
         if (event.getVehicle() instanceof Minecart) {
             Minecart minecart = (Minecart) event.getVehicle();

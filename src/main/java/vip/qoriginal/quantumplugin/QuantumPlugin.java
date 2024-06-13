@@ -65,7 +65,7 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new SpeedMonitor(this), this);
         getServer().getPluginManager().registerEvents(new NamePrefix(), this);
         getServer().getPluginManager().registerEvents(new PlayerEventListener(), this);
-        //getServer().getPluginManager().registerEvents(new PlayerInventoryViewer(), this);
+        getServer().getPluginManager().registerEvents(new PlayerInventoryViewer(), this);
         ChatSync cs = new ChatSync();
         if (enableMetro){
             getServer().getPluginManager().registerEvents(new Speed(), this);
