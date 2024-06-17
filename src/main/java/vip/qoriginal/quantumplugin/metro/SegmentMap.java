@@ -141,6 +141,7 @@ public class SegmentMap {
             this.station = station;
             this.dummy = dummy;
             this.signal = signal;
+            this.queueing = new ArrayList<>();
         }
 
         public boolean enter(Minecart minecart) {
