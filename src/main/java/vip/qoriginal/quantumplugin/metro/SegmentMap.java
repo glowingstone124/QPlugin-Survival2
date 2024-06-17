@@ -1,6 +1,7 @@
 package vip.qoriginal.quantumplugin.metro;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
@@ -23,9 +24,11 @@ public class SegmentMap {
     public static HashMap<String, Segment> segMap = new HashMap<>();
     public static HashMap<Integer, Line> lineMap = new HashMap<>();
     public static World ov = Bukkit.getWorld("world");
-    private static final Gson gson = new Gson();
-    private static final String SEGMENTS_FILE = "metro/segments.json";
-    private static final String LINES_FILE = "metro/lines.json";
+    private static final Gson gson = new GsonBuilder()
+            .registerTypeAdapter(Location.class, new LocationAdapter())
+            .create();
+    private static final String SEGMENTS_FILE = "segments.json";
+    private static final String LINES_FILE = "lines.json";
 
     public static void init() {
         loadSegments();
@@ -36,11 +39,6 @@ public class SegmentMap {
         try (FileReader reader = new FileReader(SEGMENTS_FILE)) {
             Type type = new TypeToken<HashMap<String, Segment>>() {}.getType();
             segMap = gson.fromJson(reader, type);
-            segMap.values().forEach(segment -> {
-                for (Location location : segment.signal) {
-                    location.setWorld(ov);
-                }
-            });
         } catch (IOException e) {
             e.printStackTrace();
         }
