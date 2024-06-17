@@ -39,6 +39,12 @@ public class SegmentMap {
         try (FileReader reader = new FileReader(SEGMENTS_FILE)) {
             Type type = new TypeToken<HashMap<String, Segment>>() {}.getType();
             segMap = gson.fromJson(reader, type);
+
+            for (Segment segment : segMap.values()) {
+                if (segment.queueing == null) {
+                    segment.queueing = new ArrayList<>();
+                }
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -133,7 +139,7 @@ public class SegmentMap {
         public boolean station;
         public String dummy;
         public Minecart occupied = null;
-        public ArrayList<Minecart> queueing = new ArrayList<>();
+        public ArrayList<Minecart> queueing;
         public Location[] signal;
 
         Segment(int lid, boolean station, String dummy, Location[] signal) {
