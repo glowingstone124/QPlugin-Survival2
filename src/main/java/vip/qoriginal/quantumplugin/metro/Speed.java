@@ -17,8 +17,6 @@ import org.bukkit.util.Vector;
 import org.bukkit.event.vehicle.VehicleCreateEvent;
 import org.bukkit.Material;
 
-import java.util.HashMap;
-
 
 public class Speed implements Listener{
 

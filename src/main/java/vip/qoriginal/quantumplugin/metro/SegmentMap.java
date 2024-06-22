@@ -19,10 +19,11 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class SegmentMap {
-    public static HashMap<String, Segment> segMap = new HashMap<>();
-    public static HashMap<Integer, Line> lineMap = new HashMap<>();
+    public static ConcurrentHashMap<String, Segment> segMap = new ConcurrentHashMap<>();
+    public static ConcurrentHashMap<Integer, Line> lineMap = new ConcurrentHashMap<>();
     public static World ov = Bukkit.getWorld("world");
     private static final Gson gson = new GsonBuilder()
             .registerTypeAdapter(Location.class, new LocationAdapter())
