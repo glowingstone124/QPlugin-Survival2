@@ -34,7 +34,25 @@ public class SegmentMap {
         loadSegments();
         loadLines();
     }
-
+    public static int getMinecartCountInSegment(String segmentId){
+        Segment seg = segMap.get(segmentId);
+        if(seg == null){
+            return 0;
+        }
+        int count = 0;
+        if (seg.occupied != null) {
+            count++;
+        }
+        count += seg.queueing.size();
+        return count;
+    }
+    public static HashMap<String, Integer> getMinecartCountInSegment() {
+        HashMap<String, Integer> map = new HashMap<>();
+        for (String segId : segMap.keySet()) {
+            map.put(segId,getMinecartCountInSegment(segId));
+        }
+        return map;
+    }
     private static void loadSegments() {
         try (FileReader reader = new FileReader(SEGMENTS_FILE)) {
             Type type = new TypeToken<HashMap<String, Segment>>() {}.getType();
@@ -50,26 +68,10 @@ public class SegmentMap {
         }
     }
 
-    private static void saveSegments() {
-        try (FileWriter writer = new FileWriter(SEGMENTS_FILE)) {
-            gson.toJson(segMap, writer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
     private static void loadLines() {
         try (FileReader reader = new FileReader(LINES_FILE)) {
             Type type = new TypeToken<HashMap<Integer, Line>>() {}.getType();
             lineMap = gson.fromJson(reader, type);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static void saveLines() {
-        try (FileWriter writer = new FileWriter(LINES_FILE)) {
-            gson.toJson(lineMap, writer);
         } catch (IOException e) {
             e.printStackTrace();
         }
