@@ -30,7 +30,7 @@ public class ChatSync implements Listener {
     public static void exit(){
         scheduler.shutdown();
     }
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         if (!isShutup(event.getPlayer())) {
             try {
