@@ -15,6 +15,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Listener;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -31,6 +32,7 @@ import vip.qoriginal.quantumplugin.industry.StoneFarm;
 import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 
@@ -57,15 +59,19 @@ public final class QuantumPlugin extends JavaPlugin {
         }
         piv.init();
         getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
-        getServer().getPluginManager().registerEvents(new JoinLeaveListener(), this);
-        getServer().getPluginManager().registerEvents(new ChatCommandListener(), this);
-        getServer().getPluginManager().registerEvents(new MSPTCalculator(), this);
-        getServer().getPluginManager().registerEvents(new Knowledge(), this);
-        getServer().getPluginManager().registerEvents(new ChatSync(), this);
-        getServer().getPluginManager().registerEvents(new SpeedMonitor(this), this);
-        getServer().getPluginManager().registerEvents(new NamePrefix(), this);
-        getServer().getPluginManager().registerEvents(new PlayerEventListener(), this);
-        getServer().getPluginManager().registerEvents(new PlayerInventoryViewer(), this);
+        List<Listener> needRegistry = new ArrayList<>();
+        needRegistry.add(new JoinLeaveListener());
+        needRegistry.add(new ChatCommandListener());
+        needRegistry.add(new MSPTCalculator());
+        needRegistry.add(new Knowledge());
+        needRegistry.add(new ChatSync());
+        needRegistry.add(new SpeedMonitor(this));
+        needRegistry.add(new NamePrefix());
+        needRegistry.add(new PlayerEventListener());
+        needRegistry.add(new PlayerInventoryViewer());
+        for (Listener listener : needRegistry) {
+            getServer().getPluginManager().registerEvents(listener, this);
+        }
         ChatSync cs = new ChatSync();
         if (enableMetro){
             getServer().getPluginManager().registerEvents(new Speed(), this);

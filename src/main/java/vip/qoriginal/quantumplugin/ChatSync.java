@@ -25,7 +25,7 @@ public class ChatSync implements Listener {
     static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     public void init() {
         webMsgGetter = new WebMsgGetter();
-        scheduler.scheduleAtFixedRate(webMsgGetter, 0, 3, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(webMsgGetter, 0, 500, TimeUnit.MILLISECONDS);
     }
     public static void exit(){
         scheduler.shutdown();
