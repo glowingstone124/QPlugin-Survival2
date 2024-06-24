@@ -59,17 +59,19 @@ public final class QuantumPlugin extends JavaPlugin {
         }
         piv.init();
         getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
-        List<Listener> needRegistry = new ArrayList<>();
-        needRegistry.add(new JoinLeaveListener());
-        needRegistry.add(new ChatCommandListener());
-        needRegistry.add(new MSPTCalculator());
-        needRegistry.add(new Knowledge());
-        needRegistry.add(new ChatSync());
-        needRegistry.add(new SpeedMonitor(this));
-        needRegistry.add(new NamePrefix());
-        needRegistry.add(new PlayerEventListener());
-        needRegistry.add(new PlayerInventoryViewer());
-        for (Listener listener : needRegistry) {
+        Listener[] needReg = {
+                new JoinLeaveListener(),
+                new ChatCommandListener(),
+                new MSPTCalculator(),
+                new Knowledge(),
+                new ChatSync(),
+                new SpeedMonitor(this),
+                new NamePrefix(),
+                new PlayerEventListener(),
+                new PlayerInventoryViewer(),
+
+        };
+        for (Listener listener : needReg) {
             getServer().getPluginManager().registerEvents(listener, this);
         }
         ChatSync cs = new ChatSync();

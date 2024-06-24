@@ -26,7 +26,7 @@ import java.util.Calendar;
 public class MSPTCalculator implements Listener {
     /** 最终展现在返回结果的MilliSecond Per Tick值 */
     public static float mspt = 0f;
-    public static ArrayList<Long> recent_60tick = new ArrayList<>();
+    public static ArrayList<Float> recent_60tick = new ArrayList<>();
     /** 记录一个游戏刻开始的毫秒时间 */
     private static long starttime = 0;
     /** 记录上一次 <code>mspt > 77</code> 的时间 */
@@ -76,7 +76,7 @@ public class MSPTCalculator implements Listener {
                 //MSPT的计算公式：0.95 × 先前MSPT + 0.05 × 本游戏刻MSPT
                 mspt = mspt * 0.95f + (System.currentTimeMillis() - starttime) * 0.05f;
             }
-            recent_60tick.add(System.currentTimeMillis()-starttime);
+            recent_60tick.add(mspt);
             //告警逻辑
             if(System.currentTimeMillis()-lasterror>120000 && mspt>77.0) {
                 try {
@@ -89,12 +89,12 @@ public class MSPTCalculator implements Listener {
 
     public static float getR3s() {
         int sum = 0;
-        for(Long l:recent_60tick) sum += l;
+        for(float l:recent_60tick) sum += l;
         float result = (float) sum / recent_60tick.size();
         recent_60tick.clear();
         return result;
     }
-    public static ArrayList<Long> getRecent60t(){
+    public static ArrayList<Float> getRecent60t(){
         return recent_60tick;
     }
     private static String f(int i) {
