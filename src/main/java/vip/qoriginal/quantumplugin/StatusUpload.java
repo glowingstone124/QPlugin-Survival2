@@ -83,7 +83,7 @@ public class StatusUpload extends TimerTask {
         int totalcount = 0;
         ArrayList<BriefPlayerInfo> players = new ArrayList<>();
         long timestamp = 0;
-        ArrayList<Long> recent60 = new ArrayList<>();
+        ArrayList<Float> recent60 = new ArrayList<>();
         Statistics total = null;
         float mspt = 0;
         float mspt_3s = 0;
