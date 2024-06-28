@@ -24,6 +24,7 @@ import org.checkerframework.checker.units.qual.C;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
+import vip.qoriginal.quantumplugin.patch.CustomItemStack;
 import vip.qoriginal.quantumplugin.patch.Knowledge;
 import vip.qoriginal.quantumplugin.patch.QueryBind;
 import vip.qoriginal.quantumplugin.patch.SpeedMonitor;
@@ -69,7 +70,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 new NamePrefix(),
                 new PlayerEventListener(),
                 new PlayerInventoryViewer(),
-
+                new CustomItemStack()
         };
         for (Listener listener : needReg) {
             getServer().getPluginManager().registerEvents(listener, this);
