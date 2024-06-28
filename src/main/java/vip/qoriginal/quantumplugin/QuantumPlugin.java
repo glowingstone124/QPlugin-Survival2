@@ -36,6 +36,7 @@ import vip.qoriginal.quantumplugin.metro.LoadChunk;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
+import java.util.TimerTask;
 
 public final class QuantumPlugin extends JavaPlugin {
 
@@ -82,6 +83,12 @@ public final class QuantumPlugin extends JavaPlugin {
         }
         Timer timer = new Timer();
         timer.schedule(new StatusUpload(), 1000, 2000);
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                SegmentMap.refresh();
+            }
+        }, 0, 500);
         Block b = Bukkit.getWorld("world").getBlockAt(-1782,68,720);
         if(b.getChunk().load()) {
             if(b.getType() == Material.LEVER) {

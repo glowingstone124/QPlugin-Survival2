@@ -66,7 +66,6 @@ public class MSPTCalculator implements Listener {
      */
     @EventHandler
     public void onServerTickEnd(ServerTickEndEvent endEvent) {
-        SegmentMap.refresh();
         //MSPT的主要实现区，通过当前时间与starttime
         if(starttime!=0) {
             //我不知道为什么要加这一段 但是不加这一段他会报错。。。
