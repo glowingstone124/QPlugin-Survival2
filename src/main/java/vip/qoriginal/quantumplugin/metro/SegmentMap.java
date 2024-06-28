@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SegmentMap {
+
     public static ConcurrentHashMap<String, Segment> segMap = new ConcurrentHashMap<>();
     public static ConcurrentHashMap<Integer, Line> lineMap = new ConcurrentHashMap<>();
     public static World ov = Bukkit.getWorld("world");
@@ -89,8 +90,9 @@ public class SegmentMap {
     }
 
     public static void refresh() {
-        Set<String> occupiedKeys = ConcurrentHashMap.newKeySet();
-        Set<String> vacantKeys = ConcurrentHashMap.newKeySet();
+        ConcurrentHashMap<String, Minecart> occupiedMap = new ConcurrentHashMap<>();
+        ConcurrentHashMap<String, ArrayList<Minecart>> queueingMap = new ConcurrentHashMap<>();
+        ConcurrentHashMap<String, Boolean> needUpdateMap = new ConcurrentHashMap<>();
 
         for (Minecart minecart : ov.getEntitiesByClass(Minecart.class)) {
             Set<String> tags = minecart.getScoreboardTags();
@@ -102,49 +104,56 @@ public class SegmentMap {
         }
 
         segMap.forEach((key, value) -> {
-            if (value.occupied != null) {
-                occupiedKeys.add(key);
-            } else {
-                vacantKeys.add(key);
+            boolean hasOccupied = value.occupied != null;
+            needUpdateMap.put(key, hasOccupied);
+
+            if (hasOccupied) {
+                occupiedMap.put(key, value.occupied);
+            }
+
+            if (value.occupied == null) {
+                queueingMap.put(key, new ArrayList<>(value.queueing));
             }
         });
 
-        for (String key : occupiedKeys) {
-            Segment value = segMap.get(key);
-            if (value != null) {
-                value.occupied.addScoreboardTag("occupied-" + key);
+        occupiedMap.forEach((key, minecart) -> {
+            Segment segment = segMap.get(key);
+            if (segment != null) {
+                minecart.addScoreboardTag("occupied-" + key);
             }
-        }
+        });
 
-        for (String key : vacantKeys) {
-            Segment value = segMap.get(key);
-            if (value != null) {
+        queueingMap.forEach((key, queueing) -> {
+            Segment segment = segMap.get(key);
+            if (segment != null) {
+                for (Minecart minecart : queueing) {
+                    minecart.setVelocity(minecart.getVelocity().multiply(0.88));
+                    minecart.addScoreboardTag("queueing-" + key);
+                }
+            }
+        });
+
+        segMap.forEach((key, value) -> {
+            boolean hasOccupied = needUpdateMap.getOrDefault(key, false);
+            if (hasOccupied) {
+                for (Location location : value.signal) {
+                    if (location.getBlock().getType() == Material.GREEN_CONCRETE || location.getBlock().getType() == Material.RED_CONCRETE) {
+                        location.getBlock().setType(Material.RED_CONCRETE);
+                    }
+                }
+                if (value.occupied != null && value.occupied.isDead()) {
+                    value.leave(value.occupied);
+                }
+            } else {
                 for (Location location : value.signal) {
                     if (location.getBlock().getType() == Material.GREEN_CONCRETE || location.getBlock().getType() == Material.RED_CONCRETE) {
                         location.getBlock().setType(Material.GREEN_CONCRETE);
                     }
                 }
             }
-        }
-
-        segMap.forEach((key, value) -> {
-            if (value.occupied != null) {
-                for (Location location : value.signal) {
-                    if (location.getBlock().getType() == Material.GREEN_CONCRETE || location.getBlock().getType() == Material.RED_CONCRETE) {
-                        location.getBlock().setType(Material.RED_CONCRETE);
-                    }
-                }
-                if (value.occupied.isDead()) {
-                    value.leave(value.occupied);
-                }
-            }
-
-            for (Minecart minecart : value.queueing) {
-                minecart.setVelocity(minecart.getVelocity().multiply(0.88));
-                minecart.addScoreboardTag("queueing-" + key);
-            }
         });
     }
+
 
 
     public static class Line {
