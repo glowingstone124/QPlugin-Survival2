@@ -48,8 +48,8 @@ public class SegmentMap {
         return count;
     }
 
-    public static HashMap<String, Integer> getMinecartCountInSegment() {
-        HashMap<String, Integer> map = new HashMap<>();
+    public static ConcurrentHashMap<String, Integer> getMinecartCountInSegment() {
+        ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
         for (String segId : segMap.keySet()) {
             map.put(segId, getMinecartCountInSegment(segId));
         }
