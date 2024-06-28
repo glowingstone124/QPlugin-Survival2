@@ -89,6 +89,9 @@ public class SegmentMap {
     }
 
     public static void refresh() {
+        Set<String> occupiedKeys = ConcurrentHashMap.newKeySet();
+        Set<String> vacantKeys = ConcurrentHashMap.newKeySet();
+
         for (Minecart minecart : ov.getEntitiesByClass(Minecart.class)) {
             Set<String> tags = minecart.getScoreboardTags();
             for (String tag : tags) {
@@ -100,18 +103,32 @@ public class SegmentMap {
 
         segMap.forEach((key, value) -> {
             if (value.occupied != null) {
-                value.occupied.addScoreboardTag("occupied-" + key);
+                occupiedKeys.add(key);
+            } else {
+                vacantKeys.add(key);
             }
         });
 
-        segMap.forEach((key, value) -> {
-            if (value.occupied == null) {
+        for (String key : occupiedKeys) {
+            Segment value = segMap.get(key);
+            if (value != null) {
+                value.occupied.addScoreboardTag("occupied-" + key);
+            }
+        }
+
+        for (String key : vacantKeys) {
+            Segment value = segMap.get(key);
+            if (value != null) {
                 for (Location location : value.signal) {
                     if (location.getBlock().getType() == Material.GREEN_CONCRETE || location.getBlock().getType() == Material.RED_CONCRETE) {
                         location.getBlock().setType(Material.GREEN_CONCRETE);
                     }
                 }
-            } else {
+            }
+        }
+
+        segMap.forEach((key, value) -> {
+            if (value.occupied != null) {
                 for (Location location : value.signal) {
                     if (location.getBlock().getType() == Material.GREEN_CONCRETE || location.getBlock().getType() == Material.RED_CONCRETE) {
                         location.getBlock().setType(Material.RED_CONCRETE);
@@ -128,6 +145,7 @@ public class SegmentMap {
             }
         });
     }
+
 
     public static class Line {
         public String dummy;
