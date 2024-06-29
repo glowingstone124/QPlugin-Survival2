@@ -12,6 +12,7 @@ import org.bukkit.boss.KeyedBossBar;
 import org.bukkit.entity.Player;
 import org.checkerframework.checker.units.qual.A;
 import org.jetbrains.annotations.NotNull;
+import vip.qoriginal.quantumplugin.patch.PlayerInfoFetcher;
 
 import java.io.File;
 import java.lang.reflect.Type;
@@ -30,6 +31,7 @@ public class StatusUpload extends TimerTask {
         status.timestamp = System.currentTimeMillis();
         Player[] players = Bukkit.getOnlinePlayers().toArray(new Player[0]);
         status.onlinecount = players.length;
+
         for(Player p:players) {
             BriefPlayerInfo info = new BriefPlayerInfo();
             info.ping = p.getPing();

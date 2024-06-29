@@ -1,42 +1,45 @@
 package vip.qoriginal.quantumplugin.patch
 
+import org.bukkit.Bukkit
 import org.bukkit.Material
+import org.bukkit.entity.HumanEntity
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.inventory.InventoryClickEvent
-import org.bukkit.event.inventory.InventoryType
-import org.bukkit.event.player.PlayerPickupItemEvent
+import org.bukkit.event.inventory.InventoryMoveItemEvent
+import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
+import vip.qoriginal.quantumplugin.QuantumPlugin
 import java.util.*
-import kotlin.collections.HashMap
+import kotlin.math.min
 
 class CustomItemStack : Listener {
-    private val stackableMap: MutableMap<Material, Int> = EnumMap(org.bukkit.Material::class.java)
+    private val stackableMap: MutableMap<Material, Int> = EnumMap(Material::class.java)
 
     init {
         stackableMap[Material.TOTEM_OF_UNDYING] = 4
     }
 
     @EventHandler
-    fun onPlayerPickupItem(event: PlayerPickupItemEvent) {
-        val item = event.item
-        val itemStack = item.itemStack
+    fun onEntityPickupItem(event: EntityPickupItemEvent) {
+        val itemStack = event.item.itemStack
 
         if (stackableMap.containsKey(itemStack.type)) {
-            val player = event.player
-            val maxStackSize = stackableMap[itemStack.type]!!
+            val player = event.entity as Player
 
             val itemInInventory = findItemInInventory(player, itemStack.type)
-            if (itemInInventory != null && itemInInventory.amount < maxStackSize) {
+            if (itemInInventory != null) {
+                val maxStackSize = stackableMap[itemStack.type]!!
                 val newAmount = itemInInventory.amount + itemStack.amount
                 if (newAmount <= maxStackSize) {
                     itemInInventory.amount = newAmount
-                    item.remove()
+                    event.item.remove()
                     event.isCancelled = true
                 } else {
-                    itemStack.amount = newAmount - maxStackSize
                     itemInInventory.amount = maxStackSize
+                    itemStack.amount = newAmount - maxStackSize
                 }
             }
         }
@@ -44,16 +47,61 @@ class CustomItemStack : Listener {
 
     @EventHandler
     fun onInventoryClick(event: InventoryClickEvent) {
-        if (event.clickedInventory != null && event.clickedInventory!!.type == InventoryType.PLAYER) {
-            val currentItem = event.currentItem
-            if (currentItem != null && stackableMap.containsKey(currentItem.type)) {
-                val player = event.whoClicked as Player
-                val maxStackSize = stackableMap[currentItem.type]!!
-                if (currentItem.amount > maxStackSize) {
-                    currentItem.amount = maxStackSize
-                    player.updateInventory()
+        handleItemStacking(event.currentItem, event.whoClicked as Player)
+    }
+
+    @EventHandler
+    fun onInventoryMoveItem(event: InventoryMoveItemEvent) {
+        val sourceInventory = event.source
+        val destinationInventory = event.destination
+
+        handleItemStacking(event.item, sourceInventory, destinationInventory)
+    }
+
+    private fun handleItemStacking(itemStack: ItemStack?, player: Player) {
+        if (itemStack != null && stackableMap.containsKey(itemStack.type)) {
+            val maxStackSize = stackableMap[itemStack.type]!!
+            if (itemStack.amount > maxStackSize) {
+                itemStack.amount = maxStackSize
+                player.updateInventory()
+            }
+        }
+    }
+
+    private fun handleItemStacking(itemStack: ItemStack?, sourceInventory: Inventory, destinationInventory: Inventory) {
+        if (itemStack != null && stackableMap.containsKey(itemStack.type)) {
+            val maxStackSize = stackableMap[itemStack.type]!!
+            var remainingAmount = itemStack.amount
+            for (i in destinationInventory.contents.indices) {
+                val destItem = destinationInventory.getItem(i)
+
+                if (remainingAmount <= 0) break
+
+                if (destItem == null || destItem.type == Material.AIR) {
+                    val transferAmount = min(remainingAmount, maxStackSize - (destItem?.amount ?: 0))
+                    val newItem = ItemStack(itemStack.type, transferAmount)
+                    destinationInventory.setItem(i, newItem)
+                    remainingAmount -= transferAmount
+                } else if (destItem.type == itemStack.type && destItem.amount < maxStackSize) {
+                    val spaceLeft = maxStackSize - destItem.amount
+                    val transferAmount = min(remainingAmount, spaceLeft)
+                    destItem.amount += transferAmount
+                    remainingAmount -= transferAmount
+                    destinationInventory.setItem(i, destItem)
                 }
             }
+
+            if (remainingAmount <= 0) {
+                itemStack.amount = 0
+                sourceInventory.removeItem(itemStack)
+            } else {
+                itemStack.amount = remainingAmount
+            }
+
+            Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
+                sourceInventory.contents = sourceInventory.contents
+                destinationInventory.contents = destinationInventory.contents
+            })
         }
     }
 

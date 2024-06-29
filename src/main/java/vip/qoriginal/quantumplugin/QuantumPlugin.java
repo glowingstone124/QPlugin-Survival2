@@ -20,23 +20,22 @@ import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffectType;
-import org.checkerframework.checker.units.qual.C;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.CustomItemStack;
 import vip.qoriginal.quantumplugin.patch.Knowledge;
-import vip.qoriginal.quantumplugin.patch.QueryBind;
 import vip.qoriginal.quantumplugin.patch.SpeedMonitor;
-import vip.qoriginal.quantumplugin.industry.BoneMealFlowery;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
 import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 
 public final class QuantumPlugin extends JavaPlugin {
 

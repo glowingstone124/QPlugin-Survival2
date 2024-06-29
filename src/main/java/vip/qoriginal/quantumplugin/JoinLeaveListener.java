@@ -44,7 +44,13 @@ public class JoinLeaveListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) throws Exception {
         QuantumPlugin quantumPlugin = QuantumPlugin.getInstance();
         Player player = event.getPlayer();
-        IPUtils.locIsCn(event,quantumPlugin);
+        Thread.startVirtualThread((() -> {
+            try {
+                IPUtils.locIsCn(event,quantumPlugin);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }));
         if (!Arrays.asList(prolist).contains(player.getName())) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + event.getPlayer().getName()), BindResponse.class);
             if (relationship.qq != 10000) {
