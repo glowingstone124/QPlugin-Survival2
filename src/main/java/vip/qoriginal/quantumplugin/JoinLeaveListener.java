@@ -11,8 +11,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.checkerframework.checker.units.qual.A;
-import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,6 +49,7 @@ public class JoinLeaveListener implements Listener {
                 throw new RuntimeException(e);
             }
         }));
+
         if (!Arrays.asList(prolist).contains(player.getName())) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + event.getPlayer().getName()), BindResponse.class);
             if (relationship.qq != 10000) {

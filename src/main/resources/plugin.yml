@@ -28,3 +28,6 @@ commands:
   viewInventory:
     description: Show one player's inventory
     usage: /<command> <player>
+  bindauth:
+    description: Bind your account
+    usage: /<command> <player>

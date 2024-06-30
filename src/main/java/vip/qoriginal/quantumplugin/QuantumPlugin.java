@@ -122,6 +122,9 @@ public final class QuantumPlugin extends JavaPlugin {
                 return true;
             }
             Player s = (Player) sender;
+            if (s.getInventory().getItemInOffHand().getType() == Material.TOTEM_OF_UNDYING || s.getInventory().getItemInMainHand().getType() == Material.TOTEM_OF_UNDYING) {
+                sender.sendMessage("不死图腾或许会救你一命...?");
+            }
             sender.sendMessage(Component.text("晚安..."));
             Location batloc = s.getLocation();
             batloc.setX(-66);
