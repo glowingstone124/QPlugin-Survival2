@@ -31,3 +31,6 @@ commands:
   bindauth:
     description: Bind your account
     usage: /<command> <player>
+  bind:
+    description: Bind
+    usage: /<command> <player>
