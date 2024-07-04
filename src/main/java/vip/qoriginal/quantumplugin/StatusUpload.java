@@ -25,7 +25,7 @@ public class StatusUpload {
     public static String command = "";
     public static int totalUser = 0;
     public void run() {
-        System.out.println("println");
+        //System.out.println("println");
         Gson gson = new Gson();
         StatusSample status = new StatusSample();
         status.timestamp = System.currentTimeMillis();

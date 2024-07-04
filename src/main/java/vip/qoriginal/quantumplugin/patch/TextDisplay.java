@@ -65,8 +65,8 @@ public class TextDisplay {
 
     public void createTextDisplay(Location location, String text, Direction direction, boolean vertical) {
         String rotationCommand = "";
+
         if (vertical) {
-            rotationCommand = "{axis:[1.0,0.0,0.0],angle:1.57}";
             switch (direction) {
                 case NORTH:
                     rotationCommand = "{axis:[0.0,1.0,0.0],angle:0.0}";
@@ -82,6 +82,21 @@ public class TextDisplay {
                     break;
                 default:
                     rotationCommand = "{axis:[0.0,1.0,0.0],angle:0.0}";
+            }
+        } else {
+            double yaw = (location.getYaw() - 90) % 360;
+            if (yaw < 0) {
+                yaw += 360.0;
+            }
+
+            if (yaw >= 45 && yaw < 135) {
+                rotationCommand = "{axis:[0.0,1.0,0.0],angle:1.57}";
+            } else if (yaw >= 135 && yaw < 225) {
+                rotationCommand = "{axis:[0.0,1.0,0.0],angle:3.14}";
+            } else if (yaw >= 225 && yaw < 315) {
+                rotationCommand = "{axis:[0.0,1.0,0.0],angle:-1.57}";
+            } else {
+                rotationCommand = "{axis:[0.0,1.0,0.0],angle:0.0}";
             }
         }
 
