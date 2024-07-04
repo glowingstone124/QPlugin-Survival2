@@ -34,3 +34,6 @@ commands:
   bind:
     description: Bind
     usage: /<command> <player>
+  summontext:
+    description: Show a text
+    usage: /<command> <text>

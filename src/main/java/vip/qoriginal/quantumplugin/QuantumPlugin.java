@@ -20,8 +20,10 @@ import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
+import org.w3c.dom.Text;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.CustomItemStack;
 import vip.qoriginal.quantumplugin.patch.Knowledge;
@@ -29,6 +31,7 @@ import vip.qoriginal.quantumplugin.patch.SpeedMonitor;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
 import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
+import vip.qoriginal.quantumplugin.patch.TextDisplay;
 
 import java.util.List;
 import java.util.Timer;
@@ -43,6 +46,8 @@ public final class QuantumPlugin extends JavaPlugin {
     boolean enableMetro = true;
     private static QuantumPlugin instance;
     PlayerInventoryViewer piv = new PlayerInventoryViewer();
+    private TextDisplay td = new TextDisplay();
+
     @Override
     public void onEnable() {
         instance = this;
@@ -80,14 +85,16 @@ public final class QuantumPlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(new Speed(), this);
             getServer().getPluginManager().registerEvents(new LoadChunk(this), this);
         }
-        Timer timer = new Timer();
-        timer.schedule(new StatusUpload(), 1000, 2000);
-        timer.schedule(new TimerTask() {
+        StatusUpload su = new StatusUpload();
+        new BukkitRunnable() {
             @Override
             public void run() {
+                su.run();
                 SegmentMap.refresh();
             }
-        }, 0, 500);
+        }.runTaskTimer(this, 0L, 10L);
+
+        Timer timer = new Timer();
         Block b = Bukkit.getWorld("world").getBlockAt(-1782,68,720);
         if(b.getChunk().load()) {
             if(b.getType() == Material.LEVER) {
@@ -289,6 +296,9 @@ public final class QuantumPlugin extends JavaPlugin {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
+        } else if(sender instanceof Player && command.getName().equalsIgnoreCase("displaytext" ) && args.length == 1){
+            Player player = (Player) sender;
+            td.exec(player, args[0]);
         }
         return false;
     }

@@ -21,11 +21,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.TimerTask;
 
-public class StatusUpload extends TimerTask {
+public class StatusUpload {
     public static String command = "";
     public static int totalUser = 0;
-    @Override
     public void run() {
+        System.out.println("println");
         Gson gson = new Gson();
         StatusSample status = new StatusSample();
         status.timestamp = System.currentTimeMillis();
