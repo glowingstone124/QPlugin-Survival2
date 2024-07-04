@@ -101,7 +101,7 @@ public class TextDisplay {
         }
 
         String command = String.format(
-                "minecraft:summon text_display %.2f %.2f %.2f {text:'{\"text\":\"%s\"}',line_width:200,text_opacity:255,shadow:false,see_through:false,alignment:\"center\",transformation:{right_rotation:%s,scale:[2.0,2.0,2.0]}}",
+                "minecraft:summon text_display %.2f %.2f %.2f {text:'{\"text\":\"%s\"}',line_width:200,text_opacity:255,shadow:false,see_through:false,alignment:\"center\",transformation:{left_rotation:{axis:[0.0,1.0,0.0],angle:0.0},right_rotation:%s,scale:[4.0,4.0,4.0],translation:[0,0,0]}}",
                 location.getX(), location.getY(), location.getZ(), text, rotationCommand
         );
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
