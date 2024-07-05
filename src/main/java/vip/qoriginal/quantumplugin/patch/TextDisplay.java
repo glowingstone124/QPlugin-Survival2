@@ -13,7 +13,6 @@ public class TextDisplay {
             Direction bestDirection = getBestDirection(player, targetLocation);
             boolean vertical = shouldDisplayVertical(player);
             createTextDisplay(targetLocation, text, bestDirection, vertical);
-            createTextDisplay(targetLocation, text, bestDirection, vertical);
             player.sendMessage("Text display created at: " + targetLocation + " facing " + bestDirection);
         } else {
             player.sendMessage("No target block in sight.");

@@ -296,7 +296,7 @@ public final class QuantumPlugin extends JavaPlugin {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        } else if(sender instanceof Player && command.getName().equalsIgnoreCase("displaytext" ) && args.length == 1){
+        } else if(sender instanceof Player && command.getName().equalsIgnoreCase("summontext" ) && args.length == 1){
             Player player = (Player) sender;
             td.exec(player, args[0]);
         }
