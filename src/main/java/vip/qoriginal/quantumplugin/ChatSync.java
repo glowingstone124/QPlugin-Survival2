@@ -68,7 +68,7 @@ public class ChatSync implements Listener {
                 if (jsonElement.isJsonObject()) {
                     JsonObject msgObj = jsonElement.getAsJsonObject();
                     if (msgObj.get("code").getAsInt() == 0){
-                        String content = msgObj.get("content").getAsString();
+                        String content = parseCQ(msgObj.get("content").getAsString());
                         if (!content.equals(buffer)){
                             Component msgComponent = Component.text(content).color(TextColor.color(113, 159, 165));
                             for (Player p : Bukkit.getOnlinePlayers()) {
@@ -82,5 +82,10 @@ public class ChatSync implements Listener {
                 throw new RuntimeException(e);
             }
         }
+    }
+    public String parseCQ(String msg){
+        return msg.replaceAll("\\[CQ:reply,id=\\d+\\]", "[回复]")
+                .replaceAll("\\[CQ:at,qq=(\\d+)\\]", "@$1")
+                .replaceAll("\\[CQ:image,file=[^\\]]+\\]", "[图片]");
     }
 }
