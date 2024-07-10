@@ -52,14 +52,11 @@ public class JoinLeaveListener implements Listener {
 
         if (!Arrays.asList(prolist).contains(player.getName())) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + event.getPlayer().getName()), BindResponse.class);
-            if (relationship.qq != 10000) {
-                cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
-                event.getPlayer().sendMessage(Component.text("验证通过，欢迎回到Quantum Original！").appendNewline().append(Component.text("QQ: " + relationship.qq).color(TextColor.color(114, 114, 114))));
-                sessionStartTimes.put(player, System.currentTimeMillis());
-            } else {
-                cs.sendChatMsg("机器人 " + event.getPlayer().getName() + " 加入了服务器。");
-                event.getPlayer().sendMessage(Component.text("您正在使用一个机器人账号。").color(TextColor.color(255,255,0)));
-            }
+            cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
+            event.getPlayer().sendMessage(Component.text("验证通过，欢迎回到Quantum Original！")
+                    .appendNewline().append(Component.text("QQ: " + relationship.qq)
+                            .color(TextColor.color(114, 114, 114))));
+            sessionStartTimes.put(player, System.currentTimeMillis());
         } else {
             event.getPlayer().sendMessage(Component.text(String.format("您好， %s， 您享有免验证权", player.getName())));
             cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
