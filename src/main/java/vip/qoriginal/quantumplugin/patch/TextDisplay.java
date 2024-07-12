@@ -71,13 +71,13 @@ public class TextDisplay {
                     rotationCommand = "{axis:[0.0,1.0,0.0],angle:0.0}";
                     break;
                 case SOUTH:
-                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:3.14}";
+                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:3.1415926535897932}";
                     break;
                 case EAST:
-                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:1.57}";
+                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:1.5707963267948965}";
                     break;
                 case WEST:
-                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:-1.57}";
+                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:-1.5707963267948965}";
                     break;
                 default:
                     rotationCommand = "{axis:[0.0,1.0,0.0],angle:0.0}";
