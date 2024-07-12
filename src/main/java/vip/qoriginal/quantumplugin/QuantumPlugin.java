@@ -23,7 +23,6 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
-import org.w3c.dom.Text;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.CustomItemStack;
 import vip.qoriginal.quantumplugin.patch.Knowledge;
