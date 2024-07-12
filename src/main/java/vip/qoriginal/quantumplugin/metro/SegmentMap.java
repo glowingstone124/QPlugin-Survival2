@@ -15,9 +15,7 @@ import org.bukkit.entity.Minecart;
 import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SegmentMap {
@@ -94,7 +92,9 @@ public class SegmentMap {
         ConcurrentHashMap<String, ArrayList<Minecart>> queueingMap = new ConcurrentHashMap<>();
         ConcurrentHashMap<String, Boolean> needUpdateMap = new ConcurrentHashMap<>();
 
-        for (Minecart minecart : ov.getEntitiesByClass(Minecart.class)) {
+        List<Minecart> minecarts = new ArrayList<>(ov.getEntitiesByClass(Minecart.class));
+
+        for (Minecart minecart : minecarts) {
             Set<String> tags = minecart.getScoreboardTags();
             for (String tag : tags) {
                 if (tag.startsWith("queueing-") || tag.startsWith("occupied-")) {
@@ -103,7 +103,9 @@ public class SegmentMap {
             }
         }
 
-        segMap.forEach((key, value) -> {
+        Map<String, Segment> segMapCopy = new HashMap<>(segMap);
+
+        segMapCopy.forEach((key, value) -> {
             boolean hasOccupied = value.occupied != null;
             needUpdateMap.put(key, hasOccupied);
 
@@ -117,14 +119,14 @@ public class SegmentMap {
         });
 
         occupiedMap.forEach((key, minecart) -> {
-            Segment segment = segMap.get(key);
+            Segment segment = segMapCopy.get(key);
             if (segment != null) {
                 minecart.addScoreboardTag("occupied-" + key);
             }
         });
 
         queueingMap.forEach((key, queueing) -> {
-            Segment segment = segMap.get(key);
+            Segment segment = segMapCopy.get(key);
             if (segment != null) {
                 for (Minecart minecart : queueing) {
                     minecart.setVelocity(minecart.getVelocity().multiply(0.88));
@@ -133,7 +135,7 @@ public class SegmentMap {
             }
         });
 
-        segMap.forEach((key, value) -> {
+        segMapCopy.forEach((key, value) -> {
             boolean hasOccupied = needUpdateMap.getOrDefault(key, false);
             if (hasOccupied) {
                 for (Location location : value.signal) {
@@ -152,7 +154,11 @@ public class SegmentMap {
                 }
             }
         });
+        segMap.clear();
+        segMap.putAll(segMapCopy);
     }
+
+
 
 
 
