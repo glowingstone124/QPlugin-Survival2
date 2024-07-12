@@ -17,8 +17,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 public class PlayerInventoryViewer implements Listener {
-    private static Map<UUID, UUID> openInventories = new HashMap<>();
-    private static Map<String,String> keyRing = new HashMap<>();
+    private static final Map<UUID, UUID> openInventories = new HashMap<>();
+    private static final Map<String,String> keyRing = new HashMap<>();
 
     private void openInventoryForPlayer(Player viewer, Player target) {
         Inventory targetInventory = target.getInventory();
@@ -85,6 +85,7 @@ public class PlayerInventoryViewer implements Listener {
             }
         } else if (openInventories.containsValue(player.getUniqueId())) {
             UUID viewerUUID = getKeyByValue(openInventories, player.getUniqueId());
+            assert viewerUUID != null;
             Player viewerPlayer = Bukkit.getPlayer(viewerUUID);
 
             if (viewerPlayer != null) {

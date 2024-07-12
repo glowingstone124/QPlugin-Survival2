@@ -1,25 +1,14 @@
 package vip.qoriginal.quantumplugin;
 
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.event.ClickEvent;
-import net.kyori.adventure.text.event.HoverEvent;
-import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.*;
 import org.bukkit.boss.BossBar;
 import org.bukkit.boss.KeyedBossBar;
 import org.bukkit.entity.Player;
-import org.checkerframework.checker.units.qual.A;
 import org.jetbrains.annotations.NotNull;
-import vip.qoriginal.quantumplugin.patch.PlayerInfoFetcher;
 
-import java.io.File;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
-import java.util.TimerTask;
 
 public class StatusUpload {
     public static String command = "";
@@ -73,11 +62,6 @@ public class StatusUpload {
         String format = "text";
         long[] tick_time;
         long game_time = 0;
-    }
-
-    public static class DiskUsage {
-        long total = 0;
-        long free = 0;
     }
 
     public static class StatusSample {

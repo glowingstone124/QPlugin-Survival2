@@ -19,7 +19,7 @@ import java.util.Map;
 
 
 public class JoinLeaveListener implements Listener {
-    private Map<Player, Long> sessionStartTimes = new HashMap<>();
+    private final Map<Player, Long> sessionStartTimes = new HashMap<>();
     ChatSync cs = new ChatSync();
     public static final String[] prolist = {"MineCreeper2086", "Wsiogn82", "glowingstone124"};
     public static final String[] blocklist = {"ServerSeeker.net"};

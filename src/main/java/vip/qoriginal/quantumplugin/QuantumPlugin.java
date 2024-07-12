@@ -35,10 +35,6 @@ import vip.qoriginal.quantumplugin.patch.TextDisplay;
 
 import java.util.List;
 import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
 
 public final class QuantumPlugin extends JavaPlugin {
 
@@ -260,10 +256,10 @@ public final class QuantumPlugin extends JavaPlugin {
                         查询结果
                         ==============================
                         用户名: %s
-                                                        
+                                                       \s
                         qq号: %s
-                                                        
-                        """;
+                                                       \s
+                       \s""";
                 s.sendMessage(String.format(message, name, relationship.qq));
             }
         } else if (command.getName().equalsIgnoreCase("viewInventory") && args.length == 1){

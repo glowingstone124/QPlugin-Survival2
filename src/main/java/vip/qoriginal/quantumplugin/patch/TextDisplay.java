@@ -6,18 +6,16 @@ import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
 public class TextDisplay {
-    public boolean exec(Player player,String text) {
-
+    public void exec(Player player, String text) {
         Location targetLocation = getTargetLocation(player, 50);
         if (targetLocation != null) {
-            Direction bestDirection = getBestDirection(player, targetLocation);
+            Direction bestDirection = getBestDirection(player);
             boolean vertical = shouldDisplayVertical(player);
             createTextDisplay(targetLocation, text, bestDirection, vertical);
             player.sendMessage("Text display created at: " + targetLocation + " facing " + bestDirection);
         } else {
             player.sendMessage("No target block in sight.");
         }
-        return true;
     }
 
     public enum Direction {
@@ -36,7 +34,7 @@ public class TextDisplay {
         return null;
     }
 
-    public Direction getBestDirection(Player player, Location targetLocation) {
+    public Direction getBestDirection(Player player) {
         Vector playerDirection = player.getLocation().getDirection();
         double northAngle = playerDirection.angle(new Vector(0, 0, -1));
         double southAngle = playerDirection.angle(new Vector(0, 0, 1));
@@ -63,7 +61,7 @@ public class TextDisplay {
     }
 
     public void createTextDisplay(Location location, String text, Direction direction, boolean vertical) {
-        String rotationCommand = "";
+        String rotationCommand;
 
         if (vertical) {
             switch (direction) {

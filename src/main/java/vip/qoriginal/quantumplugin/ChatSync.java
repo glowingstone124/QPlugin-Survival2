@@ -12,6 +12,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.Executors;
@@ -39,8 +40,8 @@ public class ChatSync implements Listener {
                 StringBuilder sb = new StringBuilder();
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                 String currentTime = sdf.format(new Date());
-                sb.append("[" + currentTime + "]").append("<").append(playerName).append(">: ").append(message);
-                String encodedMessage = new String(sb.toString().getBytes("UTF-8"), "ISO-8859-1");
+                sb.append("[").append(currentTime).append("]").append("<").append(playerName).append(">: ").append(message);
+                String encodedMessage = new String(sb.toString().getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
                 Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -51,7 +52,7 @@ public class ChatSync implements Listener {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append(message);
-            String encodedMessage = new String(sb.toString().getBytes("UTF-8"), "ISO-8859-1");
+            String encodedMessage = new String(sb.toString().getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
             Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
         } catch (Exception e) {
             e.printStackTrace();
