@@ -291,9 +291,13 @@ public final class QuantumPlugin extends JavaPlugin {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        } else if(sender instanceof Player && command.getName().equalsIgnoreCase("summontext" ) && args.length == 1){
+        } else if(sender instanceof Player && command.getName().equalsIgnoreCase("summontext" )){
             Player player = (Player) sender;
-            td.exec(player, args[0]);
+            if (args.length == 1) {
+                td.exec(player, args[0]);
+            } else {
+                player.sendMessage("如果有空格，请使用“”包裹");
+            }
         }
         return false;
     }

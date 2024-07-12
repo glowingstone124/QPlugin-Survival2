@@ -11,7 +11,7 @@ public class TextDisplay {
         if (targetLocation != null) {
             Direction bestDirection = getBestDirection(player);
             boolean vertical = shouldDisplayVertical(player);
-            createTextDisplay(targetLocation, text, bestDirection, vertical);
+            createTextDisplay(targetLocation, text.replace("\"", ""), bestDirection, vertical);
             player.sendMessage("Text display created at: " + targetLocation + " facing " + bestDirection);
         } else {
             player.sendMessage("No target block in sight.");
@@ -103,6 +103,7 @@ public class TextDisplay {
         );
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
     }
+
     public boolean shouldDisplayVertical(Player player) {
         Vector playerDirection = player.getLocation().getDirection();
         Vector groundNormal = new Vector(0, 1, 0);

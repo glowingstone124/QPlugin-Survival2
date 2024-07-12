@@ -158,10 +158,6 @@ public class SegmentMap {
         segMap.putAll(segMapCopy);
     }
 
-
-
-
-
     public static class Line {
         public String dummy;
         public String color;
