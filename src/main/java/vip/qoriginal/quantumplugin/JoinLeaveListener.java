@@ -60,6 +60,7 @@ public class JoinLeaveListener implements Listener {
         } else {
             event.getPlayer().sendMessage(Component.text(String.format("您好， %s， 您享有免验证权", player.getName())));
             cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
+            sessionStartTimes.put(player, System.currentTimeMillis());
         }
     }
     @EventHandler
