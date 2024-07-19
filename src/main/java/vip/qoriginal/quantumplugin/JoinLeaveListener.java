@@ -65,7 +65,6 @@ public class JoinLeaveListener implements Listener {
         });
         if (!Arrays.asList(prolist).contains(player.getName())) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + player.getName()), BindResponse.class);
-            cs.sendChatMsg("玩家" + player.getName() + "加入了服务器。");
             player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original！")
                     .appendNewline()
                     .append(Component.text("QQ: " + relationship.qq)
@@ -73,9 +72,9 @@ public class JoinLeaveListener implements Listener {
             sessionStartTimes.put(player, System.currentTimeMillis());
         } else {
             player.sendMessage(Component.text(String.format("您好， %s， 您享有免验证权", player.getName())));
-            cs.sendChatMsg("玩家" + player.getName() + "加入了服务器。");
             sessionStartTimes.put(player, System.currentTimeMillis());
         }
+        cs.sendChatMsg("玩家" + player.getName() + "加入了服务器。");
     }
 
     @EventHandler
