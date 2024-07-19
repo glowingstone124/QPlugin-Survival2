@@ -8,7 +8,10 @@ import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.regex.*;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
@@ -33,30 +36,35 @@ public class ChatSync implements Listener {
     }
     @EventHandler
     public void onPlayerChat(AsyncPlayerChatEvent event) {
+
         if (!isShutup(event.getPlayer())) {
+            Thread.startVirtualThread(() -> {
+                try {
+                    String playerName = event.getPlayer().getName();
+                    String message = event.getMessage();
+                    StringBuilder sb = new StringBuilder();
+                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                    String currentTime = sdf.format(new Date());
+                    sb.append("[").append(currentTime).append("]").append("<").append(playerName).append(">: ").append(message);
+                    String encodedMessage = new String(sb.toString().getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
+                    Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+    }
+    public void sendChatMsg(String message){
+        Thread.startVirtualThread(() -> {
             try {
-                String playerName = event.getPlayer().getName();
-                String message = event.getMessage();
                 StringBuilder sb = new StringBuilder();
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                String currentTime = sdf.format(new Date());
-                sb.append("[").append(currentTime).append("]").append("<").append(playerName).append(">: ").append(message);
+                sb.append(message);
                 String encodedMessage = new String(sb.toString().getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
                 Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }
-    }
-    public void sendChatMsg(String message){
-        try {
-            StringBuilder sb = new StringBuilder();
-            sb.append(message);
-            String encodedMessage = new String(sb.toString().getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-            Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        });
     }
     class WebMsgGetter implements Runnable {
         String buffer = "";

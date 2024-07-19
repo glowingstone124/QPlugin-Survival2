@@ -26,43 +26,58 @@ public class JoinLeaveListener implements Listener {
     @EventHandler
     public void onPlayerPreLogin(AsyncPlayerPreLoginEvent event) throws Exception {
         String playerName = event.getName();
-        if (Arrays.asList(blocklist).contains(playerName)){
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[403 Forbidden]").append(Component.text("this server doesn't allows ServerSeeker.").decorate(TextDecoration.BOLD)));
+
+        if (Arrays.asList(blocklist).contains(playerName)) {
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
+                    Component.text("[403 Forbidden]")
+                            .append(Component.text("this server doesn't allows ServerSeeker.").decorate(TextDecoration.BOLD)));
+            return;
         }
+
         if (!Arrays.asList(prolist).contains(playerName)) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + playerName), BindResponse.class);
+
             if (relationship.code == 1) {
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[401 Unauthorized]验证失败，请在群：946085440中下载QCommunity").append(Component.text("并绑定你的游戏名：" + playerName).decorate(TextDecoration.BOLD)).append(Component.text(" 之后重试！")));
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
+                        Component.text("[401 Unauthorized]验证失败，请在群：946085440中下载QCommunity")
+                                .append(Component.text("并绑定你的游戏名：" + playerName).decorate(TextDecoration.BOLD))
+                                .append(Component.text(" 之后重试！")));
             } else if (relationship.frozen) {
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[403 Forbidden]验证失败，原因：您的账户已经被冻结！ ").append(Component.text("您的游戏名：" + playerName).decorate(TextDecoration.BOLD)).append(Component.text(" 请私聊群主：1294915648了解更多")));
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
+                        Component.text("[403 Forbidden]验证失败，原因：您的账户已经被冻结！")
+                                .append(Component.text("您的游戏名：" + playerName).decorate(TextDecoration.BOLD))
+                                .append(Component.text(" 请私聊群主：1294915648了解更多")));
             }
         }
     }
+
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) throws Exception {
         QuantumPlugin quantumPlugin = QuantumPlugin.getInstance();
         Player player = event.getPlayer();
-        Thread.startVirtualThread((() -> {
+
+        Thread.startVirtualThread(() -> {
             try {
-                IPUtils.locIsCn(event,quantumPlugin);
+                IPUtils.locIsCn(event, quantumPlugin);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        }));
-
+        });
         if (!Arrays.asList(prolist).contains(player.getName())) {
-            BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + event.getPlayer().getName()), BindResponse.class);
-            cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
-            event.getPlayer().sendMessage(Component.text("验证通过，欢迎回到Quantum Original！")
-                    .appendNewline().append(Component.text("QQ: " + relationship.qq)
+            BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + player.getName()), BindResponse.class);
+            cs.sendChatMsg("玩家" + player.getName() + "加入了服务器。");
+            player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original！")
+                    .appendNewline()
+                    .append(Component.text("QQ: " + relationship.qq)
                             .color(TextColor.color(114, 114, 114))));
             sessionStartTimes.put(player, System.currentTimeMillis());
         } else {
-            event.getPlayer().sendMessage(Component.text(String.format("您好， %s， 您享有免验证权", player.getName())));
-            cs.sendChatMsg("玩家" + event.getPlayer().getName() + "加入了服务器。");
+            player.sendMessage(Component.text(String.format("您好， %s， 您享有免验证权", player.getName())));
+            cs.sendChatMsg("玩家" + player.getName() + "加入了服务器。");
             sessionStartTimes.put(player, System.currentTimeMillis());
         }
     }
+
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) throws Exception {
         Player player = event.getPlayer();
