@@ -92,9 +92,27 @@ public class ChatSync implements Listener {
             }
         }
     }
-    public String parseCQ(String msg){
-        return msg.replaceAll("\\[CQ:reply,id=\\d+\\]", "[回复]")
-                .replaceAll("\\[CQ:at,qq=(\\d+)\\]", "@$1")
-                .replaceAll("\\[CQ:image,file=[^\\]]+\\]", "[图片]");
+    public String parseCQ(String msg) throws Exception {
+        msg = msg.replaceAll("\\[CQ:reply,id=\\d+\\]", "[回复]");
+
+        Pattern atPattern = Pattern.compile("\\[CQ:at,qq=(\\d+)\\]");
+        Matcher atMatcher = atPattern.matcher(msg);
+        StringBuffer result = new StringBuffer();
+        while (atMatcher.find()) {
+            String qq = atMatcher.group(1);
+            String playername = getPlayername(qq);
+            atMatcher.appendReplacement(result, "@" + playername);
+        }
+        atMatcher.appendTail(result);
+        msg = result.toString();
+
+        msg = msg.replaceAll("\\[CQ:image,file=[^\\]]+\\]", "[图片]");
+        return msg;
+    }
+
+    private String getPlayername(String input) throws Exception {
+        JsonObject playerObj = JsonParser.parseString(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/name?qq=" + input)).getAsJsonObject();
+        if (playerObj.get("code").getAsInt() == 0) return playerObj.get("username").getAsString();
+        return input;
     }
 }
