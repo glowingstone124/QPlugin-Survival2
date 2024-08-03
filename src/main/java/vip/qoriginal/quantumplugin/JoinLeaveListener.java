@@ -5,6 +5,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
+import org.bukkit.Server;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -12,6 +13,9 @@ import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -21,8 +25,12 @@ import java.util.Map;
 public class JoinLeaveListener implements Listener {
     private final Map<Player, Long> sessionStartTimes = new HashMap<>();
     ChatSync cs = new ChatSync();
-    public static final String[] prolist = {"MineCreeper2086", "Wsiogn82", "glowingstone124"};
+    public static final String prolist_path = "pros.txt";
+    public static String[] prolist = {"MineCreeper2086", "Wsiogn82", "glowingstone124"};
     public static final String[] blocklist = {"ServerSeeker.net"};
+    public static void init() throws IOException {
+        prolist = Files.readString(Path.of(prolist_path)).split("\n");
+    }
     @EventHandler
     public void onPlayerPreLogin(AsyncPlayerPreLoginEvent event) throws Exception {
         String playerName = event.getName();

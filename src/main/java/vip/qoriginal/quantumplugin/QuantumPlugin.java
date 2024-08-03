@@ -32,6 +32,7 @@ import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
 import vip.qoriginal.quantumplugin.patch.TextDisplay;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Timer;
 
@@ -48,6 +49,11 @@ public final class QuantumPlugin extends JavaPlugin {
         instance = this;
         System.out.println("1.14.5.5.1 Started.");
         webMsgGetterTask = new WebMsgGetter();
+        try {
+            JoinLeaveListener.init();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         int delay = 0;
         int period = 20;
         JSONObject stopObj = new JSONObject();
