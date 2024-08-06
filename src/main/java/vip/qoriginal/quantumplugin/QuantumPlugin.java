@@ -305,7 +305,7 @@ public final class QuantumPlugin extends JavaPlugin {
             } else {
                 player.sendMessage("如果有空格，请使用“”包裹");
             }
-        } else if (sender instanceof Player && command.getName().equalsIgnoreCase("summontext" )){
+        } else if (sender instanceof Player && command.getName().equalsIgnoreCase("login" )){
             Player s = (Player) sender;
             if (args.length != 1) sender.sendMessage("请正确输入密码。");
             login.performLogin(s, args[0]);

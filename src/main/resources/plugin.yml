@@ -37,3 +37,6 @@ commands:
   summontext:
     description: Show a text
     usage: /<command> <text>
+  login:
+    description: Login
+    usage: /<command> <password>
