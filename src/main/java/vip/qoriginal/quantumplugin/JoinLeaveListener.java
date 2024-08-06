@@ -25,6 +25,7 @@ import java.util.Map;
 public class JoinLeaveListener implements Listener {
     private final Map<Player, Long> sessionStartTimes = new HashMap<>();
     ChatSync cs = new ChatSync();
+    Login login = new Login();
     public static final String prolist_path = "pros.txt";
     public static String[] prolist = {"MineCreeper2086", "Wsiogn82", "glowingstone124"};
     public static final String[] blocklist = {"ServerSeeker.net"};
@@ -73,11 +74,12 @@ public class JoinLeaveListener implements Listener {
         });
         if (!Arrays.asList(prolist).contains(player.getName())) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + player.getName()), BindResponse.class);
-            player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original！")
+            player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original，输入密码来登录")
                     .appendNewline()
                     .append(Component.text("QQ: " + relationship.qq)
                             .color(TextColor.color(114, 114, 114))));
             sessionStartTimes.put(player, System.currentTimeMillis());
+            login.handleJoin(event.getPlayer());
         } else {
             player.sendMessage(Component.text(String.format("您好， %s， 您享有免验证权", player.getName())));
             sessionStartTimes.put(player, System.currentTimeMillis());

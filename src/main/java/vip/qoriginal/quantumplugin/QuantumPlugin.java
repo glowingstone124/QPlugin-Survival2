@@ -43,7 +43,7 @@ public final class QuantumPlugin extends JavaPlugin {
     private static QuantumPlugin instance;
     PlayerInventoryViewer piv = new PlayerInventoryViewer();
     private TextDisplay td = new TextDisplay();
-
+    Login login = new Login();
     @Override
     public void onEnable() {
         instance = this;
@@ -67,6 +67,7 @@ public final class QuantumPlugin extends JavaPlugin {
         piv.init();
         getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
         Listener[] needReg = {
+                new Login(),
                 new JoinLeaveListener(),
                 new ChatCommandListener(),
                 new MSPTCalculator(),
@@ -304,6 +305,10 @@ public final class QuantumPlugin extends JavaPlugin {
             } else {
                 player.sendMessage("如果有空格，请使用“”包裹");
             }
+        } else if (sender instanceof Player && command.getName().equalsIgnoreCase("summontext" )){
+            Player s = (Player) sender;
+            if (args.length != 1) sender.sendMessage("请正确输入密码。");
+            login.performLogin(s, args[0]);
         }
         return false;
     }

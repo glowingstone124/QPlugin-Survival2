@@ -24,7 +24,7 @@ public class ChatCommandListener implements Listener {
         }
 
         if (event.getMessage().startsWith("./")) {
-            String command = event.getMessage().substring(2).trim();
+            String command = "/" + event.getMessage().substring(2).trim();
             Component chatShareCommandComponent = Component.text("玩家 <")
                     .append(Component.text(event.getPlayer().getName()))
                     .append(Component.text("> 分享了了命令: [").clickEvent(ClickEvent.copyToClipboard(command)))
