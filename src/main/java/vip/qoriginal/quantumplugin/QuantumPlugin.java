@@ -307,8 +307,12 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         } else if (sender instanceof Player && command.getName().equalsIgnoreCase("login" )){
             Player s = (Player) sender;
-            if (args.length != 1) sender.sendMessage("请正确输入密码。");
+            if (args.length != 1) {
+                sender.sendMessage("请正确输入密码。");
+                return true;
+            }
             login.performLogin(s, args[0]);
+            return true;
         }
         return false;
     }
