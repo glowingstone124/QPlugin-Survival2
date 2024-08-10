@@ -74,7 +74,7 @@ public class JoinLeaveListener implements Listener {
         });
         if (!Arrays.asList(prolist).contains(player.getName())) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + player.getName()), BindResponse.class);
-            player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original，输入密码来登录")
+            player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original，输入/login 你的密码来登录")
                     .appendNewline()
                     .append(Component.text("QQ: " + relationship.qq)
                             .color(TextColor.color(114, 114, 114))));
