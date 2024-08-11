@@ -43,7 +43,9 @@ class Login : Listener {
     fun handleJoin(player: Player){
         player.addScoreboardTag("guest")
         Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
-            player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
+            if (player.scoreboardTags.contains("guest")){
+                    player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
+                }
         }, 0, 20)
 
     }
