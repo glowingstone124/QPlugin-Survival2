@@ -44,7 +44,8 @@ class Login : Listener {
         player.addScoreboardTag("guest")
         Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
             player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
-        },0 ,1000)
+        }, 0, 20)
+
     }
     @EventHandler
     fun onPlayerMove(event: PlayerMoveEvent) {
