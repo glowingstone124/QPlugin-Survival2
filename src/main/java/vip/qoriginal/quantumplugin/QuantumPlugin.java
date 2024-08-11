@@ -140,7 +140,7 @@ public final class QuantumPlugin extends JavaPlugin {
             Entity e = s.getWorld().spawnEntity(batloc, EntityType.BAT);
             e.customName(Component.text("中子束").color(TextColor.color(72, 72, 72)));
             s.setHealth(0.1f);
-            s.removePotionEffect(PotionEffectType.DAMAGE_RESISTANCE);
+            s.removePotionEffect(PotionEffectType.RESISTANCE);
             s.damage(s.getHealth() + 5, e);
             int i = 0;
             while (!s.isDead() && ++i != 10) s.damage(5, e);
@@ -182,8 +182,8 @@ public final class QuantumPlugin extends JavaPlugin {
                         s.getLocation().getBlockX() * (1 - factor) + l.getBlockX() * factor,
                         s.getLocation().getBlockY() + 1.5,
                         s.getLocation().getBlockZ() * (1 - factor) + l.getBlockZ() * factor);
-                s.getWorld().spawnParticle(Particle.FIREWORKS_SPARK, particle, 70, 3, 1, 3);
-                s.getWorld().spawnParticle(Particle.VILLAGER_HAPPY, particle, 70, 1, 1, 1);
+                s.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, particle, 70, 3, 1, 3);
+                s.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, particle, 70, 1, 1, 1);
                 s.sendMessage("如果没有展示粒子效果试试转个身重来？");
             }
             return true;

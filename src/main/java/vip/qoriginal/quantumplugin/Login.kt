@@ -3,6 +3,8 @@ package vip.qoriginal.quantumplugin
 import com.google.gson.JsonParser
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.title.TitlePart
+import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -22,7 +24,11 @@ class Login : Listener {
         val result = JsonParser.parseString(Request.sendGetRequest("http://localhost:8080/qo/game/login?username=${player.name}&password=$password")).asJsonObject
         if (result.get("result").asBoolean) {
             player.removeScoreboardTag("guest")
-            player.sendMessage(Component.text("登录成功").color(NamedTextColor.GREEN))
+            Bukkit.getScheduler().runTaskAsynchronously(QuantumPlugin.getInstance(), Runnable {
+                val time = JsonParser.parseString(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/getgametime?username=${player.name}")).asJsonObject
+                player.sendMessage(Component.text("登录成功，您已经游玩 ${time.get("time").asLong}分钟").color(NamedTextColor.GREEN))
+            })
+            player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
         } else {
             player.sendMessage(Component.text("登录失败，原因：密码不正确").color(NamedTextColor.GREEN))
             if (playerLoginMap.containsKey(player) && playerLoginMap[player]!! <= 3) {
@@ -36,6 +42,9 @@ class Login : Listener {
     }
     fun handleJoin(player: Player){
         player.addScoreboardTag("guest")
+        Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
+            player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
+        },0 ,1000)
     }
     @EventHandler
     fun onPlayerMove(event: PlayerMoveEvent) {
