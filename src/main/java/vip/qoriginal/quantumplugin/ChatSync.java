@@ -36,7 +36,6 @@ public class ChatSync implements Listener {
     }
     @EventHandler
     public void onPlayerChat(AsyncPlayerChatEvent event) {
-
         if (!isShutup(event.getPlayer())) {
             Thread.startVirtualThread(() -> {
                 try {
