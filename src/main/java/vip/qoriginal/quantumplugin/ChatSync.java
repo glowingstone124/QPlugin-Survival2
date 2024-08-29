@@ -67,6 +67,7 @@ public class ChatSync implements Listener {
     }
     class WebMsgGetter implements Runnable {
         String buffer = "";
+
         @Override
         public void run() {
             try {
@@ -75,9 +76,9 @@ public class ChatSync implements Listener {
                 JsonElement jsonElement = parser.parse(response);
                 if (jsonElement.isJsonObject()) {
                     JsonObject msgObj = jsonElement.getAsJsonObject();
-                    if (msgObj.get("code").getAsInt() == 0){
+                    if (msgObj.get("code").getAsInt() == 0) {
                         String content = parseCQ(msgObj.get("content").getAsString());
-                        if (!content.equals(buffer)){
+                        if (!content.equals(buffer)) {
                             Component msgComponent = Component.text(content).color(TextColor.color(113, 159, 165));
                             for (Player p : Bukkit.getOnlinePlayers()) {
                                 p.sendMessage(msgComponent);
@@ -91,27 +92,14 @@ public class ChatSync implements Listener {
             }
         }
     }
-    public String parseCQ(String msg) throws Exception {
-        msg = msg.replaceAll("\\[CQ:reply,id=\\d+\\]", "[回复]");
 
-        Pattern atPattern = Pattern.compile("\\[CQ:at,qq=(\\d+)\\]");
-        Matcher atMatcher = atPattern.matcher(msg);
-        StringBuffer result = new StringBuffer();
-        while (atMatcher.find()) {
-            String qq = atMatcher.group(1);
-            String playername = getPlayername(qq);
-            atMatcher.appendReplacement(result, "@" + playername);
-        }
-        atMatcher.appendTail(result);
-        msg = result.toString();
-
-        msg = msg.replaceAll("\\[CQ:image,file=[^\\]]+\\]", "[图片]");
-        return msg;
-    }
-
-    private String getPlayername(String input) throws Exception {
-        JsonObject playerObj = JsonParser.parseString(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/name?qq=" + input)).getAsJsonObject();
-        if (playerObj.get("code").getAsInt() == 0) return playerObj.get("username").getAsString();
-        return input;
+    public String parseCQ(String content) {
+        content = content.replaceAll("\\[CQ:face,id=.*?\\]", "[表情]");
+        content = content.replaceAll("\\[CQ:image,file=.*?\\]", "[图片]");
+        content = content.replaceAll("\\[CQ:record,file=.*?\\]", "[语音]");
+        content = content.replaceAll("\\[CQ:share,file=.*?\\]", "[链接]");
+        content = content.replaceAll("\\[CQ:mface,.*?\\]", "[表情]");
+        content = content.replace("CQ:at,qq=", "@");
+        return content;
     }
 }
