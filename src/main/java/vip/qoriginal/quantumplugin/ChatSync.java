@@ -1,5 +1,6 @@
 package vip.qoriginal.quantumplugin;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -25,6 +26,8 @@ import java.util.concurrent.TimeUnit;
 import static vip.qoriginal.quantumplugin.QuantumPlugin.isShutup;
 
 public class ChatSync implements Listener {
+    private final static int QO_CODE = 1;
+    private static Gson gson = new Gson();
     private static WebMsgGetter webMsgGetter;
     static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     public void init() {
@@ -46,7 +49,7 @@ public class ChatSync implements Listener {
                     String currentTime = sdf.format(new Date());
                     sb.append("[").append(currentTime).append("]").append("<").append(playerName).append(">: ").append(message);
                     String encodedMessage = new String(sb.toString().getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                    Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
+                    Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload", generateCredential(encodedMessage));
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -56,10 +59,8 @@ public class ChatSync implements Listener {
     public void sendChatMsg(String message){
         Thread.startVirtualThread(() -> {
             try {
-                StringBuilder sb = new StringBuilder();
-                sb.append(message);
-                String encodedMessage = new String(sb.toString().getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload?auth=2djg45uifjs034", encodedMessage);
+                String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
+                Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload",  generateCredential(encodedMessage));
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -101,5 +102,12 @@ public class ChatSync implements Listener {
         content = content.replaceAll("\\[CQ:mface,.*?\\]", "[表情]");
         content = content.replace("CQ:at,qq=", "@");
         return content;
+    }
+    public static String generateCredential(String message) {
+        JsonObject jsonObject = new JsonObject();
+        jsonObject.addProperty("message", message);
+        jsonObject.addProperty("from", QO_CODE);
+        jsonObject.addProperty("token", "aad3r32in213ndvv11@");
+        return jsonObject.toString();
     }
 }
