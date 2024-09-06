@@ -1,5 +1,6 @@
 package vip.qoriginal.quantumplugin;
 
+import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.TextColor;
@@ -11,8 +12,8 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 
 public class ChatCommandListener implements Listener {
     @EventHandler
-    public void onChat(AsyncPlayerChatEvent event) throws Exception {
-        if ((event.getMessage().contains("怎么") || event.getMessage().contains("如何")) && event.getMessage().length() > 4) {
+    public void onChat(AsyncChatEvent event) throws Exception {
+        if ((event.message().toString().contains("怎么") || event.message().toString().contains("如何")) && event.message().toString().length() > 4) {
             event.getPlayer().sendMessage(Component.text("【友情提醒】本服务器已和 ")
                     .append(Component.text("G").color(TextColor.color(66, 133, 244)))
                     .append(Component.text("o").color(TextColor.color(233, 66, 53)))
@@ -23,8 +24,8 @@ public class ChatCommandListener implements Listener {
                     .append(Component.text(" 达成合作，有不懂的可以直接查！")));
         }
 
-        if (event.getMessage().startsWith("./")) {
-            String command = "/" + event.getMessage().substring(2).trim();
+        if (event.message().toString().startsWith("./")) {
+            String command = "/" + event.message().toString().substring(2).trim();
             Component chatShareCommandComponent = Component.text("玩家 <")
                     .append(Component.text(event.getPlayer().getName()))
                     .append(Component.text("> 分享了了命令: [").clickEvent(ClickEvent.copyToClipboard(command)))

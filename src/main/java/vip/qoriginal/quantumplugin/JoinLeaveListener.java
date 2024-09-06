@@ -99,6 +99,7 @@ public class JoinLeaveListener implements Listener {
             player.sendMessage("你的本次游玩时长为: " + minutesPlayed + " 分钟");
             cs.sendChatMsg("玩家" + event.getPlayer().getName() + "退出了服务器，本次游玩时间 " + minutesPlayed + "分钟");
             Request.sendPostRequest("http://qoriginal.vip:8080/qo/upload/gametimerecord?name=" + player.getName() + "&time=" + minutesPlayed, "");
+            Request.sendPostRequest("http://qoriginal.vip:8080/qo/offline?name=" + player.getName(), "");
             sessionStartTimes.remove(player);
         }
     }

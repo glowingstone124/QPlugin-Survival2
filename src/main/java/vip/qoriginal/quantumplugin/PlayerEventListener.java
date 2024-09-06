@@ -27,6 +27,7 @@ public class PlayerEventListener implements Listener {
         if (newLevel > oldLevel && newLevel >= 100) {
             cs.sendChatMsg("玩家 " + player.getName() + " 的等级已经超过了100级，现在等级为：" + newLevel);
         }
+
     }
 
     private int getExpToLevel(int level) {
