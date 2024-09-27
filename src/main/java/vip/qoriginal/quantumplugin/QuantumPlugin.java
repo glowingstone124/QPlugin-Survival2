@@ -249,7 +249,7 @@ public final class QuantumPlugin extends JavaPlugin {
             String name = args[0];
             String result = null;
             try {
-                result = Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + name);
+                result = Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + name).get();
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -274,13 +274,13 @@ public final class QuantumPlugin extends JavaPlugin {
                 return true;
             }
             try {
-                String result = Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + args[0]);
+                String result = Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + args[0]).get();
                 JsonObject queryObj = (JsonObject) JsonParser.parseString(result);
                 if (queryObj.get("code").getAsInt() != 0){
                     sender.sendMessage("该玩家不存在！");
                     return true;
                 }
-                String res2 = Request.sendGetRequest("http://qoriginal.vip:8080/qo/inventory/request?name=" + args[0] + "&from=" + sender.getName());
+                String res2 = Request.sendGetRequest("http://qoriginal.vip:8080/qo/inventory/request?name=" + args[0] + "&from=" + sender.getName()).get();
                 if (JsonParser.parseString(res2).getAsJsonObject().get("code").getAsInt() == 0) {
                     String key = JsonParser.parseString(res2).getAsJsonObject().get("key").getAsString();
                     sender.sendMessage(Component.text("已经发送请求，请等待对方验证。")

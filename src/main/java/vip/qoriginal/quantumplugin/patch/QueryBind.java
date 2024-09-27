@@ -16,7 +16,7 @@ public class QueryBind {
     public static JsonObject PlayerinfoObj = new JsonObject();
 
     public static BindResponse queryPlayer(String name) throws Exception {
-        String result = Request.sendGetRequest("http://127.0.0.1:8080/qo/download/registry?name=" + name);
+        String result = Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + name).get();
         BindResponse relationship = new Gson().fromJson(result, BindResponse.class);
         return relationship;
     }

@@ -25,14 +25,14 @@ class Login : Listener {
     fun performLogin(player: Player, password: String) {
         GlobalScope.launch {
             val loginResult = withContext(Dispatchers.IO) {
-                JsonParser.parseString(Request.sendGetRequest("http://localhost:8080/qo/game/login?username=${player.name}&password=$password")).asJsonObject
+                JsonParser.parseString(Request.sendGetRequest("http://localhost:8080/qo/game/login?username=${player.name}&password=$password").get()).asJsonObject
             }
 
             if (loginResult.get("result").asBoolean) {
                 player.removeScoreboardTag("guest")
                 player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
                 val time = withContext(Dispatchers.IO) {
-                    JsonParser.parseString(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/getgametime?username=${player.name}")).asJsonObject
+                    JsonParser.parseString(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/getgametime?username=${player.name}").get()).asJsonObject
                 }
                 player.sendMessage(
                     Component.text("登录成功，您已经游玩 ${time.get("time").asLong}分钟").color(NamedTextColor.GREEN)
