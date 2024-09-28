@@ -40,3 +40,6 @@ commands:
   login:
     description: Login
     usage: /<command> <password>
+  damageindicator:
+    description: Show damage when your arrow hits.
+    usage: /<command> [enable|disable|query]
