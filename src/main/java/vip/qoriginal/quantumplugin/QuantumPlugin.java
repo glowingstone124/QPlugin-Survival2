@@ -35,6 +35,7 @@ import vip.qoriginal.quantumplugin.patch.TextDisplay;
 import java.io.IOException;
 import java.util.List;
 import java.util.Timer;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class QuantumPlugin extends JavaPlugin {
 
@@ -44,6 +45,7 @@ public final class QuantumPlugin extends JavaPlugin {
     PlayerInventoryViewer piv = new PlayerInventoryViewer();
     private TextDisplay td = new TextDisplay();
     Login login = new Login();
+
     @Override
     public void onEnable() {
         instance = this;
@@ -83,7 +85,7 @@ public final class QuantumPlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(listener, this);
         }
         ChatSync cs = new ChatSync();
-        if (enableMetro){
+        if (enableMetro) {
             getServer().getPluginManager().registerEvents(new Speed(), this);
             getServer().getPluginManager().registerEvents(new LoadChunk(this), this);
         }
@@ -97,18 +99,20 @@ public final class QuantumPlugin extends JavaPlugin {
         }.runTaskTimer(this, 0L, 10L);
 
         Timer timer = new Timer();
-        Block b = Bukkit.getWorld("world").getBlockAt(-1782,68,720);
-        if(b.getChunk().load()) {
-            if(b.getType() == Material.LEVER) {
+        Block b = Bukkit.getWorld("world").getBlockAt(-1782, 68, 720);
+        if (b.getChunk().load()) {
+            if (b.getType() == Material.LEVER) {
                 BlockData data = b.getBlockData();
-                if(data.getAsString().contains("powered=true")) StoneFarm.console_state = 10;
+                if (data.getAsString().contains("powered=true")) StoneFarm.console_state = 10;
             }
         }
         SegmentMap.init();
     }
+
     public static QuantumPlugin getInstance() {
         return instance;
     }
+
     @Override
     public void onDisable() {
         webMsgGetterTask.cancel();
@@ -258,17 +262,17 @@ public final class QuantumPlugin extends JavaPlugin {
                 s.sendMessage("你查询的用户名不存在");
             } else {
                 String message = """
-                        ==============================
-                        查询结果
-                        ==============================
-                        用户名: %s
-                                                       \s
-                        qq号: %s
-                                                       \s
-                       \s""";
+                         ==============================
+                         查询结果
+                         ==============================
+                         用户名: %s
+                                                        \s
+                         qq号: %s
+                                                        \s
+                        \s""";
                 s.sendMessage(String.format(message, name, relationship.qq));
             }
-        } else if (command.getName().equalsIgnoreCase("viewInventory") && args.length == 1){
+        } else if (command.getName().equalsIgnoreCase("viewInventory") && args.length == 1) {
             if (!(sender instanceof Player)) {
                 sender.sendMessage("Only players can use this command!");
                 return true;
@@ -276,7 +280,7 @@ public final class QuantumPlugin extends JavaPlugin {
             try {
                 String result = Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + args[0]).get();
                 JsonObject queryObj = (JsonObject) JsonParser.parseString(result);
-                if (queryObj.get("code").getAsInt() != 0){
+                if (queryObj.get("code").getAsInt() != 0) {
                     sender.sendMessage("该玩家不存在！");
                     return true;
                 }
@@ -292,20 +296,20 @@ public final class QuantumPlugin extends JavaPlugin {
                     );
                     piv.insertKey(args[0], key);
                 } else {
-                    sender.sendMessage(Component.text("请求未通过。可能你之前已经发送了请求，也可能当前的请求数已经过多。").color(TextColor.color(67,205,128)));
+                    sender.sendMessage(Component.text("请求未通过。可能你之前已经发送了请求，也可能当前的请求数已经过多。").color(TextColor.color(67, 205, 128)));
                 }
 
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        } else if(sender instanceof Player && command.getName().equalsIgnoreCase("summontext" )){
+        } else if (sender instanceof Player && command.getName().equalsIgnoreCase("summontext")) {
             Player player = (Player) sender;
             if (args.length == 1) {
                 td.exec(player, args[0]);
             } else {
                 player.sendMessage("如果有空格，请使用“”包裹");
             }
-        } else if (sender instanceof Player && command.getName().equalsIgnoreCase("login" )){
+        } else if (sender instanceof Player && command.getName().equalsIgnoreCase("login")) {
             Player s = (Player) sender;
             if (args.length != 1) {
                 sender.sendMessage("请正确输入密码。");
@@ -313,13 +317,49 @@ public final class QuantumPlugin extends JavaPlugin {
             }
             login.performLogin(s, args[0]);
             return true;
+        } else if (sender instanceof Player && command.getName().equalsIgnoreCase("damageindicator")) {
+            Player s = (Player) sender;
+            if (args.length != 1) {
+                sender.sendMessage("[query] 查询开启状态 [enable]开启 [disable]关闭");
+                return true;
+            }
+            switch (args[0]) {
+                case "query":
+                    if (isIndicatorEnabled(s)) {
+                        sender.sendMessage("当前状态：开启");
+                    } else {
+                        sender.sendMessage("当前状态：关闭");
+                    }
+                    break;
+                case "enable":
+                    if (!isIndicatorEnabled(s)) {
+                        s.addScoreboardTag("di");
+                    }
+                    sender.sendMessage("成功");
+                    break;
+                case "disable":
+                    if (isIndicatorEnabled(s)) {
+                        s.removeScoreboardTag("di");
+                    }
+                    sender.sendMessage("成功");
+                    break;
+            }
         }
         return false;
     }
 
     public static boolean isShutup(Player player) {
         boolean istagged = false;
-        for(String s:player.getScoreboardTags()) if(s.contentEquals("muteqq")) istagged = true;
+        for (String s : player.getScoreboardTags()) if (s.contentEquals("muteqq")) istagged = true;
         return istagged;
     }
+
+    public static boolean isIndicatorEnabled(Player player) {
+        AtomicBoolean istagged = new AtomicBoolean(false);
+        player.getScoreboardTags().forEach(tag -> {
+            if (tag.contentEquals("di")) istagged.set(true);
+        });
+        return istagged.get();
+    }
+
 }

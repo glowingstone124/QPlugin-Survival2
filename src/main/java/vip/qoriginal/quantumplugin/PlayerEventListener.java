@@ -1,5 +1,7 @@
 package vip.qoriginal.quantumplugin;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.entity.Arrow;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -50,8 +52,10 @@ public class PlayerEventListener implements Listener {
             if (!isIndicatorEnabled(player)) return;
             if (hitEntity != null) {
                 player.sendMessage("Hit!");
+                player.sendActionBar(Component.text("Hit!").color(TextColor.color(34,139,34)));
             } else {
                 player.sendMessage("Miss!");
+                player.sendActionBar(Component.text("Miss!").color(TextColor.color(139, 133, 42)));
             }
         }
     }
@@ -68,7 +72,8 @@ public class PlayerEventListener implements Listener {
                 {
                     LivingEntity livingEntity = (LivingEntity) event.getEntity();
                     double damage = event.getDamage();
-                    player.sendMessage(player.getName()+" -> "+ livingEntity.getName() +" 造成 "+ damage + " 点伤害");
+                    player.sendMessage(Component.text(" -> "+ livingEntity.getName() +" "+ damage + " damage").color(TextColor.color(34,139,34)));
+                    player.sendActionBar(Component.text(player.getName()+" -> "+ livingEntity.getName() +" 造成 "+ damage + " 点伤害").color(TextColor.color(34,139,34)));
                 }
             }
         }
