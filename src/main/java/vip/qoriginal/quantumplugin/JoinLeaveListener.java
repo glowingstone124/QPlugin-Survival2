@@ -87,6 +87,7 @@ public class JoinLeaveListener implements Listener {
             sessionStartTimes.put(player, System.currentTimeMillis());
         }
         cs.sendChatMsg("玩家" + player.getName() + "加入了服务器。");
+        Request.sendPostRequest("http://qoriginal.vip:8080/qo/online?name=" + player.getName(), "");
     }
 
     @EventHandler
