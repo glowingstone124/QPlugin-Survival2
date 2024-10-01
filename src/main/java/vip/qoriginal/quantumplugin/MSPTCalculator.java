@@ -22,11 +22,13 @@ import vip.qoriginal.quantumplugin.patch.Knowledge;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.List;
 
 public class MSPTCalculator implements Listener {
     /** 最终展现在返回结果的MilliSecond Per Tick值 */
     public static float mspt = 0f;
     public static ArrayList<Float> recent_60tick = new ArrayList<>();
+    public static ArrayList<Float> tick_list = new ArrayList<>();
     /** 记录一个游戏刻开始的毫秒时间 */
     private static long starttime = 0;
     /** 记录上一次 <code>mspt > 77</code> 的时间 */
@@ -95,7 +97,7 @@ public class MSPTCalculator implements Listener {
         return result;
     }
     public static ArrayList<Float> getRecent60t(){
-        return recent_60tick;
+        return tick_list;
     }
     private static String f(int i) {
         if(i>=10) return i+"";
@@ -135,5 +137,11 @@ public class MSPTCalculator implements Listener {
                 sign.update();
             }
         }
+    }
+    public static void add_to_tick_list(float f) {
+        if (tick_list.size() >= 60) {
+            tick_list.removeFirst();
+        }
+        tick_list.add(f);
     }
 }
