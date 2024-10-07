@@ -98,6 +98,18 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         }.runTaskTimer(this, 0L, 10L);
 
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                getServer().getOnlinePlayers().forEach(player -> {
+                    try {
+                        Request.sendPostRequest("http://qoriginal.vip:8080/qo/online?name=" + player.getName(), "");
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            }
+        }.runTaskTimer(this, 0L, 30*60*20L/* 30 Min */);
         Timer timer = new Timer();
         Block b = Bukkit.getWorld("world").getBlockAt(-1782, 68, 720);
         if (b.getChunk().load()) {
