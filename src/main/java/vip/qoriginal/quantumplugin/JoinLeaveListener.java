@@ -66,7 +66,6 @@ public class JoinLeaveListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) throws Exception {
         QuantumPlugin quantumPlugin = QuantumPlugin.getInstance();
         Player player = event.getPlayer();
-        cs.sendChatMsg("玩家" + player.getName() + "加入了服务器。");
         Thread.startVirtualThread(() -> {
             try {
                 IPUtils.locIsCn(event, quantumPlugin);

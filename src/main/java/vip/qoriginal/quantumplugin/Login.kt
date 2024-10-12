@@ -22,12 +22,11 @@ class Login : Listener {
         val playerLoginMap = hashMapOf<Player, Int>()
     }
     @OptIn(DelicateCoroutinesApi::class)
-    fun performLogin(player: Player, password: String) {
+    fun performLogin(player: Player, password: String)  {
         GlobalScope.launch {
             val loginResult = withContext(Dispatchers.IO) {
                 JsonParser.parseString(Request.sendGetRequest("http://localhost:8080/qo/game/login?username=${player.name}&password=$password").get()).asJsonObject
             }
-
             if (loginResult.get("result").asBoolean) {
                 player.removeScoreboardTag("guest")
                 player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
@@ -37,10 +36,10 @@ class Login : Listener {
                 player.sendMessage(
                     Component.text("登录成功，您已经游玩 ${time.get("time").asLong}分钟").color(NamedTextColor.GREEN)
                 )
+                ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
 
             } else {
                 player.sendMessage(Component.text("登录失败，原因：密码不正确").color(NamedTextColor.RED))
-
                 playerLoginMap[player] = (playerLoginMap[player] ?: 0) + 1
                 if (playerLoginMap[player]!! >= 3) {
                     player.kick(Component.text("失败次数过多。"))
