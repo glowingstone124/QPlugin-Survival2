@@ -15,7 +15,8 @@ public class IPUtils{
             try {
                 ChatSync cs = new ChatSync();
                 String ip = Objects.requireNonNull(player.getAddress()).getAddress().getHostAddress();
-                JSONObject ipLocObj = new JSONObject(Request.sendGetRequest("https://ip.shakaianee.top/" + ip + "?f=json"));
+                JSONObject ipLocObj = new JSONObject(Request.sendGetRequest("https://ip.shakaianee.top/" + ip + "?f=json").get());
+                System.out.println(ipLocObj);
                 if (!ipLocObj.getString("country_code").equals("CN")) {
                     player.sendMessage("你正在使用一个非中国大陆ip登录。");
                     cs.sendChatMsg("玩家" + player.getName() + "正在使用一个非中国大陆ip登录. (" + ip + ")");
