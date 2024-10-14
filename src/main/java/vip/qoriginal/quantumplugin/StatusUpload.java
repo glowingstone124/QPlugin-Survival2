@@ -28,6 +28,7 @@ public class StatusUpload {
             info.x = p.getLocation().getBlockX();
             info.y = p.getLocation().getBlockY();
             info.z = p.getLocation().getBlockZ();
+            info.health = p.getHealth();
             info.name = p.getName();
             status.players.add(info);
         }
@@ -104,6 +105,7 @@ public class StatusUpload {
     public static class BriefPlayerInfo {
         String name = "";
         int ping = 0;
+        double health = 0;
         String world = "";
         int x = 0;
         int y = 0;
