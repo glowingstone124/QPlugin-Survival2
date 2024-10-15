@@ -7,11 +7,16 @@ import org.bukkit.boss.KeyedBossBar;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.*;
 
 public class StatusUpload {
     public static String command = "";
+    public static final Map<String, String> header = new HashMap<>();
+
+    static {
+        header.put("Authorization", "aad3r32in213ndvv11@");
+    }
+
     public static int totalUser = 0;
     public void run() {
         //System.out.println("println");
@@ -48,7 +53,7 @@ public class StatusUpload {
             }
         }
         try {
-            String msg = Request.sendPostRequest("http://qoriginal.vip:8080/qo/upload/status",data).get();
+            String msg = Request.sendPostRequest("http://qoriginal.vip:8080/qo/upload/status",data, Optional.of(header)).get();
         } catch (Exception e) {
             Bukkit.getLogger().warning("Experienced an exception" + e + " (on network?) while uploading status.\nIf the problem persists, please tell MineCreeper2086 to check if the target host is down.");
         }
