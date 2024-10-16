@@ -21,6 +21,7 @@ class Login : Listener {
     companion object {
         val playerLoginMap = hashMapOf<Player, Int>()
     }
+    val logger = Logger();
     @OptIn(DelicateCoroutinesApi::class)
     fun performLogin(player: Player, password: String)  {
         GlobalScope.launch {
@@ -36,9 +37,12 @@ class Login : Listener {
                 player.sendMessage(
                     Component.text("登录成功，您已经游玩 ${time.get("time").asLong}分钟").color(NamedTextColor.GREEN)
                 )
+
+                logger.log("${player.name} logged in.", "LoginAction")
                 ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
 
             } else {
+                logger.log("${player.name} kicked due to wrong password.", "LoginAction")
                 player.sendMessage(Component.text("登录失败，原因：密码不正确").color(NamedTextColor.RED))
                 playerLoginMap[player] = (playerLoginMap[player] ?: 0) + 1
                 if (playerLoginMap[player]!! >= 3) {

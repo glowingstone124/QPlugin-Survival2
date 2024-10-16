@@ -1,10 +1,8 @@
 package vip.qoriginal.quantumplugin
 
 import kotlinx.coroutines.*
-import kotlinx.coroutines.future.asCompletableFuture
 import java.util.concurrent.Callable
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Future
 
 class CoroutineJava {
 

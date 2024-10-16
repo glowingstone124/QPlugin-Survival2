@@ -32,14 +32,18 @@ public class JoinLeaveListener implements Listener {
     public static final String prolist_path = "pros.txt";
     public static String[] prolist = {"MineCreeper2086", "Wsiogn82", "glowingstone124"};
     public static final String[] blocklist = {"ServerSeeker.net"};
+    public static final Logger logger = new Logger();
+
     public static void init() throws IOException {
         prolist = Files.readString(Path.of(prolist_path)).split("\n");
     }
+
     @EventHandler
     public void onPlayerPreLogin(AsyncPlayerPreLoginEvent event) throws Exception {
         String playerName = event.getName();
 
         if (Arrays.asList(blocklist).contains(playerName)) {
+            logger.log("Player " + playerName + " was blocked and wanted to join in", "LoginManager");
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     Component.text("[403 Forbidden]")
                             .append(Component.text("this server doesn't allows ServerSeeker.").decorate(TextDecoration.BOLD)));
@@ -48,13 +52,14 @@ public class JoinLeaveListener implements Listener {
 
         if (!Arrays.asList(prolist).contains(playerName)) {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + playerName).get(), BindResponse.class);
-
+            logger.log("Player " + playerName + " didn't register but wanted to join in", "LoginManager");
             if (relationship.code == 1) {
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                         Component.text("[401 Unauthorized]验证失败，请在群：946085440中下载QCommunity")
                                 .append(Component.text("并绑定你的游戏名：" + playerName).decorate(TextDecoration.BOLD))
                                 .append(Component.text(" 之后重试！")));
             } else if (relationship.frozen) {
+                logger.log("Player " + playerName + " was frozen.", "LoginManager");
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                         Component.text("[403 Forbidden]验证失败，原因：您的账户已经被冻结！")
                                 .append(Component.text("您的游戏名：" + playerName).decorate(TextDecoration.BOLD))
@@ -62,6 +67,7 @@ public class JoinLeaveListener implements Listener {
             }
         }
     }
+
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) throws Exception {
         QuantumPlugin quantumPlugin = QuantumPlugin.getInstance();
@@ -74,6 +80,7 @@ public class JoinLeaveListener implements Listener {
             }
         });
         if (!Arrays.asList(prolist).contains(player.getName())) {
+
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + player.getName()).get(), BindResponse.class);
             player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original，输入/login 你的密码来登录")
                     .appendNewline()
