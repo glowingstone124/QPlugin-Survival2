@@ -33,6 +33,7 @@ import vip.qoriginal.quantumplugin.metro.LoadChunk;
 import vip.qoriginal.quantumplugin.patch.TextDisplay;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Timer;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -81,9 +82,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 new PlayerInventoryViewer(),
                 new CustomItemStack()
         };
-        for (Listener listener : needReg) {
-            getServer().getPluginManager().registerEvents(listener, this);
-        }
+        Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
         ChatSync cs = new ChatSync();
         if (enableMetro) {
             getServer().getPluginManager().registerEvents(new Speed(), this);
