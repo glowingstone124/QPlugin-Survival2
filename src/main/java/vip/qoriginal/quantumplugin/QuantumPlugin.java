@@ -35,6 +35,7 @@ import vip.qoriginal.quantumplugin.patch.TextDisplay;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Timer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -50,8 +51,8 @@ public final class QuantumPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
-        System.out.println("1.14.5.5.1 Started.");
         webMsgGetterTask = new WebMsgGetter();
+        System.out.println("1.14.5.5.1 Started.");
         try {
             JoinLeaveListener.init();
         } catch (IOException e) {
@@ -110,7 +111,7 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         }.runTaskTimer(this, 0L, 30*60*20L/* 30 Min */);
         Timer timer = new Timer();
-        Block b = Bukkit.getWorld("world").getBlockAt(-1782, 68, 720);
+        Block b = Objects.requireNonNull(Bukkit.getWorld("world")).getBlockAt(-1782, 68, 720);
         if (b.getChunk().load()) {
             if (b.getType() == Material.LEVER) {
                 BlockData data = b.getBlockData();
@@ -141,11 +142,10 @@ public final class QuantumPlugin extends JavaPlugin {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (command.getName().equalsIgnoreCase("suicide")) {
-            if (!(sender instanceof Player)) {
+            if (!(sender instanceof Player s)) {
                 sender.sendMessage("Only players can use this command!");
                 return true;
             }
-            Player s = (Player) sender;
             if (s.getInventory().getItemInOffHand().getType() == Material.TOTEM_OF_UNDYING || s.getInventory().getItemInMainHand().getType() == Material.TOTEM_OF_UNDYING) {
                 sender.sendMessage("不死图腾或许会救你一命...?");
             }
@@ -162,11 +162,10 @@ public final class QuantumPlugin extends JavaPlugin {
             if (!s.isDead()) s.setHealth(0f);
             return true;
         } else if (command.getName().equalsIgnoreCase("myloc")) {
-            if (!(sender instanceof Player)) {
+            if (!(sender instanceof Player s)) {
                 sender.sendMessage("Only players can use this command!");
                 return true;
             }
-            Player s = (Player) sender;
             String world_name = s.getWorld().getName();
             Component common_component = Component.text("玩家").color(TextColor.color(255, 212, 40))
                     .append(Component.text("[" + s.getName() + "]").color(TextColor.color(128, 212, 28)))
@@ -184,11 +183,10 @@ public final class QuantumPlugin extends JavaPlugin {
             }
             return true;
         } else if (command.getName().equalsIgnoreCase("highlight") && args.length == 3) {
-            if (!(sender instanceof Player)) {
+            if (!(sender instanceof Player s)) {
                 sender.sendMessage("Only players can use this command!");
                 return true;
             }
-            Player s = (Player) sender;
             Location l = new Location(s.getWorld(), Float.parseFloat(args[0]), Float.parseFloat(args[1]), Float.parseFloat(args[2]));
             double distance = s.getLocation().distance(l);
             if (distance != 0) {
@@ -233,10 +231,6 @@ public final class QuantumPlugin extends JavaPlugin {
             }
             return true;
         } else if (command.getName().equalsIgnoreCase("bind") && args.length == 2) {
-            if (args.length != 2) {
-                sender.sendMessage("Usage: /bind <forum_account>");
-                return true;
-            }
             Player s = (Player) sender;
             Component common_component = Component.text("您的游戏id").color(TextColor.color(255, 212, 40))
                     .append(Component.text("[" + s.getName() + "]").color(TextColor.color(128, 212, 28)))
@@ -313,23 +307,20 @@ public final class QuantumPlugin extends JavaPlugin {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        } else if (sender instanceof Player && command.getName().equalsIgnoreCase("summontext")) {
-            Player player = (Player) sender;
+        } else if (sender instanceof Player player && command.getName().equalsIgnoreCase("summontext")) {
             if (args.length == 1) {
                 td.exec(player, args[0]);
             } else {
                 player.sendMessage("如果有空格，请使用“”包裹");
             }
-        } else if (sender instanceof Player && command.getName().equalsIgnoreCase("login")) {
-            Player s = (Player) sender;
+        } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("login")) {
             if (args.length != 1) {
                 sender.sendMessage("请正确输入密码。");
                 return true;
             }
             login.performLogin(s, args[0]);
             return true;
-        } else if (sender instanceof Player && command.getName().equalsIgnoreCase("damageindicator")) {
-            Player s = (Player) sender;
+        } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("damageindicator")) {
             if (args.length != 1) {
                 sender.sendMessage("[query] 查询开启状态 [enable]开启 [disable]关闭");
                 return true;
