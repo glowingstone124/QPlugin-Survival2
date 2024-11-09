@@ -43,3 +43,6 @@ commands:
   damageindicator:
     description: Show damage when your arrow hits.
     usage: /<command> [enable|disable|query]
+  leavemessage:
+    description: Send messages to an offline player.
+    usage: /leavemessage <player> <message>
