@@ -46,6 +46,7 @@ public final class QuantumPlugin extends JavaPlugin {
     private static QuantumPlugin instance;
     PlayerInventoryViewer piv = new PlayerInventoryViewer();
     private TextDisplay td = new TextDisplay();
+    LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
 
     @Override
@@ -346,6 +347,12 @@ public final class QuantumPlugin extends JavaPlugin {
                     sender.sendMessage("成功");
                     break;
             }
+        } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("leavemessage")) {
+            if (args.length != 2) {
+                sender.sendMessage("用法：/leavemessage <player> <message>");
+                return true;
+            }
+            return leaveMessageComponent.handlePlayerMessageUpload(s, args[0], args[1]);
         }
         return false;
     }
