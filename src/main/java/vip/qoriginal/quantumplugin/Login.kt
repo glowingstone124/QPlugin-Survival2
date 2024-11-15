@@ -33,7 +33,7 @@ class Login : Listener {
 		GlobalScope.launch {
 			val loginResult = withContext(Dispatchers.IO) {
 				JsonParser.parseString(
-					Request.sendGetRequest("http://localhost:8080/qo/game/login?username=${player.name}&password=$password")
+					Request.sendGetRequest("http://qoriginal.vip:8080/qo/game/login?username=${player.name}&password=$password")
 						.get()
 				).asJsonObject
 			}
@@ -49,6 +49,7 @@ class Login : Listener {
 				player.sendMessage(
 					Component.text("登录成功，您已经游玩 ${time.get("time").asLong}分钟").color(NamedTextColor.GREEN)
 				)
+				player.removeScoreboardTag("guest")
 				logger.log("${player.name} logged in.", "LoginAction")
 				ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
 				leaveMessageComponent.getMessages(player).forEach {
