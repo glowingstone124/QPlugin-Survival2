@@ -15,6 +15,7 @@ import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.scheduler.BukkitRunnable
+import vip.qoriginal.quantumplugin.patch.Utils
 import java.lang.Runnable
 import java.util.concurrent.ConcurrentHashMap
 
@@ -60,8 +61,7 @@ class Login : Listener {
 				player.sendMessage(Component.text("登录失败，原因：密码不正确").color(NamedTextColor.RED))
 				playerLoginMap[player] = (playerLoginMap[player] ?: 0) + 1
 				if (playerLoginMap[player]!! >= 3) {
-					player.kick(Component.text("失败次数过多。"))
-
+					performKick(player, Component.text("失败次数过多。"))
 				}
 			}
 		}
@@ -85,14 +85,14 @@ class Login : Listener {
 				} else {
 					timeObj.get("time").asLong
 				}
-				if (time > 180) player.kick(Component.text("体验时间已经结束，欢迎转正！"))
+				if (time > 180) performKick(player, Component.text("体验时间已经结束，欢迎转正！"))
 				visitorPlayedMap[player] = time
 				object : BukkitRunnable() {
 					override fun run() {
 						visitorPlayedMap.forEach { (player, time) ->
 							visitorPlayedMap[player]?.let {
 								if (it >= 180) {
-									player.kick(Component.text("体验时间已经结束，欢迎转正！"))
+									performKick(player, Component.text("体验时间已经结束，欢迎转正！"))
 								}
 							}
 							visitorPlayedMap[player] = time + 1
@@ -149,6 +149,12 @@ class Login : Listener {
 		val player: Player = event.player
 		if (player.getScoreboardTags().contains("guest")) {
 			event.isCancelled = true
+		}
+	}
+
+	fun performKick(player: Player, reason: Component) {
+		Utils.runTaskOnMainThread {
+			player.kick(reason)
 		}
 	}
 }
