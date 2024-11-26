@@ -54,6 +54,7 @@ public class JoinLeaveListener implements Listener {
             BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + playerName).get(), BindResponse.class);
             if (relationship == null) {
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[500 Internal Server Error]内部验证出现错误。请等待之后再试。。。"));
+                return;
             }
             logger.log("Player " + playerName + " didn't register but wanted to join in", "LoginManager");
             if (relationship.code == 1) {

@@ -154,9 +154,11 @@ public class SegmentMap {
                 }
             }
         });
+
         segMap.clear();
         segMap.putAll(segMapCopy);
     }
+
 
     public static class Line {
         public String dummy;
