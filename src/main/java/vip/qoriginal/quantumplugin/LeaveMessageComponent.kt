@@ -30,7 +30,7 @@ class LeaveMessageComponent {
 
 		val res = Request.sendPostRequest("http://qoriginal.vip:8080/qo/leavemessage/upload?from=${player.name}&to=${target}&message=${message}", "").get().asJsonObject()
 		when(res.get("code").asInt) {
-			0 -> player.sendMessage("发送成功。")
+			0 -> player.sendMessage("发送成功。"); return true,
 			1 -> player.sendMessage("您不被允许发送消息。")
 			2 -> player.sendMessage("您发送的留言太多了，您最多只能同时拥有五条留言。")
 			3 -> player.sendMessage("对方的留言箱已满！")
