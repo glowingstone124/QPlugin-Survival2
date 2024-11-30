@@ -10,7 +10,6 @@ import vip.qoriginal.quantumplugin.Request;
 import javax.management.relation.Relation;
 import java.util.Arrays;
 
-import static vip.qoriginal.quantumplugin.JoinLeaveListener.prolist;
 
 public class QueryBind {
     public static JsonObject PlayerinfoObj = new JsonObject();
