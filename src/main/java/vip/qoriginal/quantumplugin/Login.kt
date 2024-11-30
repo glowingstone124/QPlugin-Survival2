@@ -12,6 +12,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockPlaceEvent
+import org.bukkit.event.player.PlayerCommandPreprocessEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.scheduler.BukkitRunnable
@@ -34,7 +35,7 @@ class Login : Listener {
 		GlobalScope.launch {
 			val loginResult = withContext(Dispatchers.IO) {
 				JsonParser.parseString(
-					Request.sendGetRequest("http://qoriginal.vip:8080/qo/game/login?username=${player.name}&password=$password")
+					Request.sendGetRequest("http://172.19.0.6:8080/qo/game/login?username=${player.name}&password=$password")
 						.get()
 				).asJsonObject
 			}
@@ -43,7 +44,7 @@ class Login : Listener {
 				player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
 				val time = withContext(Dispatchers.IO) {
 					JsonParser.parseString(
-						Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/getgametime?username=${player.name}")
+						Request.sendGetRequest("http://172.19.0.6:8080/qo/download/getgametime?username=${player.name}")
 							.get()
 					).asJsonObject
 				}
@@ -76,7 +77,7 @@ class Login : Listener {
 			GlobalScope.launch {
 				val timeObj = withContext(Dispatchers.IO) {
 					JsonParser.parseString(
-						Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/getgametime?username=${player.name}")
+						Request.sendGetRequest("http://172.19.0.6:8080/qo/download/getgametime?username=${player.name}")
 							.get()
 					).asJsonObject.takeIf { it.has("time") }?.asJsonObject
 				}
@@ -149,6 +150,17 @@ class Login : Listener {
 		val player: Player = event.player
 		if (player.getScoreboardTags().contains("guest")) {
 			event.isCancelled = true
+		}
+	}
+	@EventHandler
+	fun onPlayerCommandPreprocess(event: PlayerCommandPreprocessEvent) {
+		val player: Player = event.player
+		if (player.scoreboardTags.contains("guest")) {
+			val message = event.message.lowercase()
+			if (!message.startsWith("/login")) {
+				event.isCancelled = true
+				player.sendMessage("§c你只能使用 /login 命令！")
+			}
 		}
 	}
 

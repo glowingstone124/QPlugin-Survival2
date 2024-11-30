@@ -53,7 +53,7 @@ public class StatusUpload {
             }
         }
         try {
-            Request.sendPostRequest("http://qoriginal.vip:8080/qo/upload/status",data, Optional.of(header));
+            Request.sendPostRequest("http://172.19.0.6:8080/qo/upload/status",data, Optional.of(header));
         } catch (Exception e) {
             Bukkit.getLogger().warning("Experienced an exception" + e + " (on network?) while uploading status.\nIf the problem persists, please tell MineCreeper2086 to check if the target host is down.");
         }

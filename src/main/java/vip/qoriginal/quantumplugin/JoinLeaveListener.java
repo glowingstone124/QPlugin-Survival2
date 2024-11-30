@@ -51,7 +51,7 @@ public class JoinLeaveListener implements Listener {
         }
 
         if (!Arrays.asList(prolist).contains(playerName)) {
-            BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + playerName).get(), BindResponse.class);
+            BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://172.19.0.6:8080/qo/download/registry?name=" + playerName).get(), BindResponse.class);
             if (relationship == null) {
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[500 Internal Server Error]内部验证出现错误。请等待之后再试。。。"));
                 return;
@@ -86,7 +86,7 @@ public class JoinLeaveListener implements Listener {
             }
         });
         if (!Arrays.asList(prolist).contains(player.getName())) {
-            BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://qoriginal.vip:8080/qo/download/registry?name=" + player.getName()).get(), BindResponse.class);
+            BindResponse relationship = new Gson().fromJson(Request.sendGetRequest("http://172.19.0.6:8080/qo/download/registry?name=" + player.getName()).get(), BindResponse.class);
             if (relationship.code == 0) {
                 player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original，输入/login 你的密码来登录")
                         .appendNewline()
@@ -102,7 +102,7 @@ public class JoinLeaveListener implements Listener {
             player.sendMessage(Component.text(String.format("您好， %s， 您享有免验证权", player.getName())));
             sessionStartTimes.put(player, System.currentTimeMillis());
         }
-        Request.sendPostRequest("http://qoriginal.vip:8080/qo/online?name=" + player.getName(), "");
+        Request.sendPostRequest("http://172.19.0.6:8080/qo/online?name=" + player.getName(), "");
     }
 
     @EventHandler
@@ -114,8 +114,8 @@ public class JoinLeaveListener implements Listener {
             long minutesPlayed = sessionDuration / (1000 * 60);
             player.sendMessage("你的本次游玩时长为: " + minutesPlayed + " 分钟");
             cs.sendChatMsg("玩家" + event.getPlayer().getName() + "退出了服务器，本次游玩时间 " + minutesPlayed + "分钟");
-            Request.sendPostRequest("http://qoriginal.vip:8080/qo/upload/gametimerecord?name=" + player.getName() + "&time=" + minutesPlayed, "");
-            Request.sendPostRequest("http://qoriginal.vip:8080/qo/offline?name=" + player.getName(), "");
+            Request.sendPostRequest("http://172.19.0.6:8080/qo/upload/gametimerecord?name=" + player.getName() + "&time=" + minutesPlayed, "");
+            Request.sendPostRequest("http://172.19.0.6:8080/qo/offline?name=" + player.getName(), "");
             sessionStartTimes.remove(player);
         }
     }

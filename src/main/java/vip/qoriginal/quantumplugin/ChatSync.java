@@ -44,7 +44,7 @@ public class ChatSync implements Listener {
                     String currentTime = sdf.format(new Date());
                     sb.append("[").append(currentTime).append("]").append("<").append(playerName).append(">: ").append(message);
                     String encodedMessage = new String(sb.toString().getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                    Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload", generateCredential(encodedMessage));
+                    Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload", generateCredential(encodedMessage));
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -55,7 +55,7 @@ public class ChatSync implements Listener {
         Thread.startVirtualThread(() -> {
             try {
                 String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                Request.sendPostRequest("http://qoriginal.vip:8080/qo/msglist/upload",  generateCredential(encodedMessage));
+                Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload",  generateCredential(encodedMessage));
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -67,7 +67,7 @@ public class ChatSync implements Listener {
         @Override
         public void run() {
             try {
-                String response = Request.sendGetRequest("http://qoriginal.vip:8080/qo/msglist/download").get();
+                String response = Request.sendGetRequest("http://172.19.0.6:8080/qo/msglist/download").get();
                 JsonElement jsonElement = JsonParser.parseString(response);
                 if (jsonElement.isJsonObject()) {
                     JsonObject msgObj = jsonElement.getAsJsonObject();

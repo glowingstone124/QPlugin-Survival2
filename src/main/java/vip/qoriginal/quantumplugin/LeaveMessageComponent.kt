@@ -28,7 +28,7 @@ class LeaveMessageComponent {
 			return false;
 		}
 
-		val res = Request.sendPostRequest("http://qoriginal.vip:8080/qo/leavemessage/upload?from=${player.name}&to=${target}&message=${message}", "").get().asJsonObject()
+		val res = Request.sendPostRequest("http://172.19.0.6:8080/qo/leavemessage/upload?from=${player.name}&to=${target}&message=${message}", "").get().asJsonObject()
 		when(res.get("code").asInt) {
 			0 -> player.sendMessage("发送成功。"); return true,
 			1 -> player.sendMessage("您不被允许发送消息。")
@@ -39,7 +39,7 @@ class LeaveMessageComponent {
 	}
 
 	fun getMessages(player: Player): List<Component> {
-		val result = Request.sendGetRequest("http://qoriginal.vip:8080/qo/leavemessage/get?receiver=${player.name}")
+		val result = Request.sendGetRequest("http://172.19.0.6:8080/qo/leavemessage/get?receiver=${player.name}")
 			.get().asJsonArray()
 
 
