@@ -1,10 +1,12 @@
 package vip.qoriginal.quantumplugin;
 
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.Plugin;
 import org.json.JSONObject;
+import vip.qoriginal.quantumplugin.patch.Utils;
 
 import java.util.Objects;
 
@@ -24,6 +26,9 @@ public class IPUtils{
                     cs.sendChatMsg("玩家" + player.getName() + "正在使用一个非中国大陆ip登录. (" + ip + ")");
                     if (!JoinLeaveListener.ip_whitelist.contains(ip)) {
                         player.sendMessage("你正在使用一个非中国大陆ip登录，请联系glowingstone124过白您的ip。您的ip：" + ip);
+                        Utils.INSTANCE.runTaskOnMainThread(() -> {
+                            player.kick(Component.text("你正在使用一个非中国大陆ip登录，请联系glowingstone124过白您的ip。您的ip：" + ip));
+                        });
                     }
                 }
             } catch (Exception e) {
