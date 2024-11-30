@@ -56,11 +56,11 @@ public class Request {
         }, Dispatchers.getIO());
     }
 
-    public static CompletableFuture<String> sendGetRequest(String targetUrl) throws Exception {
+    public static CompletableFuture<String> sendGetRequest(String targetUrl) {
         return sendGetRequest(targetUrl, Optional.empty());
     }
 
-    public static CompletableFuture<String> sendGetRequest(String targetUrl, Optional<Map<String, String>> headers) throws Exception {
+    public static CompletableFuture<String> sendGetRequest(String targetUrl, Optional<Map<String, String>> headers) {
         return cj.run(() -> {
             String result = "";
             HttpURLConnection connection = null;
@@ -84,9 +84,6 @@ public class Request {
                         }
                     }
                 }
-            } catch(Exception e) {
-                e.printStackTrace();
-                throw new RuntimeException(e);
             } finally {
                 if (connection != null) {
                     connection.disconnect();
