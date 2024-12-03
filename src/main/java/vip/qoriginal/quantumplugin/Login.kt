@@ -8,11 +8,15 @@ import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.title.TitlePart
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
+import org.bukkit.event.Cancellable
+import org.bukkit.event.Event
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.player.PlayerCommandPreprocessEvent
+import org.bukkit.event.player.PlayerDropItemEvent
+import org.bukkit.event.player.PlayerEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.scheduler.BukkitRunnable
@@ -22,6 +26,16 @@ import java.util.concurrent.ConcurrentHashMap
 
 
 class Login : Listener {
+
+	private val eventHandlers: Map<Class<out Event>, (Player, Cancellable) -> Unit> = mapOf(
+		PlayerMoveEvent::class.java to { player, event -> handleGuestOnlyEvent(player, event) },
+		BlockBreakEvent::class.java to { player, event -> handleGuestOrVisitorEvent(player, event) },
+		BlockPlaceEvent::class.java to { player, event -> handleGuestOrVisitorEvent(player, event) },
+		PlayerInteractEvent::class.java to { player, event -> handleGuestOrVisitorEvent(player, event) },
+		AsyncChatEvent::class.java to { player, event -> handleGuestOnlyEvent(player, event) },
+		PlayerDropItemEvent::class.java to { player, event -> handleGuestOnlyEvent(player, event) }
+	)
+
 	companion object {
 		val playerLoginMap = ConcurrentHashMap<Player, Int>()
 		val visitorPlayedMap = ConcurrentHashMap<Player, Long>()
@@ -108,53 +122,24 @@ class Login : Listener {
 			}
 		}, 0, 20)
 	}
+	@EventHandler
+	fun onPlayerMove(event: PlayerMoveEvent) = handleEvent(event)
 
 	@EventHandler
-	fun onPlayerMove(event: PlayerMoveEvent) {
-		val player: Player = event.player
-		if (player.getScoreboardTags().contains("guest")) {
-			event.isCancelled = true
-		}
-	}
-
-	fun isGuestOrVisitor(player: Player): Boolean {
-		return player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor")
-	}
+	fun onBlockBreak(event: BlockBreakEvent) = handleEvent(event)
 
 	@EventHandler
-	fun onBlockBreak(event: BlockBreakEvent) {
-		val player: Player = event.player
-		if (isGuestOrVisitor(player)) {
-			event.isCancelled = true
-		}
-	}
+	fun onBlockPlace(event: BlockPlaceEvent) = handleEvent(event)
 
 	@EventHandler
-	fun onBlockPlace(event: BlockPlaceEvent) {
-		val player: Player = event.player
-		if (isGuestOrVisitor(player)) {
-			event.isCancelled = true
-		}
-	}
+	fun onPlayerInteract(event: PlayerInteractEvent) = handleEvent(event)
 
 	@EventHandler
-	fun onPlayerInteract(event: PlayerInteractEvent) {
-		val player: Player = event.player
-		if (isGuestOrVisitor(player)) {
-			event.isCancelled = true
-		}
-	}
+	fun onPlayerChat(event: AsyncChatEvent) = handleEvent(event)
 
-	@EventHandler
-	fun onPlayerChat(event: AsyncChatEvent) {
-		val player: Player = event.player
-		if (player.getScoreboardTags().contains("guest")) {
-			event.isCancelled = true
-		}
-	}
 	@EventHandler
 	fun onPlayerCommandPreprocess(event: PlayerCommandPreprocessEvent) {
-		val player: Player = event.player
+		val player = event.player
 		if (player.scoreboardTags.contains("guest")) {
 			val message = event.message.lowercase()
 			if (!message.startsWith("/login")) {
@@ -164,6 +149,29 @@ class Login : Listener {
 		}
 	}
 
+	@EventHandler
+	fun onPlayerDropItem(event: PlayerDropItemEvent) = handleEvent(event)
+
+	private fun handleEvent(event: Event) {
+		val player = when (event) {
+			is PlayerEvent -> event.player
+			else -> return
+		}
+		val cancellableEvent = event as? Cancellable ?: return
+		eventHandlers[event::class.java]?.invoke(player, cancellableEvent)
+	}
+
+	private fun handleGuestOnlyEvent(player: Player, event: Cancellable) {
+		if (player.scoreboardTags.contains("guest")) {
+			event.isCancelled = true
+		}
+	}
+
+	private fun handleGuestOrVisitorEvent(player: Player, event: Cancellable) {
+		if (player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor")) {
+			event.isCancelled = true
+		}
+	}
 	fun performKick(player: Player, reason: Component) {
 		Utils.runTaskOnMainThread {
 			player.kick(reason)
