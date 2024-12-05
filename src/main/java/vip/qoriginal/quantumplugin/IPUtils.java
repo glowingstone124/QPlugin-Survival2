@@ -51,7 +51,7 @@ public class IPUtils {
         while (attempts < retries) {
             try {
                 String response = Request.sendGetRequest("http://172.19.0.6:8080/qo/download/ip?ip=" + ip).get();
-                return Objects.equals("true", response);
+                return !Objects.equals("true", response);
             } catch (Exception e) {
                 attempts++;
                 System.err.println("尝试获取IP地址信息失败，第 " + attempts + " 次重试...");
