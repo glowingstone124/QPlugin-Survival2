@@ -3,6 +3,7 @@ package vip.qoriginal.quantumplugin;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import kotlin.Pair;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;

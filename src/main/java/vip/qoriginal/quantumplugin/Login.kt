@@ -1,5 +1,6 @@
 package vip.qoriginal.quantumplugin
 
+import com.google.gson.Gson
 import com.google.gson.JsonParser
 import io.papermc.paper.event.player.AsyncChatEvent
 import kotlinx.coroutines.*
@@ -22,6 +23,7 @@ import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.scheduler.BukkitRunnable
 import vip.qoriginal.quantumplugin.patch.Utils
 import java.lang.Runnable
+import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 
 
@@ -41,7 +43,8 @@ class Login : Listener {
 		val visitorPlayedMap = ConcurrentHashMap<Player, Long>()
 	}
 
-	val logger = Logger();
+	val logger = Logger()
+	val gson = Gson()
 	val leaveMessageComponent = LeaveMessageComponent()
 
 	@OptIn(DelicateCoroutinesApi::class)
@@ -71,12 +74,14 @@ class Login : Listener {
 				leaveMessageComponent.getMessages(player).forEach {
 					player.sendMessage(it)
 				}
+				sendLoginAttempt(player, true)
 			} else {
 				logger.log("${player.name} kicked due to wrong password.", "LoginAction")
 				player.sendMessage(Component.text("登录失败，原因：密码不正确").color(NamedTextColor.RED))
 				playerLoginMap[player] = (playerLoginMap[player] ?: 0) + 1
 				if (playerLoginMap[player]!! >= 3) {
 					performKick(player, Component.text("失败次数过多。"))
+					sendLoginAttempt(player, false)
 				}
 			}
 		}
@@ -177,4 +182,18 @@ class Login : Listener {
 			player.kick(reason)
 		}
 	}
+
+	fun sendLoginAttempt(player: Player, success: Boolean) {
+		val logClazz = LoginLog(
+			player.name,
+			System.currentTimeMillis(),
+			success,
+		)
+		Request.sendPostRequest("http://172.19.0.6:8080/qo/upload/loginattempt", gson.toJson(logClazz), java.util.Optional.ofNullable(mapOf("token" to "aad3r32in213ndvv11@")))
+	}
 }
+data class LoginLog(
+	val user: String,
+	val date: Long,
+	val success: Boolean
+)
