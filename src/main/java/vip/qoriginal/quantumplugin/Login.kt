@@ -189,7 +189,7 @@ class Login : Listener {
 			System.currentTimeMillis(),
 			success,
 		)
-		Request.sendPostRequest("http://172.19.0.6:8080/qo/upload/loginattempt", gson.toJson(logClazz), java.util.Optional.ofNullable(mapOf("token" to "aad3r32in213ndvv11@")))
+		Request.sendPostRequest("http://172.19.0.6:8080/qo/upload/loginattempt?auth=aad3r32in213ndvv11@", gson.toJson(logClazz))
 	}
 }
 data class LoginLog(
