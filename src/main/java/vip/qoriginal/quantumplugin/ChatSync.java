@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 
 import java.util.*;
+
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
@@ -25,14 +26,17 @@ public class ChatSync implements Listener {
     private final static int QO_CODE = 1;
     private static Gson gson = new Gson();
     static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
     public void init() {
         WebMsgGetter webMsgGetter = new WebMsgGetter();
 
         scheduler.scheduleAtFixedRate(webMsgGetter, 0, 500, TimeUnit.MILLISECONDS);
     }
-    public static void exit(){
+
+    public static void exit() {
         scheduler.shutdown();
     }
+
     @EventHandler
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         if (!isShutup(event.getPlayer())) {
@@ -40,49 +44,85 @@ public class ChatSync implements Listener {
                 try {
                     String playerName = event.getPlayer().getName();
                     String message = event.getMessage();
-                    Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload", generateCredential(message, ChatType.GAME_CHAT.getChatType(), playerName));
+                    String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
+                    MessageWrapper mw = new MessageWrapper(encodedMessage, ChatType.GAME_CHAT.getChatType(), AuthUtils.INSTANCE.getToken(), QO_CODE, System.currentTimeMillis(), playerName);
+                    System.out.println(mw.getAsString());
+                    Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload", mw.getAsString());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             });
         }
     }
-    public void sendChatMsg(String message){
+
+    public void sendChatMsg(String message) {
         Thread.startVirtualThread(() -> {
             try {
                 String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload",  generateCredential(encodedMessage, ChatType.SYSTEM_CHAT.getChatType(), "QO"));
+                Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload", new MessageWrapper(encodedMessage, ChatType.SYSTEM_CHAT.getChatType(), AuthUtils.INSTANCE.getToken(), QO_CODE, System.currentTimeMillis(), "QO").getAsString());
             } catch (Exception e) {
                 e.printStackTrace();
             }
         });
     }
-    class WebMsgGetter implements Runnable {
-        String buffer = "";
+
+    public class WebMsgGetter implements Runnable {
+        private String buffer = "";
+        private long lastTimestamp = 0L;
+        private final Object lock = new Object();
 
         @Override
         public void run() {
             try {
                 String response = Request.sendGetRequest("http://172.19.0.6:8080/qo/msglist/download").get();
                 JsonElement jsonElement = JsonParser.parseString(response);
+
                 if (jsonElement.isJsonObject()) {
                     JsonObject msgObj = jsonElement.getAsJsonObject();
-                    if (msgObj.get("code").getAsInt() == 0) {
-                        String content = parseCQ(msgObj.get("content").getAsString());
-                        if (!content.equals(buffer)) {
-                            Component msgComponent = Component.text(content).color(TextColor.color(113, 159, 165));
-                            for (Player p : Bukkit.getOnlinePlayers()) {
-                                p.sendMessage(msgComponent);
-                            }
+                    List<JsonObject> newMessages = parseMessages(msgObj.getAsJsonArray("messages"));
 
+                    List<JsonObject> messagesToSend = new ArrayList<>();
+                    synchronized (lock) {
+                        for (JsonObject msg : newMessages) {
+                            long messageTime = msg.get("time").getAsLong();
+
+                            if (messageTime > lastTimestamp) {
+                                messagesToSend.add(msg);
+                                lastTimestamp = messageTime;
+                            }
+                        }
+
+
+                        if (!messagesToSend.isEmpty()) {
+                            for (JsonObject msg : messagesToSend) {
+                                if(msg.get("from").getAsInt() == QO_CODE) return;
+                                String content = "<" + msg.get("sender") + ">" + parseCQ(msg.get("message").getAsString());
+                                Component msgComponent = Component.text(content).color(TextColor.color(113, 159, 165));
+                                for (Player p : Bukkit.getOnlinePlayers()) {
+                                    p.sendMessage(msgComponent);
+                                }
+                            }
                         }
                     }
                 }
             } catch (Exception e) {
-                throw new RuntimeException(e);
+                e.printStackTrace();
             }
         }
+
+        private List<JsonObject> parseMessages(JsonArray messagesArray) {
+            List<JsonObject> messages = new ArrayList<>();
+            for (JsonElement msgElement : messagesArray) {
+                if (msgElement.isJsonPrimitive()) {
+                    String msgStr = msgElement.getAsString();
+                    JsonObject msgObj = JsonParser.parseString(msgStr).getAsJsonObject();
+                    messages.add(msgObj);
+                }
+            }
+            return messages;
+        }
     }
+
 
     public String parseCQ(String content) {
         content = content.replaceAll("\\[CQ:face,id=.*?\\]", "[表情]");
@@ -146,15 +186,9 @@ public class ChatSync implements Listener {
     }
 
 
-    public static String generateCredential(String message, String type, String sender) {
-        MessageWrapper messageWrapper = new MessageWrapper(message,"game_chat", AuthUtils.INSTANCE.getToken(), QO_CODE, System.currentTimeMillis(), sender);
-        return messageWrapper.getAsString();
-    }
-
     public enum ChatType {
         GAME_CHAT("game_chat"),
         SYSTEM_CHAT("system_chat");
-
         private final String chatType;
 
         ChatType(String chatType) {
@@ -182,6 +216,7 @@ public class ChatSync implements Listener {
             this.time = time;
             this.sender = sender;
         }
+
         public String getAsString() {
             return gson.toJson(this);
         }
