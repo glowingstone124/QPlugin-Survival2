@@ -1,8 +1,6 @@
 package vip.qoriginal.quantumplugin;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import kotlin.Pair;
 import net.kyori.adventure.text.Component;
@@ -25,9 +23,11 @@ import static vip.qoriginal.quantumplugin.QuantumPlugin.isShutup;
 
 public class ChatSync implements Listener {
     private final static int QO_CODE = 1;
+    private static Gson gson = new Gson();
     static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     public void init() {
         WebMsgGetter webMsgGetter = new WebMsgGetter();
+
         scheduler.scheduleAtFixedRate(webMsgGetter, 0, 500, TimeUnit.MILLISECONDS);
     }
     public static void exit(){
@@ -40,12 +40,7 @@ public class ChatSync implements Listener {
                 try {
                     String playerName = event.getPlayer().getName();
                     String message = event.getMessage();
-                    StringBuilder sb = new StringBuilder();
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    String currentTime = sdf.format(new Date());
-                    sb.append("[").append(currentTime).append("]").append("<").append(playerName).append(">: ").append(message);
-                    String encodedMessage = new String(sb.toString().getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                    Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload", generateCredential(encodedMessage));
+                    Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload", generateCredential(message, ChatType.GAME_CHAT.getChatType(), playerName));
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -56,7 +51,7 @@ public class ChatSync implements Listener {
         Thread.startVirtualThread(() -> {
             try {
                 String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload",  generateCredential(encodedMessage));
+                Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload",  generateCredential(encodedMessage, ChatType.SYSTEM_CHAT.getChatType(), "QO"));
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -151,11 +146,44 @@ public class ChatSync implements Listener {
     }
 
 
-    public static String generateCredential(String message) {
-        JsonObject jsonObject = new JsonObject();
-        jsonObject.addProperty("message", message);
-        jsonObject.addProperty("from", QO_CODE);
-        jsonObject.addProperty("token", "aad3r32in213ndvv11@");
-        return jsonObject.toString();
+    public static String generateCredential(String message, String type, String sender) {
+        MessageWrapper messageWrapper = new MessageWrapper(message,"game_chat", AuthUtils.INSTANCE.getToken(), QO_CODE, System.currentTimeMillis(), sender);
+        return messageWrapper.getAsString();
+    }
+
+    public enum ChatType {
+        GAME_CHAT("game_chat"),
+        SYSTEM_CHAT("system_chat");
+
+        private final String chatType;
+
+        ChatType(String chatType) {
+            this.chatType = chatType;
+        }
+
+        public String getChatType() {
+            return chatType;
+        }
+    }
+
+    public static class MessageWrapper {
+        public String message;
+        public String type;
+        public String sender;
+        public String token;
+        public int from;
+        public long time;
+
+        public MessageWrapper(String message, String type, String token, int from, long time, String sender) {
+            this.message = message;
+            this.type = type;
+            this.token = token;
+            this.from = from;
+            this.time = time;
+            this.sender = sender;
+        }
+        public String getAsString() {
+            return gson.toJson(this);
+        }
     }
 }
