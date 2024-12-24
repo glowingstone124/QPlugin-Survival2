@@ -4,6 +4,7 @@ import com.google.gson.*;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import kotlin.Pair;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -92,12 +93,18 @@ public class ChatSync implements Listener {
                             }
                         }
 
-
                         if (!messagesToSend.isEmpty()) {
                             for (JsonObject msg : messagesToSend) {
                                 if(msg.get("from").getAsInt() == QO_CODE) return;
-                                String content = "<" + msg.get("sender") + ">" + parseCQ(msg.get("message").getAsString());
-                                Component msgComponent = Component.text(content).color(TextColor.color(113, 159, 165));
+                                long sender = msg.get("from").getAsInt();
+                                JsonObject resp = (JsonObject) JsonParser.parseString(Request.sendGetRequest("http://172.19.0.6:8080/qo/download/name?qq=" + sender).get());
+                                String content;
+                                if (resp.get("code").getAsInt() == 0) {
+                                    content = "<" + resp.get("username") + ">" + parseCQ(msg.get("message").getAsString());
+                                } else {
+                                    content = "<未注册>" + parseCQ(msg.get("message").getAsString());
+                                }
+                                Component msgComponent = Component.text(content).color(TextColor.color(113, 159, 165)).hoverEvent(HoverEvent.showText(Component.text("Sender ID: " + sender)));
                                 for (Player p : Bukkit.getOnlinePlayers()) {
                                     p.sendMessage(msgComponent);
                                 }
