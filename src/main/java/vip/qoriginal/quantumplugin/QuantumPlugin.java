@@ -10,6 +10,8 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.boss.BossBar;
+import org.bukkit.boss.KeyedBossBar;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
@@ -33,10 +35,7 @@ import vip.qoriginal.quantumplugin.metro.LoadChunk;
 import vip.qoriginal.quantumplugin.patch.TextDisplay;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Timer;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class QuantumPlugin extends JavaPlugin {
@@ -99,6 +98,17 @@ public final class QuantumPlugin extends JavaPlugin {
                 SegmentMap.refresh();
             }
         }.runTaskTimer(this, 0L, 10L);
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (@NotNull Iterator<KeyedBossBar> it = Bukkit.getBossBars(); it.hasNext(); ) {
+                    BossBar bar = it.next();
+                    if(bar.getTitle().contentEquals("治疗进度")) {
+                        bar.removeAll();
+                    }
+                }
+            }
+        }.runTaskTimerAsynchronously(this, 0L, 30L);
 
         new BukkitRunnable() {
             @Override
@@ -112,7 +122,6 @@ public final class QuantumPlugin extends JavaPlugin {
                 });
             }
         }.runTaskTimer(this, 0L, 30*60*20L/* 30 Min */);
-        Timer timer = new Timer();
         Block b = Objects.requireNonNull(Bukkit.getWorld("world")).getBlockAt(-1782, 68, 720);
         if (b.getChunk().load()) {
             if (b.getType() == Material.LEVER) {

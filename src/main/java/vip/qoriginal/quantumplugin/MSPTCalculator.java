@@ -43,22 +43,6 @@ public class MSPTCalculator implements Listener {
         //MSPT的主要实现区，更新starttime
         starttime = System.currentTimeMillis();
         //实现在主线程执行command|@命令
-        if(!StatusUpload.command.contentEquals("")) {
-            try {
-                if(StatusUpload.command.indexOf("echo_off ")==0) {
-                    Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(),StatusUpload.command.substring(9));
-                } else if(StatusUpload.command.indexOf("changepass ")==0) {
-                    String[] args = StatusUpload.command.split(" ");
-                    Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(),"authme changepassword "+args[1]+" "+args[2]);
-                    Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(),"kick "+args[1]+" \"密码已更改，请重新登录！\"");
-                } else {
-                    //ChatCommandListener.sendMsg("serverbroadcast",Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(),StatusUpload.command)?"执行成功":"执行失败");
-                }
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-            StatusUpload.command = "";
-        }
         someExtraWorks();
         //村民治愈进度条更新
     }
@@ -82,7 +66,6 @@ public class MSPTCalculator implements Listener {
             //告警逻辑
             if(System.currentTimeMillis()-lasterror>120000 && mspt>77.0) {
                 try {
-                    //sendMsg("serverbroadcast", "【警告】MSPT值超过77.0，已经开始造成服务器卡顿！\n最近一分钟的TPS是："+(float) Bukkit.getServer().getTPS()[0]);
                     lasterror = System.currentTimeMillis();
                 } catch (Exception e) {}
             }

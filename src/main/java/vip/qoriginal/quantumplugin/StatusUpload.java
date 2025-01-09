@@ -10,9 +10,8 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 
 public class StatusUpload {
-    public static String command = "";
     public static final Map<String, String> header = new HashMap<>();
-
+    private static final Gson gson = new Gson();
     static {
         header.put("Authorization", "aad3r32in213ndvv11@");
     }
@@ -20,13 +19,10 @@ public class StatusUpload {
     public static int totalUser = 0;
     public void run() {
         //System.out.println("println");
-        Gson gson = new Gson();
         StatusSample status = new StatusSample();
         status.timestamp = System.currentTimeMillis();
-        Player[] players = Bukkit.getOnlinePlayers().toArray(new Player[0]);
-        status.onlinecount = players.length;
-
-        for(Player p:players) {
+        status.onlinecount = Bukkit.getOnlinePlayers().size();
+        for(Player p:Bukkit.getOnlinePlayers()) {
             BriefPlayerInfo info = new BriefPlayerInfo();
             info.ping = p.getPing();
             info.world = p.getWorld().getName();
@@ -46,12 +42,6 @@ public class StatusUpload {
         String data = gson.toJson(status);
         status.tick_time = Bukkit.getServer().getTickTimes();
         status.game_time = Objects.requireNonNull(Bukkit.getServer().getWorld("world")).getGameTime();
-        for (@NotNull Iterator<KeyedBossBar> it = Bukkit.getBossBars(); it.hasNext(); ) {
-            BossBar bar = it.next();
-            if(bar.getTitle().contentEquals("治疗进度")) {
-                bar.removeAll();
-            }
-        }
         try {
             Request.sendPostRequest("http://172.19.0.6:8080/qo/upload/status",data, Optional.of(header));
         } catch (Exception e) {
