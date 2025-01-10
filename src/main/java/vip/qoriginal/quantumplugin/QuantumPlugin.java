@@ -26,13 +26,10 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
-import vip.qoriginal.quantumplugin.patch.CustomItemStack;
-import vip.qoriginal.quantumplugin.patch.Knowledge;
-import vip.qoriginal.quantumplugin.patch.SpeedMonitor;
+import vip.qoriginal.quantumplugin.patch.*;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
 import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
-import vip.qoriginal.quantumplugin.patch.TextDisplay;
 
 import java.io.IOException;
 import java.util.*;
@@ -130,6 +127,7 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         }
         SegmentMap.init();
+        Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
     }
 
     public static QuantumPlugin getInstance() {

@@ -46,3 +46,6 @@ commands:
   leavemessage:
     description: Send messages to an offline player.
     usage: /leavemessage <player> <message>
+  firework:
+    description: 新年快乐，放烟花吧！/firework get <数字>获取烟花，/firework set 在身旁燃放烟花
+    usage: /firework <operation>
