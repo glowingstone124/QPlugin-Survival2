@@ -78,7 +78,8 @@ public final class QuantumPlugin extends JavaPlugin {
                 new NamePrefix(),
                 new PlayerEventListener(),
                 new PlayerInventoryViewer(),
-                new CustomItemStack()
+                new CustomItemStack(),
+                new FriendlyTnt()
         };
         Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
         ChatSync cs = new ChatSync();
