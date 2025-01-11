@@ -49,3 +49,6 @@ commands:
   firework:
     description: 新年快乐，放烟花吧！/firework get <数字>获取烟花，/firework set 在身旁燃放烟花
     usage: /firework <operation>
+  newyeartnt:
+    description: 来点温和的tnt？
+    usage: /<command> give
