@@ -64,7 +64,7 @@ class FriendlyTnt : CommandExecutor, Listener {
 				event.isCancelled = true
 				item.amount -= 1
 				meta.persistentDataContainer.set(customTntKey, PersistentDataType.FLOAT, 0f)
-				val location = player.location
+				val location = event.blockPlaced.location
 				val tnt = location.world!!.spawn(location, TNTPrimed::class.java)
 				tnt.fuseTicks = 60
 				tnt.persistentDataContainer.set(customTntKey, PersistentDataType.BYTE, 1.toByte());
@@ -80,11 +80,11 @@ class FriendlyTnt : CommandExecutor, Listener {
 				event.isCancelled = true
 				tnt.fireTicks = 0
 
-				entity.getNearbyEntities(5.0, 5.0, 5.0).forEach { nearbyEntity ->
+				entity.getNearbyEntities(8.0, 5.0, 8.0).forEach { nearbyEntity ->
 					if (nearbyEntity is Player) {
 						val player = nearbyEntity as Player
 						val direction = player.location.toVector().subtract(entity.location.toVector()).normalize()
-						player.velocity = direction.multiply(2)
+						player.velocity = direction.multiply(3)
 					}
 				}
 			}
