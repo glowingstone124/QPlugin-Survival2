@@ -30,15 +30,11 @@ public class JoinLeaveListener implements Listener {
     private final Map<Player, Long> sessionStartTimes = new HashMap<>();
     ChatSync cs = new ChatSync();
     Login login = new Login();
-    public static final String oversea_ip_whitelist = "ip.txt";
     public static final String[] blocklist = {"ServerSeeker.net"};
     public static Set<String> ip_whitelist = new HashSet<>();
     public static final Logger logger = new Logger();
 
     public static void init() throws IOException {
-        ip_whitelist = Files.lines(Path.of(oversea_ip_whitelist)).map(String::trim)
-                .filter(line -> !line.isEmpty())
-                .collect(Collectors.toSet());
     }
 
     @EventHandler

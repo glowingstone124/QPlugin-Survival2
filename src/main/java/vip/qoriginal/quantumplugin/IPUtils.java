@@ -1,5 +1,7 @@
 package vip.qoriginal.quantumplugin;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -9,6 +11,7 @@ import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.patch.Utils;
 
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 
 public class IPUtils {
     public static void locIsCn(PlayerJoinEvent event, Plugin plugin) {
@@ -33,8 +36,8 @@ public class IPUtils {
                 if (!ipIsInCn) {
                     player.sendMessage("你正在使用一个非中国大陆IP登录。");
                     cs.sendChatMsg("玩家 " + player.getName() + " 正在使用一个非中国大陆IP登录");
-                    if (!JoinLeaveListener.ip_whitelist.contains(ip)) {
-                        player.sendMessage("你正在使用一个非中国大陆IP登录，请联系glowingstone124过白您的IP。您的IP：" + ip);
+                    if (!fetchIpIsWhitelisted(ip)) {
+                        player.sendMessage("你正在使用一个非中国大陆IP登录，请联系glowingstone124或者在app.qoriginal.vip过白您的ip。您的IP：" + ip);
                         Utils.INSTANCE.runTaskOnMainThread(() -> {
                             player.kick(Component.text("你正在使用一个非中国大陆IP登录，请联系glowingstone124过白您的IP。您的IP：" + ip));
                         });
@@ -64,6 +67,10 @@ public class IPUtils {
             }
         }
         return null;
+    }
+    private static boolean fetchIpIsWhitelisted(String ip) throws ExecutionException, InterruptedException {
+        JsonObject response = (JsonObject) JsonParser.parseString(Request.sendGetRequest("http:172.19.0.6:8080/qo/download/ip/whitelisted?ip=" + ip).get());
+        return response.get("whitelisted").getAsBoolean();
     }
 
 }
