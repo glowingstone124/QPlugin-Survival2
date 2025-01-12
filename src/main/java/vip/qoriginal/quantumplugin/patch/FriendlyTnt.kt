@@ -43,7 +43,7 @@ class FriendlyTnt : CommandExecutor, Listener {
 			meta.displayName(Component.text("红包").decoration(TextDecoration.BOLD, true).color(NamedTextColor.YELLOW))
 			meta.lore(
 				listOf<Component>(
-					Component.text("新年快乐！说不定里面有什么惊喜...").color(NamedTextColor.YELLOW),
+					Component.text("成分改变了不少的TNT。据说会让人飞的更高，也许依然符合物理定律吧（笑），顺便，新年快乐！说不定里面有什么惊喜...").color(NamedTextColor.YELLOW),
 					Component.text("此物品用于庆祝2025年农历春节").color(NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true),
 					Component.text("由QO-JPL荣誉出品").color(NamedTextColor.YELLOW),
 					)
