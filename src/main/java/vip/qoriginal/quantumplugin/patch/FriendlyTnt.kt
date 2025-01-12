@@ -45,7 +45,8 @@ class FriendlyTnt : CommandExecutor, Listener {
 				listOf<Component>(
 					Component.text("新年快乐！说不定里面有什么惊喜...").color(NamedTextColor.YELLOW),
 					Component.text("此物品用于庆祝2025年农历春节").color(NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true),
-				)
+					Component.text("由QO-JPL荣誉出品").color(NamedTextColor.YELLOW),
+					)
 			)
 			meta.persistentDataContainer.set(customTntKey, PersistentDataType.BYTE, 1.toByte())
 			tnt.itemMeta = meta
