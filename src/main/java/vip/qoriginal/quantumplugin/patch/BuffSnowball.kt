@@ -24,9 +24,12 @@ import org.bukkit.persistence.PersistentDataType
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 import vip.qoriginal.quantumplugin.QuantumPlugin
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.random.Random
 
 class BuffSnowball: CommandExecutor, Listener {
+	val list = Files.readString(Path.of("newyear.txt")).split("\n".toRegex())
 	val customSnowball = NamespacedKey(QuantumPlugin.getInstance(), "buff_snowball")
 	override fun onCommand(
 		sender: CommandSender,
@@ -40,12 +43,15 @@ class BuffSnowball: CommandExecutor, Listener {
 		}
 		val snowball = ItemStack(Material.SNOWBALL).add(15)
 		val meta = snowball.itemMeta
+		val selection = Random.nextInt(0, list.size)
 		meta.apply {
 			displayName(Component.text("新年团子").decoration(TextDecoration.BOLD, true).color(NamedTextColor.YELLOW))
 			meta.lore(
 				listOf<Component>(
+
 					Component.text("试试看扔出去？").color(NamedTextColor.YELLOW),
 					Component.text("此物品用于庆祝2025年农历春节").color(NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true),
+					Component.text(list[selection]).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, true),
 				)
 			)
 			persistentDataContainer.set(customSnowball, PersistentDataType.BYTE, 1)

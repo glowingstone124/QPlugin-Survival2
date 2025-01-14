@@ -49,7 +49,7 @@ class Firework : CommandExecutor {
 			meta.apply {
 				power = 4
 				effects.forEach { addEffect(it) }
-				val selection = Random.nextInt(0, list.size - 1)
+				val selection = Random.nextInt(0, list.size)
 				displayName(Component.text("新年烟花").decoration(TextDecoration.BOLD, true).color(NamedTextColor.YELLOW))
 				lore(listOf(
 					Component.text("庆祝2025新年快乐的庆祝烟花: 方案${opt}").color(NamedTextColor.GREEN),
