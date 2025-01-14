@@ -52,3 +52,6 @@ commands:
   newyeartnt:
     description: 来点温和的tnt？
     usage: /<command> give
+  newyeardumplings:
+    description: 大家一起扔团子吧！
+    usage: /<command>

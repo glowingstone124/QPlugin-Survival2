@@ -78,6 +78,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 new NamePrefix(),
                 new PlayerEventListener(),
                 new PlayerInventoryViewer(),
+                new BuffSnowball(),
                 new CustomItemStack(),
                 new FriendlyTnt()
         };
@@ -130,6 +131,7 @@ public final class QuantumPlugin extends JavaPlugin {
         SegmentMap.init();
         Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
         Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
+        Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());
     }
 
     public static QuantumPlugin getInstance() {

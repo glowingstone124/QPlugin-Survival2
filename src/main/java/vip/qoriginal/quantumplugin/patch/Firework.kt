@@ -30,7 +30,7 @@ class Firework : CommandExecutor {
 			p0.sendMessage("请指定操作为 get or launch")
 			return true
 		}
-		if (p3[0] == "get") {
+		if (p3[0] == "get" && p3.size == 2) {
 			var opt by Delegates.notNull<Int>()
 			try {
 				opt = p3[1].toInt()

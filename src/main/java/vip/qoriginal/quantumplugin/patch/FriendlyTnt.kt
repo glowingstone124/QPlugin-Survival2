@@ -15,6 +15,7 @@ import org.bukkit.entity.TNTPrimed
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockPlaceEvent
+import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
@@ -88,6 +89,17 @@ class FriendlyTnt : CommandExecutor, Listener {
 						player.velocity = direction.multiply(3)
 					}
 				}
+			}
+		}
+	}
+
+	@EventHandler
+	fun onEntityDamage(event: EntityDamageEvent) {
+		val entity = event.damageSource.directEntity
+		if (entity?.type == EntityType.TNT) {
+			val tnt = entity as TNTPrimed
+			if (tnt.persistentDataContainer.has(customTntKey, PersistentDataType.BYTE)) {
+				event.isCancelled = true
 			}
 		}
 	}
