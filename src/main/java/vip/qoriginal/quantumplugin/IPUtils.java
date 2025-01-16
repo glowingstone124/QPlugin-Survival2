@@ -69,7 +69,7 @@ public class IPUtils {
         return null;
     }
     private static boolean fetchIpIsWhitelisted(String ip) throws ExecutionException, InterruptedException {
-        JsonObject response = (JsonObject) JsonParser.parseString(Request.sendGetRequest("http:172.19.0.6:8080/qo/download/ip/whitelisted?ip=" + ip).get());
+        JsonObject response = (JsonObject) JsonParser.parseString(Request.sendGetRequest("http://172.19.0.6:8080/qo/download/ip/whitelisted?ip=" + ip).get());
         return response.get("whitelisted").getAsBoolean();
     }
 
