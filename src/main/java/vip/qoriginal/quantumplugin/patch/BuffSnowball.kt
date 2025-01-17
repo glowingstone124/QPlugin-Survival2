@@ -130,7 +130,7 @@ class BuffSnowball: CommandExecutor, Listener {
 
 	@EventHandler
 	fun onEntityDamage(event: EntityDamageEvent) {
-		val entity = event.damageSource as Entity
+		val entity = event.damageSource.directEntity as Entity
 		if (entity.type == EntityType.FIREWORK_ROCKET) {
 			val firework = entity as Firework
 			if (firework.persistentDataContainer.has(customSnowballTriggeredFirework, PersistentDataType.BYTE) == true) {
