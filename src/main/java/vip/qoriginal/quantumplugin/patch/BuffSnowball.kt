@@ -13,10 +13,14 @@ import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.Color
+import org.bukkit.entity.Entity
+import org.bukkit.entity.EntityType
+import org.bukkit.entity.Firework
 import org.bukkit.entity.Player
 import org.bukkit.entity.Snowball
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.ProjectileHitEvent
 import org.bukkit.event.entity.ProjectileLaunchEvent
 import org.bukkit.inventory.ItemStack
@@ -31,6 +35,7 @@ import kotlin.random.Random
 class BuffSnowball: CommandExecutor, Listener {
 	val list = Files.readString(Path.of("newyear.txt")).split("\n".toRegex())
 	val customSnowball = NamespacedKey(QuantumPlugin.getInstance(), "buff_snowball")
+	val customSnowballTriggeredFirework = NamespacedKey(QuantumPlugin.getInstance(), "buff_snowball_firework")
 	override fun onCommand(
 		sender: CommandSender,
 		command: Command,
@@ -48,7 +53,6 @@ class BuffSnowball: CommandExecutor, Listener {
 			displayName(Component.text("新年团子").decoration(TextDecoration.BOLD, true).color(NamedTextColor.YELLOW))
 			meta.lore(
 				listOf<Component>(
-
 					Component.text("试试看扔出去？").color(NamedTextColor.YELLOW),
 					Component.text("此物品用于庆祝2025年农历春节").color(NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true),
 					Component.text(list[selection]).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, true),
@@ -101,6 +105,7 @@ class BuffSnowball: CommandExecutor, Listener {
 				val firework = world.spawn(location, org.bukkit.entity.Firework::class.java)
 
 				val fireworkMeta = firework.fireworkMeta
+				fireworkMeta.persistentDataContainer.set(customSnowball, PersistentDataType.BYTE, 1)
 				fireworkMeta.addEffect(
 					FireworkEffect.builder()
 						.with(FireworkEffect.Type.BURST)
@@ -122,6 +127,18 @@ class BuffSnowball: CommandExecutor, Listener {
 			}
 		}
 	}
+
+	@EventHandler
+	fun onEntityDamage(event: EntityDamageEvent) {
+		val entity = event.damageSource as Entity
+		if (entity.type == EntityType.FIREWORK_ROCKET) {
+			val firework = entity as Firework
+			if (firework.persistentDataContainer.has(customSnowballTriggeredFirework, PersistentDataType.BYTE) == true) {
+				event.isCancelled = true
+			}
+		}
+	}
+
 	val effectList = listOf(
 		PotionEffect(
 			PotionEffectType.REGENERATION,
