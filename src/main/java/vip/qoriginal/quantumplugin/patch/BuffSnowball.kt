@@ -130,14 +130,13 @@ class BuffSnowball: CommandExecutor, Listener {
 
 	@EventHandler
 	fun onEntityDamage(event: EntityDamageEvent) {
-		val entity = event.damageSource.directEntity as Entity
-		if (entity.type == EntityType.FIREWORK_ROCKET) {
-			val firework = entity as Firework
+		(event.damageSource.directEntity as? Firework)?.let { firework ->
 			if (firework.persistentDataContainer.has(customSnowballTriggeredFirework, PersistentDataType.BYTE) == true) {
 				event.isCancelled = true
 			}
 		}
 	}
+
 
 	val effectList = listOf(
 		PotionEffect(
