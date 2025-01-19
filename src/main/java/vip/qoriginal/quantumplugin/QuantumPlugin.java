@@ -44,6 +44,7 @@ public final class QuantumPlugin extends JavaPlugin {
     private TextDisplay td = new TextDisplay();
     LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
+    Ranking ranking = new Ranking();
 
     @Override
     public void onEnable() {
