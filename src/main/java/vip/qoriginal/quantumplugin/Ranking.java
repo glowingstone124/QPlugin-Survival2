@@ -37,6 +37,8 @@ public class Ranking
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
+            destroyMap.clear();
+            placeMap.clear();
         }
     };
     public void initRankingMap() {
