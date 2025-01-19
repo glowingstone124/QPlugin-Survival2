@@ -1,5 +1,7 @@
 package vip.qoriginal.quantumplugin;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -21,6 +23,6 @@ public class NamePrefix implements Listener {
                 newName = player.getName();
                 break;
         }
-        player.setDisplayName(newName);
+        player.displayName(Component.text(newName, NamedTextColor.GREEN));
     }
 }
