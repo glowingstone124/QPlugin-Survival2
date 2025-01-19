@@ -44,7 +44,6 @@ public final class QuantumPlugin extends JavaPlugin {
     private TextDisplay td = new TextDisplay();
     LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
-    Ranking ranking = new Ranking();
 
     @Override
     public void onEnable() {
@@ -133,6 +132,7 @@ public final class QuantumPlugin extends JavaPlugin {
         Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
         Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
         Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());
+        Ranking ranking = new Ranking();
     }
 
     public static QuantumPlugin getInstance() {
