@@ -74,6 +74,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 new MSPTCalculator(),
                 new Knowledge(),
                 new ChatSync(),
+                /*new Chat(),*/
                 new SpeedMonitor(this),
                 new NamePrefix(),
                 new PlayerEventListener(),
