@@ -65,11 +65,13 @@ class FriendlyTnt : CommandExecutor, Listener {
 			if (meta != null && meta.persistentDataContainer.has(customTntKey, PersistentDataType.BYTE)) {
 				event.isCancelled = true
 				item.amount -= 1
+				/*
 				meta.persistentDataContainer.set(customTntKey, PersistentDataType.FLOAT, 0f)
 				val location = event.blockPlaced.location
 				val tnt = location.world!!.spawn(location, TNTPrimed::class.java)
 				tnt.fuseTicks = 60
 				tnt.persistentDataContainer.set(customTntKey, PersistentDataType.BYTE, 1.toByte());
+				*/
 			}
 		}
 	}

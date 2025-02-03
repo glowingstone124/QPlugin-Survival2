@@ -74,6 +74,7 @@ class BuffSnowball: CommandExecutor, Listener {
 				val isBuffSnowball = itemInHand.itemMeta?.persistentDataContainer?.has(customSnowball, PersistentDataType.BYTE) == true
 
 				if (isBuffSnowball) {
+					/*
 					projectile.persistentDataContainer.set(customSnowball, PersistentDataType.BYTE, 1)
 					Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
 						if (!projectile.isDead && !projectile.isOnGround) {
@@ -88,6 +89,9 @@ class BuffSnowball: CommandExecutor, Listener {
 							)
 						}
 					}, 0L, 1L)
+					*/
+					event.isCancelled = true
+					itemInHand.amount -= 1
 				}
 			}
 		}
