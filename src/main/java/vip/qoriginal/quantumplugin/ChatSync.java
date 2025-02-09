@@ -24,6 +24,8 @@ import java.util.concurrent.TimeUnit;
 import static vip.qoriginal.quantumplugin.QuantumPlugin.isShutup;
 
 public class ChatSync implements Listener {
+    private final static int WEB_CODE = 3;
+    private final static int SYSTEM_CODE = 2;
     private final static int QO_CODE = 1;
     private static Gson gson = new Gson();
     static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -95,16 +97,23 @@ public class ChatSync implements Listener {
 
                         if (!messagesToSend.isEmpty()) {
                             for (JsonObject msg : messagesToSend) {
-                                if(msg.get("from").getAsInt() == QO_CODE) return;
-                                long sender = msg.get("from").getAsInt();
-                                JsonObject resp = (JsonObject) JsonParser.parseString(Request.sendGetRequest("http://172.19.0.6:8080/qo/download/name?qq=" + sender).get());
+                                int from = msg.get("from").getAsInt();
+                                if(from == QO_CODE) return;
                                 String content;
-                                if (resp.get("code").getAsInt() == 0) {
-                                    content = "<" + resp.get("username") + ">" + parseCQ(msg.get("message").getAsString());
+                                Component msgComponent;
+                                if (from == WEB_CODE) { // handle web chat
+                                    content = "<" + msg.get("username") + ">" + msg.get("message");
+                                    msgComponent = Component.text(content).color(TextColor.color(113, 159, 165));
                                 } else {
-                                    content = "<未注册>" + parseCQ(msg.get("message").getAsString());
+                                    long sender = msg.get("from").getAsInt();
+                                    JsonObject resp = (JsonObject) JsonParser.parseString(Request.sendGetRequest("http://172.19.0.6:8080/qo/download/name?qq=" + sender).get());
+                                    if (resp.get("code").getAsInt() == 0) {
+                                        content = "<" + resp.get("username") + ">" + parseCQ(msg.get("message").getAsString());
+                                    } else {
+                                        content = "<未注册>" + parseCQ(msg.get("message").getAsString());
+                                    }
+                                    msgComponent = Component.text(content).hoverEvent(HoverEvent.showText(Component.text("Sender ID: " + sender)));;
                                 }
-                                Component msgComponent = Component.text(content).color(TextColor.color(113, 159, 165)).hoverEvent(HoverEvent.showText(Component.text("Sender ID: " + sender)));
                                 for (Player p : Bukkit.getOnlinePlayers()) {
                                     p.sendMessage(msgComponent);
                                 }
