@@ -102,7 +102,7 @@ public class ChatSync implements Listener {
                                 String content;
                                 Component msgComponent;
                                 if (from == WEB_CODE) { // handle web chat
-                                    content = "<" + msg.get("username") + ">" + msg.get("message");
+                                    content = "<" + msg.get("sender") + ">" + msg.get("message");
                                     msgComponent = Component.text(content).color(TextColor.color(113, 159, 165));
                                 } else {
                                     long sender = msg.get("from").getAsInt();
