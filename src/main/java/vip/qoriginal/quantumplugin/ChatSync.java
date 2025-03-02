@@ -50,7 +50,7 @@ public class ChatSync implements Listener {
                     String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
                     MessageWrapper mw = new MessageWrapper(encodedMessage, ChatType.GAME_CHAT.getChatType(), AuthUtils.INSTANCE.getToken(), QO_CODE, System.currentTimeMillis(), playerName);
                     System.out.println(mw.getAsString());
-                    Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload", mw.getAsString());
+                    Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", mw.getAsString());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -62,7 +62,7 @@ public class ChatSync implements Listener {
         Thread.startVirtualThread(() -> {
             try {
                 String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                Request.sendPostRequest("http://172.19.0.6:8080/qo/msglist/upload", new MessageWrapper(encodedMessage, ChatType.SYSTEM_CHAT.getChatType(), AuthUtils.INSTANCE.getToken(), QO_CODE, System.currentTimeMillis(), "QO").getAsString());
+                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", new MessageWrapper(encodedMessage, ChatType.SYSTEM_CHAT.getChatType(), AuthUtils.INSTANCE.getToken(), QO_CODE, System.currentTimeMillis(), "QO").getAsString());
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -77,7 +77,7 @@ public class ChatSync implements Listener {
         @Override
         public void run() {
             try {
-                String response = Request.sendGetRequest("http://172.19.0.6:8080/qo/msglist/download").get();
+                String response = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/download").get();
                 JsonElement jsonElement = JsonParser.parseString(response);
 
                 if (jsonElement.isJsonObject()) {
@@ -106,7 +106,7 @@ public class ChatSync implements Listener {
                                     msgComponent = Component.text(content).color(TextColor.color(113, 159, 165));
                                 } else {
                                     long sender = msg.get("from").getAsInt();
-                                    JsonObject resp = (JsonObject) JsonParser.parseString(Request.sendGetRequest("http://172.19.0.6:8080/qo/download/name?qq=" + sender).get());
+                                    JsonObject resp = (JsonObject) JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/name?qq=" + sender).get());
                                     if (resp.get("code").getAsInt() == 0) {
                                         content = "<" + resp.get("username") + ">" + parseCQ(msg.get("message").getAsString());
                                     } else {

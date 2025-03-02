@@ -17,7 +17,7 @@ public class WebMsgGetter extends TimerTask{
     @Override
     public void run(){
         try {
-            String response = Request.sendGetRequest("http://172.19.0.6:8080/qo/msglist/download").get();
+            String response = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() +"/qo/msglist/download").get();
             JSONObject remoteObj = new JSONObject(response);
             JSONArray remoteRaw = remoteObj.getJSONArray("messages");
             ArrayList<String> remoteArr = parseArrList(remoteRaw);

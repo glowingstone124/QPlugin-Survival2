@@ -27,11 +27,11 @@ public class Ranking
             String serializedDestroy = gson.toJson(destroyMap);
             try {
                 Request.sendPostRequest(
-                        "http://172.19.0.6:8080/qo/destroy/upload/",
+                        Config.INSTANCE.getAPI_ENDPOINT() + "/qo/destroy/upload/",
                         serializedDestroy
                 );
                 Request.sendPostRequest(
-                        "http://172.19.0.6:8080/qo/place/upload/",
+                        Config.INSTANCE.getAPI_ENDPOINT() +"/qo/place/upload/",
                         serializedPlace
                 );
             } catch (Exception e) {
@@ -42,8 +42,8 @@ public class Ranking
         }
     };
     public void initRankingMap() {
-        String placeUrl = "http://172.19.0.6:8080/qo/place/download";
-        String destroyUrl = "http://172.19.0.6:8080/qo/destroy/download/";
+        String placeUrl = Config.INSTANCE.getAPI_ENDPOINT() +"/qo/place/download";
+        String destroyUrl =Config.INSTANCE.getAPI_ENDPOINT() + "/qo/destroy/download/";
 
         try {
             String placeResponse = Request.sendGetRequest(placeUrl).get();

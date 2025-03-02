@@ -53,7 +53,7 @@ public class IPUtils {
         int attempts = 0;
         while (attempts < retries) {
             try {
-                String response = Request.sendGetRequest("http://172.19.0.6:8080/qo/download/ip?ip=" + ip).get();
+                String response = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/ip?ip=" + ip).get();
                 return Objects.equals("true", response);
             } catch (Exception e) {
                 attempts++;
@@ -69,7 +69,7 @@ public class IPUtils {
         return null;
     }
     private static boolean fetchIpIsWhitelisted(String ip) throws ExecutionException, InterruptedException {
-        JsonObject response = (JsonObject) JsonParser.parseString(Request.sendGetRequest("http://172.19.0.6:8080/qo/download/ip/whitelisted?ip=" + ip).get());
+        JsonObject response = (JsonObject) JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/ip/whitelisted?ip=" + ip).get());
         return response.get("whitelisted").getAsBoolean();
     }
 

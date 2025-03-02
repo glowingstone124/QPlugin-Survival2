@@ -23,7 +23,6 @@ import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.scheduler.BukkitRunnable
 import vip.qoriginal.quantumplugin.patch.Utils
 import java.lang.Runnable
-import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 
 
@@ -52,7 +51,7 @@ class Login : Listener {
 		GlobalScope.launch {
 			val loginResult = withContext(Dispatchers.IO) {
 				JsonParser.parseString(
-					Request.sendGetRequest("http://172.19.0.6:8080/qo/game/login?username=${player.name}&password=$password")
+					Request.sendGetRequest(Config.API_ENDPOINT + "/qo/game/login?username=${player.name}&password=$password")
 						.get()
 				).asJsonObject
 			}
@@ -61,7 +60,7 @@ class Login : Listener {
 				player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
 				val time = withContext(Dispatchers.IO) {
 					JsonParser.parseString(
-						Request.sendGetRequest("http://172.19.0.6:8080/qo/download/getgametime?username=${player.name}")
+						Request.sendGetRequest(Config.API_ENDPOINT + "/qo/download/getgametime?username=${player.name}")
 							.get()
 					).asJsonObject
 				}
@@ -96,7 +95,7 @@ class Login : Listener {
 			GlobalScope.launch {
 				val timeObj = withContext(Dispatchers.IO) {
 					JsonParser.parseString(
-						Request.sendGetRequest("http://172.19.0.6:8080/qo/download/getgametime?username=${player.name}")
+						Request.sendGetRequest(Config.API_ENDPOINT + "/qo/download/getgametime?username=${player.name}")
 							.get()
 					).asJsonObject.takeIf { it.has("time") }?.asJsonObject
 				}
@@ -189,7 +188,7 @@ class Login : Listener {
 			System.currentTimeMillis(),
 			success,
 		)
-		Request.sendPostRequest("http://172.19.0.6:8080/qo/upload/loginattempt?auth=2djg45uifjs034", gson.toJson(logClazz))
+		Request.sendPostRequest(Config.API_ENDPOINT + "/qo/upload/loginattempt?auth=2djg45uifjs034", gson.toJson(logClazz))
 	}
 }
 data class LoginLog(

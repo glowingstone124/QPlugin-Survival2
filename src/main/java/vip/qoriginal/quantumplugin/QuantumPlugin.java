@@ -61,7 +61,7 @@ public final class QuantumPlugin extends JavaPlugin {
         stopObj.put("timestamp", System.currentTimeMillis());
         stopObj.put("stat", 0);
         try {
-            Request.sendPostRequest("http://172.19.0.6:8080/qo/alive/upload", stopObj.toString());
+            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/alive/upload", stopObj.toString());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -115,7 +115,7 @@ public final class QuantumPlugin extends JavaPlugin {
             public void run() {
                 getServer().getOnlinePlayers().forEach(player -> {
                     try {
-                        Request.sendPostRequest("http://172.19.0.6:8080/qo/online?name=" + player.getName(), "");
+                        Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT()+ "/qo/online?name=" + player.getName(), "");
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
@@ -147,7 +147,7 @@ public final class QuantumPlugin extends JavaPlugin {
         stopObj.put("timestamp", System.currentTimeMillis());
         stopObj.put("stat", 1);
         try {
-            Request.sendPostRequest("http://172.19.0.6:8080/qo/alive/upload", stopObj.toString());
+            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/alive/upload", stopObj.toString());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -259,7 +259,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 List<MetadataValue> values = s.getMetadata("need_confirm_binding");
                 String forumAccount = values.get(0).asString();
                 try {
-                    Request.sendPostRequest("http://172.19.0.6:8080/qo/upload/link?name" + s.getName() + "&forum" + forumAccount, "");
+                    Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/upload/link?name" + s.getName() + "&forum" + forumAccount, "");
                 } catch (Exception e) {
                     s.sendMessage("由于系统错误，绑定无法完成");
                 }
@@ -273,7 +273,7 @@ public final class QuantumPlugin extends JavaPlugin {
             String name = args[0];
             String result = null;
             try {
-                result = Request.sendGetRequest("http://172.19.0.6:8080/qo/download/registry?name=" + name).get();
+                result = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + name).get();
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -298,13 +298,13 @@ public final class QuantumPlugin extends JavaPlugin {
                 return true;
             }
             try {
-                String result = Request.sendGetRequest("http://172.19.0.6:8080/qo/download/registry?name=" + args[0]).get();
+                String result = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + args[0]).get();
                 JsonObject queryObj = (JsonObject) JsonParser.parseString(result);
                 if (queryObj.get("code").getAsInt() != 0) {
                     sender.sendMessage("该玩家不存在！");
                     return true;
                 }
-                String res2 = Request.sendGetRequest("http://172.19.0.6:8080/qo/inventory/request?name=" + args[0] + "&from=" + sender.getName()).get();
+                String res2 = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/inventory/request?name=" + args[0] + "&from=" + sender.getName()).get();
                 if (JsonParser.parseString(res2).getAsJsonObject().get("code").getAsInt() == 0) {
                     String key = JsonParser.parseString(res2).getAsJsonObject().get("key").getAsString();
                     sender.sendMessage(Component.text("已经发送请求，请等待对方验证。")

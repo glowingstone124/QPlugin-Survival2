@@ -43,7 +43,7 @@ public class StatusUpload {
         status.tick_time = Bukkit.getServer().getTickTimes();
         status.game_time = Objects.requireNonNull(Bukkit.getServer().getWorld("world")).getGameTime();
         try {
-            Request.sendPostRequest("http://172.19.0.6:8080/qo/upload/status",data, Optional.of(header));
+            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/upload/status",data, Optional.of(header));
         } catch (Exception e) {
             Bukkit.getLogger().warning("Experienced an exception" + e + " (on network?) while uploading status.\nIf the problem persists, please tell MineCreeper2086 to check if the target host is down.");
         }
