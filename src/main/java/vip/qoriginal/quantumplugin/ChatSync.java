@@ -108,11 +108,11 @@ public class ChatSync implements Listener {
                                     long sender = msg.get("from").getAsInt();
                                     JsonObject resp = (JsonObject) JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/name?qq=" + sender).get());
                                     if (resp.get("code").getAsInt() == 0) {
-                                        content = "<" + resp.get("username") + ">" + parseCQ(msg.get("message").getAsString());
+                                        content = "<" + resp.get("username") + ">" + parseCQv2(msg.get("message").getAsString());
                                     } else {
                                         content = "<未注册>" + parseCQ(msg.get("message").getAsString());
                                     }
-                                    msgComponent = Component.text(content).hoverEvent(HoverEvent.showText(Component.text("Sender ID: " + sender)));;
+                                    msgComponent = Component.text(content).color(TextColor.color(33, 165, 105)).hoverEvent(HoverEvent.showText(Component.text("Sender ID: " + sender)));;
                                 }
                                 for (Player p : Bukkit.getOnlinePlayers()) {
                                     p.sendMessage(msgComponent);
