@@ -27,6 +27,7 @@ public class ChatSync implements Listener {
     private final static int WEB_CODE = 3;
     private final static int SYSTEM_CODE = 2;
     private final static int QO_CODE = 1;
+    private final static int QQ_CODE = 0;
     private static Gson gson = new Gson();
     static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
@@ -98,22 +99,10 @@ public class ChatSync implements Listener {
                         if (!messagesToSend.isEmpty()) {
                             for (JsonObject msg : messagesToSend) {
                                 int from = msg.get("from").getAsInt();
-                                if(from == QO_CODE) return;
-                                String content;
-                                Component msgComponent;
-                                if (from == WEB_CODE) { // handle web chat
-                                    content = "<" + msg.get("sender") + ">" + msg.get("message");
-                                    msgComponent = Component.text(content).color(TextColor.color(113, 159, 165));
-                                } else {
-                                    long sender = msg.get("from").getAsInt();
-                                    JsonObject resp = (JsonObject) JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/name?qq=" + sender).get());
-                                    if (resp.get("code").getAsInt() == 0) {
-                                        content = "<" + resp.get("username") + ">" + parseCQv2(msg.get("message").getAsString());
-                                    } else {
-                                        content = "<未注册>" + parseCQ(msg.get("message").getAsString());
-                                    }
-                                    msgComponent = Component.text(content).color(TextColor.color(33, 165, 105)).hoverEvent(HoverEvent.showText(Component.text("Sender ID: " + sender)));;
-                                }
+                                if (from == QO_CODE) return;
+
+                                Component msgComponent = buildMessageComponent(from, msg);
+
                                 for (Player p : Bukkit.getOnlinePlayers()) {
                                     p.sendMessage(msgComponent);
                                 }
@@ -136,6 +125,54 @@ public class ChatSync implements Listener {
                 }
             }
             return messages;
+        }
+        private Component buildMessageComponent(int from, JsonObject msg) {
+            String content;
+            String message = msg.get("message").getAsString();
+
+            switch (from) {
+                case WEB_CODE -> {
+                    String sender = msg.get("sender").getAsString();
+                    content = "<" + sender + ">" + message;
+                    return Component.text(content)
+                            .color(TextColor.color(113, 159, 165));
+                }
+
+                case QQ_CODE -> {
+                    long sender = msg.get("sender").getAsLong();
+                    String username = getQQUsername(sender);
+                    if (username == null) {
+                        content = "<未注册>" + parseCQ(message);
+                    } else {
+                        content = "<" + username + ">" + parseCQv2(message);
+                    }
+                    return Component.text(content)
+                            .color(TextColor.color(33, 95, 105))
+                            .hoverEvent(HoverEvent.showText(Component.text("Sender ID: " + sender)));
+                }
+
+                case SYSTEM_CODE -> {
+                    content = "<系统>" + message;
+                    return Component.text(content)
+                            .color(TextColor.color(33, 95, 105))
+                            .hoverEvent(HoverEvent.showText(Component.text("这是Quantum Original官方消息")));
+                }
+
+                default -> {
+                    return Component.text("<unknown source>" + message);
+                }
+            }
+        }
+
+        private String getQQUsername(long qq) {
+            try {
+                String url = Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/name?qq=" + qq;
+                JsonObject resp = (JsonObject) JsonParser.parseString(Request.sendGetRequest(url).get());
+                return resp.get("code").getAsInt() == 0 ? resp.get("username").getAsString() : null;
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
         }
     }
 
