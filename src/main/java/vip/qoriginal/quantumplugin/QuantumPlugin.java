@@ -25,6 +25,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
+import vip.qoriginal.quantumplugin.event.Locker;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
@@ -42,6 +43,7 @@ public final class QuantumPlugin extends JavaPlugin {
     private static QuantumPlugin instance;
     PlayerInventoryViewer piv = new PlayerInventoryViewer();
     private TextDisplay td = new TextDisplay();
+    Locker locker = new Locker();
     LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
 
@@ -81,7 +83,8 @@ public final class QuantumPlugin extends JavaPlugin {
                 new PlayerInventoryViewer(),
                 new BuffSnowball(),
                 new CustomItemStack(),
-                new FriendlyTnt()
+                new FriendlyTnt(),
+                new Locker()
         };
         Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
         ChatSync cs = new ChatSync();
@@ -367,6 +370,9 @@ public final class QuantumPlugin extends JavaPlugin {
                 return true;
             }
             return leaveMessageComponent.handlePlayerMessageUpload(s, args[0], args[1]);
+        } else if(command.getName().equalsIgnoreCase("lock")) {
+            locker.onCommand(sender, args);
+            return true;
         }
         return false;
     }
