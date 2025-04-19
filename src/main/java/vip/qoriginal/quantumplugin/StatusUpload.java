@@ -1,28 +1,52 @@
 package vip.qoriginal.quantumplugin;
 
 import com.google.gson.Gson;
+import kotlinx.coroutines.Dispatchers;
 import org.bukkit.*;
-import org.bukkit.boss.BossBar;
-import org.bukkit.boss.KeyedBossBar;
 import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
+import vip.qoriginal.quantumplugin.patch.Utils;
 
 import java.util.*;
+import java.util.concurrent.Callable;
+
+import static kotlin.system.TimingKt.measureTimeMillis;
 
 public class StatusUpload {
     public static final Map<String, String> header = new HashMap<>();
+    public static final List<Long> time = new ArrayList<>();
+    private static final CoroutineJava cj = new CoroutineJava();
+    private static final Logger logger = new Logger();
     private static final Gson gson = new Gson();
+    private static final boolean DEBUG = true;
+
     static {
         header.put("Authorization", "aad3r32in213ndvv11@");
     }
 
     public static int totalUser = 0;
+
     public void run() {
-        //System.out.println("println");
+        long starttime = System.currentTimeMillis();
+        if (DEBUG) {
+            cj.run(() -> {
+                if (time.toArray().length % 50 == 0) {
+                    logger.log("Last 50 times' status upload cost avg is:" + Utils.INSTANCE.avg(time), "LoggerHealth");
+                }
+                return null;
+            }, Dispatchers.getIO());
+        }
+        actualLogic();
+        if (DEBUG) {
+            long cost = System.currentTimeMillis() - starttime;
+            time.add(cost);
+        }
+    }
+
+    private void actualLogic() {
         StatusSample status = new StatusSample();
         status.timestamp = System.currentTimeMillis();
         status.onlinecount = Bukkit.getOnlinePlayers().size();
-        for(Player p:Bukkit.getOnlinePlayers()) {
+        for (Player p : Bukkit.getOnlinePlayers()) {
             BriefPlayerInfo info = new BriefPlayerInfo();
             info.ping = p.getPing();
             info.world = p.getWorld().getName();
@@ -34,21 +58,20 @@ public class StatusUpload {
             status.players.add(info);
         }
         status.totalcount = totalUser;
-        status.mspt = Float.isNaN(MSPTCalculator.mspt)?0:MSPTCalculator.mspt;
+        status.mspt = Float.isNaN(MSPTCalculator.mspt) ? 0 : MSPTCalculator.mspt;
         status.recent60 = MSPTCalculator.getRecent60t();
         //getR3S will clear msptList so invoke recent60 before R3S.
         float mspt_3s = MSPTCalculator.getR3s();
-        status.mspt_3s = Float.isNaN(mspt_3s)?0:mspt_3s;
+        status.mspt_3s = Float.isNaN(mspt_3s) ? 0 : mspt_3s;
         String data = gson.toJson(status);
         status.tick_time = Bukkit.getServer().getTickTimes();
         status.game_time = Objects.requireNonNull(Bukkit.getServer().getWorld("world")).getGameTime();
         try {
-            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/upload/status",data, Optional.of(header));
+            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/upload/status", data, Optional.of(header));
         } catch (Exception e) {
             Bukkit.getLogger().warning("Experienced an exception" + e + " (on network?) while uploading status.\nIf the problem persists, please tell MineCreeper2086 to check if the target host is down.");
         }
     }
-
     public static class DetailedStatus {
         int onlinecount = 0;
         ArrayList<BriefPlayerInfo> players = new ArrayList<>();

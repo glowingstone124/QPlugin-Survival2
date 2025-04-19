@@ -11,6 +11,7 @@ import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 
 class LeaveMessageComponent {
+
 	fun handlePlayerMessageUpload(player: Player,target:String, message: String): Boolean {
 		if(player.name == target) {
 			player.sendMessage("您不能向自己发送留言。")
