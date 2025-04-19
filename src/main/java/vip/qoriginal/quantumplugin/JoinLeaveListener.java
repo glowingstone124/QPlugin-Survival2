@@ -62,9 +62,8 @@ public class JoinLeaveListener implements Listener {
         logger.log("Player " + playerName + " didn't register but wanted to join in", "LoginManager");
         if (relationship.code == 1) {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                    Component.text("[401 Unauthorized]验证失败，请在群：946085440中下载QCommunity")
-                            .append(Component.text("并绑定你的游戏名：" + playerName).decorate(TextDecoration.BOLD))
-                            .append(Component.text(" 之后重试！")));
+                    Component.text("[401 Unauthorized]您还没有注册QO账号，请前往app.qoriginal.vip注册您的账号并加入群946085440来验。")
+                            .append(Component.text("你的游戏名：" + playerName).decorate(TextDecoration.BOLD)));
         } else if (relationship.frozen) {
             logger.log("Player " + playerName + " was frozen.", "LoginManager");
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
