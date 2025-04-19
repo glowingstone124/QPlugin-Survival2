@@ -144,7 +144,7 @@ public class ChatSync implements Listener {
                     if (username == null) {
                         content = "<未注册>" + parseCQ(message);
                     } else {
-                        content = "<" + username + ">" + parseCQv2(message);
+                        content = "<" + username + ">" + parseCQ(message);
                     }
                     return Component.text(content)
                             .color(TextColor.color(33, 95, 105))

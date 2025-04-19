@@ -29,8 +29,9 @@ public class StatusUpload {
         long starttime = System.currentTimeMillis();
         if (DEBUG) {
             cj.run(() -> {
-                if (time.toArray().length % 50 == 0) {
-                    logger.log("Last 50 times' status upload cost avg is:" + Utils.INSTANCE.avg(time), "LoggerHealth");
+                if (time.size() >= 50) {
+                    logger.log(time.toString(), "LoggerHealth");
+                    time.clear();
                 }
                 return null;
             }, Dispatchers.getIO());
