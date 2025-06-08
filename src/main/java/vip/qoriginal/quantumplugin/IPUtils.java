@@ -21,6 +21,9 @@ public class IPUtils {
             try {
                 ChatSync cs = new ChatSync();
                 String ip = Objects.requireNonNull(player.getAddress()).getAddress().getHostAddress();
+                if (ip.startsWith("127.0.0.1")) {
+                    return;
+                }
                 //JSONObject ipLocObj = fetchIpLocationWithRetries(ip, 3); Old ways
                 Boolean ipIsInCn = fetchIpLocationWithRetries(ip, 3);
                 if (ipIsInCn == null) {
