@@ -120,17 +120,21 @@ class Login : Listener {
 				}.runTaskTimer(QuantumPlugin.getInstance(), 0L, 1200L)
 			}
 		}
-		Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
-			if (player.scoreboardTags.contains("guest")) {
-				CoroutineScope(Dispatchers.Default).launch {
-					val resultJson = JsonParser.parseString(Request.sendGetRequest(Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}").get()).asJsonObject
-					if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address.hostName) {
-						player.sendTitlePart(TitlePart.TITLE, Component.text("自动登录成功").color(NamedTextColor.GREEN))
-						abstractLoginLogic(player)
-						player.removeScoreboardTag("guest")
-					}
+		Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
+			CoroutineScope(Dispatchers.Default).launch {
+				val resultJson = JsonParser.parseString(Request.sendGetRequest(Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}").get()).asJsonObject
+				if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address.hostName) {
+					player.sendTitlePart(TitlePart.TITLE, Component.text("自动登录成功").color(NamedTextColor.GREEN))
+					abstractLoginLogic(player)
+					player.removeScoreboardTag("guest")
 				}
-				player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
+			}
+		})
+		Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
+			CoroutineScope(Dispatchers.Default).launch {
+				if (player.scoreboardTags.contains("guest")) {
+					player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
+				}
 			}
 		}, 0, 20)
 	}
