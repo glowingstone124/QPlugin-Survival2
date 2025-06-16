@@ -58,9 +58,6 @@ class Login : Listener {
 		)
 		logger.log("${player.name} logged in.", "LoginAction")
 		ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
-		leaveMessageComponent.getMessages(player).forEach {
-			player.sendMessage(it)
-		}
 	}
 	@OptIn(DelicateCoroutinesApi::class)
 	fun performLogin(player: Player, password: String) {
