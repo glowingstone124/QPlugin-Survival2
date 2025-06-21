@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import static vip.qoriginal.quantumplugin.QuantumPlugin.isShutup;
 
 public class ChatSync implements Listener {
+    private final static int QO_CREATIVE_CODE = 4;
     private final static int WEB_CODE = 3;
     private final static int SYSTEM_CODE = 2;
     private final static int QO_CODE = 1;
@@ -158,6 +159,11 @@ public class ChatSync implements Listener {
                             .hoverEvent(HoverEvent.showText(Component.text("这是Quantum Original官方消息")));
                 }
 
+                case QO_CREATIVE_CODE -> {
+                    content = "[QO_Creative]<" + msg.get("sender").getAsString() + ">" + message;
+                    return Component.text(content)
+                            .color(TextColor.color(33, 95, 105));
+                }
                 default -> {
                     return Component.text("<unknown source>" + message);
                 }

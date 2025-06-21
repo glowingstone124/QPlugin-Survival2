@@ -4,12 +4,8 @@ import com.google.gson.Gson;
 import kotlinx.coroutines.Dispatchers;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
-import vip.qoriginal.quantumplugin.patch.Utils;
 
 import java.util.*;
-import java.util.concurrent.Callable;
-
-import static kotlin.system.TimingKt.measureTimeMillis;
 
 public class StatusUpload {
     public static final Map<String, String> header = new HashMap<>();
@@ -20,7 +16,7 @@ public class StatusUpload {
     private static final boolean DEBUG = true;
 
     static {
-        header.put("Authorization", "aad3r32in213ndvv11@");
+        header.put("Authorization", AuthUtils.INSTANCE.getToken());
     }
 
     public static int totalUser = 0;
