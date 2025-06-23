@@ -118,13 +118,13 @@ public final class QuantumPlugin extends JavaPlugin {
             public void run() {
                 getServer().getOnlinePlayers().forEach(player -> {
                     try {
-                        Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT()+ "/qo/online?name=" + player.getName(), "");
+                        Request.sendPostRequest((Config.INSTANCE.getAPI_ENDPOINT()+ "/qo/online?name=" + player.getName() + "&ip=" + Objects.requireNonNull(player.getAddress()).getHostName()).trim(), "");
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 });
             }
-        }.runTaskTimer(this, 0L, 30*60*20L/* 30 Min */);
+        }.runTaskTimer(this, 0L, 20*20L/* 20 seconds */);
         Block b = Objects.requireNonNull(Bukkit.getWorld("world")).getBlockAt(-1782, 68, 720);
         if (b.getChunk().load()) {
             if (b.getType() == Material.LEVER) {

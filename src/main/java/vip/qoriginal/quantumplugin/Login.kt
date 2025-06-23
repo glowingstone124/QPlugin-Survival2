@@ -46,6 +46,23 @@ class Login : Listener {
 	val gson = Gson()
 	val leaveMessageComponent = LeaveMessageComponent()
 
+	suspend fun abstractLoginLogic(player: Player){
+		val time = withContext(Dispatchers.IO) {
+			JsonParser.parseString(
+				Request.sendGetRequest(Config.API_ENDPOINT + "/qo/download/getgametime?username=${player.name}")
+					.get()
+			).asJsonObject
+		}
+		player.sendMessage(
+            Component.text("登录成功，您已经游玩 ${time["time"].asJsonObject["time"].asLong} 分钟").color(NamedTextColor.GREEN)
+                .appendNewline()
+                .append(Component.text("生存在线玩家：${time["online"].asJsonArray.firstOrNull { it.asJsonObject["id"].asInt == 1 }?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
+                .appendNewline()
+                .append(Component.text("创造在线玩家：${time["online"].asJsonArray.firstOrNull { it.asJsonObject["id"].asInt == 4 }?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
+		)
+		logger.log("${player.name} logged in.", "LoginAction")
+		ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
+	}
 	@OptIn(DelicateCoroutinesApi::class)
 	fun performLogin(player: Player, password: String) {
 		GlobalScope.launch {
@@ -58,25 +75,8 @@ class Login : Listener {
 			if (loginResult.get("result").asBoolean) {
 				player.removeScoreboardTag("guest")
 				player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
-				val time = withContext(Dispatchers.IO) {
-					JsonParser.parseString(
-						Request.sendGetRequest(Config.API_ENDPOINT + "/qo/download/logingreeting?username=${player.name}")
-							.get()
-					).asJsonObject
-				}
-				player.sendMessage(
-					Component.text("登录成功，您已经游玩 ${time["time"].asJsonObject["time"].asLong} 分钟").color(NamedTextColor.GREEN)
-						.appendNewline()
-						.append(Component.text("生存在线玩家：${time["online"].asJsonArray.firstOrNull { it.asJsonObject["id"].asInt == 1 }?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
-						.appendNewline()
-						.append(Component.text("创造在线玩家：${time["online"].asJsonArray.firstOrNull { it.asJsonObject["id"].asInt == 4 }?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
-				)
+				abstractLoginLogic(player)
 				player.removeScoreboardTag("guest")
-				logger.log("${player.name} logged in.", "LoginAction")
-				ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
-				leaveMessageComponent.getMessages(player).forEach {
-					player.sendMessage(it)
-				}
 				sendLoginAttempt(player, true)
 			} else {
 				logger.log("${player.name} kicked due to wrong password.", "LoginAction")
@@ -124,9 +124,21 @@ class Login : Listener {
 				}.runTaskTimer(QuantumPlugin.getInstance(), 0L, 1200L)
 			}
 		}
+		Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
+			CoroutineScope(Dispatchers.Default).launch {
+				val resultJson = JsonParser.parseString(Request.sendGetRequest(Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}").get()).asJsonObject
+				if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address.hostName) {
+					player.sendTitlePart(TitlePart.TITLE, Component.text("自动登录成功").color(NamedTextColor.GREEN))
+					abstractLoginLogic(player)
+					player.removeScoreboardTag("guest")
+				}
+			}
+		})
 		Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
-			if (player.scoreboardTags.contains("guest")) {
-				player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
+			CoroutineScope(Dispatchers.Default).launch {
+				if (player.scoreboardTags.contains("guest")) {
+					player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
+				}
 			}
 		}, 0, 20)
 	}
