@@ -63,22 +63,22 @@ public class TextDisplay {
     public void createTextDisplay(Location location, String text, Direction direction, boolean vertical) {
         String rotationCommand;
 
-        if (vertical) {
+        if (!vertical) {
             switch (direction) {
                 case NORTH:
-                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:0.0}";
+                    rotationCommand = "[4,0,0,0,0,0,4,0,0,4,0,0,0,0,0,1]";
                     break;
                 case SOUTH:
-                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:3.1415926535897932}";
+                    rotationCommand = "[-4,0,0,0,0,0,4,0,0,-4,0,0,0,0,0,1]";
                     break;
                 case EAST:
-                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:1.5707963267948965}";
+                    rotationCommand = "[0,-4,0,0,0,0,4,0,4,0,0,0,0,0,0,1]";
                     break;
                 case WEST:
-                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:-1.5707963267948965}";
+                    rotationCommand = "[0,4,0,0,0,0,4,0,-4,0,0,0,0,0,0,1]";
                     break;
                 default:
-                    rotationCommand = "{axis:[0.0,1.0,0.0],angle:0.0}";
+                    rotationCommand = "[4,0,0,0,0,0,4,0,0,4,0,0,0,0,0,1]";
             }
         } else {
             double yaw = (location.getYaw() - 90) % 360;
@@ -87,18 +87,18 @@ public class TextDisplay {
             }
 
             if (yaw >= 45 && yaw < 135) {
-                rotationCommand = "{axis:[0.0,1.0,0.0],angle:1.57}";
+                rotationCommand = "[0,0,4,0,0,4,0,0,-4,0,0,0,0,0,0,1]";
             } else if (yaw >= 135 && yaw < 225) {
-                rotationCommand = "{axis:[0.0,1.0,0.0],angle:3.14}";
+                rotationCommand = "[4,0,0,0,0,4,0,0,0,0,4,0,0,0,0,1]";
             } else if (yaw >= 225 && yaw < 315) {
-                rotationCommand = "{axis:[0.0,1.0,0.0],angle:-1.57}";
+                rotationCommand = "[0,0,-4,0,0,4,0,0,4,0,0,0,0,0,0,1]";
             } else {
-                rotationCommand = "{axis:[0.0,1.0,0.0],angle:0.0}";
+                rotationCommand = "[-4,0,0,0,0,4,0,0,0,0,-4,0,0,0,0,1]";
             }
         }
 
         String command = String.format(
-                "minecraft:summon text_display %.2f %.2f %.2f {text:'{\"text\":\"%s\"}',line_width:200,text_opacity:255,shadow:false,see_through:false,alignment:\"center\",transformation:{left_rotation:{axis:[0.0,1.0,0.0],angle:0.0},right_rotation:%s,scale:[4.0,4.0,4.0],translation:[0,0,0]}}",
+                "minecraft:summon text_display %.2f %.2f %.2f {text:'{\"text\":\"%s\"}',line_width:200,text_opacity:255,shadow:false,see_through:false,alignment:\"center\",transformation:%s}",
                 location.getX(), location.getY(), location.getZ(), text, rotationCommand
         );
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);

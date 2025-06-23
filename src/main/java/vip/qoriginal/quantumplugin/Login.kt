@@ -60,12 +60,16 @@ class Login : Listener {
 				player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
 				val time = withContext(Dispatchers.IO) {
 					JsonParser.parseString(
-						Request.sendGetRequest(Config.API_ENDPOINT + "/qo/download/getgametime?username=${player.name}")
+						Request.sendGetRequest(Config.API_ENDPOINT + "/qo/download/logingreeting?username=${player.name}")
 							.get()
 					).asJsonObject
 				}
 				player.sendMessage(
-					Component.text("登录成功，您已经游玩 ${time.get("time").asLong}分钟").color(NamedTextColor.GREEN)
+					Component.text("登录成功，您已经游玩 ${time["time"].asJsonObject["time"].asLong} 分钟").color(NamedTextColor.GREEN)
+						.appendNewline()
+						.append(Component.text("生存在线玩家：${time["online"].asJsonArray.firstOrNull { it.asJsonObject["id"].asInt == 1 }?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
+						.appendNewline()
+						.append(Component.text("创造在线玩家：${time["online"].asJsonArray.firstOrNull { it.asJsonObject["id"].asInt == 4 }?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
 				)
 				player.removeScoreboardTag("guest")
 				logger.log("${player.name} logged in.", "LoginAction")
