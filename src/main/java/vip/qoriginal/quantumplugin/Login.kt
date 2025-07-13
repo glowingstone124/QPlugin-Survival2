@@ -56,9 +56,13 @@ class Login : Listener {
 		player.sendMessage(
             Component.text("登录成功，您已经游玩 ${time["time"].asJsonObject["time"].asLong} 分钟").color(NamedTextColor.GREEN)
                 .appendNewline()
-                .append(Component.text("生存在线玩家：${time["online"].asJsonArray.firstOrNull { it.asJsonObject["id"].asInt == 1 }?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
+                .append(Component.text("生存在线玩家：${time["online"].asJsonArray.firstOrNull { 
+					it.asJsonObject["id"].asInt == 1 
+				}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
                 .appendNewline()
-                .append(Component.text("创造在线玩家：${time["online"].asJsonArray.firstOrNull { it.asJsonObject["id"].asInt == 4 }?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
+                .append(Component.text("创造在线玩家：${time["online"].asJsonArray.firstOrNull { 
+					it.asJsonObject["id"].asInt == 4 
+				}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
 		)
 		logger.log("${player.name} logged in.", "LoginAction")
 		ChatSync().sendChatMsg("玩家${player.name}加入了服务器");

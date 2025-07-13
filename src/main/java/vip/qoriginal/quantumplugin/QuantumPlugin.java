@@ -46,6 +46,7 @@ public final class QuantumPlugin extends JavaPlugin {
     Locker locker = new Locker();
     LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
+    ChatSync cs = new ChatSync();
 
     @Override
     public void onEnable() {
@@ -189,7 +190,6 @@ public final class QuantumPlugin extends JavaPlugin {
                     .append(Component.text("[" + s.getName() + "]").color(TextColor.color(128, 212, 28)))
                     .append(Component.text("发布了自己的位置：")).appendNewline()
                     .append(Component.text("x: " + s.getLocation().getBlockX() + ", y: " + s.getLocation().getBlockY() + ", z: " + s.getLocation().getBlockZ() + " (" + world_name + ")"));
-            ChatSync cs = new ChatSync();
             cs.sendChatMsg("玩家" + s.getName() + "发布了自己的位置：" + "x: " + s.getLocation().getBlockX() + ", y: " + s.getLocation().getBlockY() + ", z: " + s.getLocation().getBlockZ() + " (" + world_name + ")");
             for (Player player : Bukkit.getOnlinePlayers()) {
                 if (world_name.equals(player.getWorld().getName())) {
@@ -248,29 +248,6 @@ public final class QuantumPlugin extends JavaPlugin {
                 player.sendMessage(common_component);
             }
             return true;
-        } else if (command.getName().equalsIgnoreCase("bind") && args.length == 2) {
-            Player s = (Player) sender;
-            Component common_component = Component.text("您的游戏id").color(TextColor.color(255, 212, 40))
-                    .append(Component.text("[" + s.getName() + "]").color(TextColor.color(128, 212, 28)))
-                    .append(Component.text("将要绑定到" + args[1] + "论坛账户。请输入/bindauth来确认"))
-                    .append(s.getInventory().getItemInMainHand().displayName());
-            s.sendMessage(common_component);
-            s.setMetadata("need_confirm_binding", new FixedMetadataValue(this, args[1]));
-        } else if (command.getName().equalsIgnoreCase("bindauth") && args.length == 1) {
-            Player s = (Player) sender;
-            if (s.hasMetadata("need_confirm_binding")) {
-                List<MetadataValue> values = s.getMetadata("need_confirm_binding");
-                String forumAccount = values.get(0).asString();
-                try {
-                    Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/upload/link?name" + s.getName() + "&forum" + forumAccount, "");
-                } catch (Exception e) {
-                    s.sendMessage("由于系统错误，绑定无法完成");
-                }
-                s.sendMessage("已成功绑定到论坛账户：" + forumAccount);
-                s.removeMetadata("need_confirm_binding", this);
-            } else {
-                s.sendMessage("没有需要确认的绑定。");
-            }
         } else if (command.getName().equalsIgnoreCase("querybind") && args.length == 1) {
             Player s = (Player) sender;
             String name = args[0];
