@@ -9,10 +9,14 @@ import org.bukkit.event.player.PlayerPortalEvent
 import org.bukkit.event.player.PlayerTeleportEvent
 
 class RestrictZones : Listener{
-	val MIN_X = -6500
-	val MAX_X = 1000
-	val MIN_Z = -1000
-	val MAX_Z = 5000
+	companion object {
+		val MIN_X = -6500
+		val MAX_X = 1000
+		val MIN_Z = -1000
+		val MAX_Z = 5000
+		val ArenaLoc1 = Location(Bukkit.getWorld("world"), -6500.0,-64.0,-1000.0)
+		val ArenaLoc2 = Location(Bukkit.getWorld("world"), 1000.0,320.0,5000.0)
+	}
 
 	@EventHandler
 	fun onPlayerMove(event: org.bukkit.event.player.PlayerMoveEvent) {

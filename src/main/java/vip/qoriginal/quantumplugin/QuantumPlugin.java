@@ -26,10 +26,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
-import vip.qoriginal.quantumplugin.combatZone.CombatPoint;
-import vip.qoriginal.quantumplugin.combatZone.CombatPoints;
-import vip.qoriginal.quantumplugin.combatZone.RestrictZones;
-import vip.qoriginal.quantumplugin.combatZone.ShopCommand;
+import vip.qoriginal.quantumplugin.combatZone.*;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
@@ -144,6 +141,7 @@ public final class QuantumPlugin extends JavaPlugin {
     public void initCombat() {
         getServer().getPluginManager().registerEvents(new RestrictZones(), this);
         getServer().getPluginManager().registerEvents(new CombatPoints(), this);
+        getServer().getPluginManager().registerEvents(new Respawn(), this);
         Objects.requireNonNull(getCommand("shop")).setExecutor(new ShopCommand());
         Bukkit.getScheduler().runTaskTimer(this,
                 new Runnable() {
