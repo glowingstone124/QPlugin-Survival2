@@ -1,5 +1,7 @@
 package vip.qoriginal.quantumplugin.combatZone
 
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.TextColor
 import org.bukkit.Material
 import org.bukkit.entity.Arrow
 import org.bukkit.entity.Player
@@ -93,17 +95,23 @@ class CombatPoints : Listener {
 	fun onEntityDamageByEntity(event: org.bukkit.event.entity.EntityDamageByEntityEvent) {
 		val damage = event.finalDamage
 		var attacker: Player? = null
-		if (event.damager is Arrow) {
-			val arrow = event.damager as Arrow
-			if (arrow.shooter is Player) {
-				attacker = arrow.shooter as Player
-			}
+		var receiver: Player? = null
+		when (event.entity) {
+			is Player -> receiver = event.entity as Player
 		}
-		if (event.damager is Player) {
-			attacker = event.damager as Player
+
+		when (val damager = event.damager) {
+			is Player -> attacker = damager
+			is Arrow -> if (damager.shooter is Player) attacker = damager.shooter as Player
 		}
-		if (attacker != null) {
+
+		if (attacker != null && receiver != null) {
 			val stats = getStats(attacker)
+			attacker.sendMessage(Component.text("对").color(TextColor.color(255, 255, 255))
+				.append(Component.text(receiver.name).color(TextColor.color(255, 0, 0)))
+				.append(Component.text("造成"))
+				.append(Component.text(damage.toInt().toString()).color(TextColor.color(0, 255, 0))).append(
+				Component.text("点伤害")))
 			stats.addDamage(damage.toInt())
 		}
 	}

@@ -7,6 +7,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.title.Title;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
@@ -25,8 +26,10 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
+import vip.qoriginal.quantumplugin.combatZone.CombatPoint;
 import vip.qoriginal.quantumplugin.combatZone.CombatPoints;
 import vip.qoriginal.quantumplugin.combatZone.Shop;
+import vip.qoriginal.quantumplugin.combatZone.ShopCommand;
 import vip.qoriginal.quantumplugin.event.Locker;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
@@ -35,8 +38,10 @@ import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 
 public final class QuantumPlugin extends JavaPlugin {
 
@@ -49,11 +54,8 @@ public final class QuantumPlugin extends JavaPlugin {
     LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
     ChatSync cs = new ChatSync();
-
-    @Override
-    public void onEnable() {
-        instance = this;
-        webMsgGetterTask = new WebMsgGetter();
+    public void init() {
+        //webMsgGetterTask = new WebMsgGetter();
         System.out.println("QPlugin for Combat Zone, Please do not use this version in regular server!!!");
         try {
             JoinLeaveListener.init();
@@ -88,8 +90,6 @@ public final class QuantumPlugin extends JavaPlugin {
                 new CustomItemStack(),
                 new FriendlyTnt(),
                 new Locker(),
-                new CombatPoints(),
-                new Shop()
         };
         Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
         ChatSync cs = new ChatSync();
@@ -142,6 +142,43 @@ public final class QuantumPlugin extends JavaPlugin {
         Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
         Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());*/
         Ranking ranking = new Ranking();
+    }
+
+    public void initCombat() {
+        getServer().getPluginManager().registerEvents(new CombatPoints(), this);
+        Objects.requireNonNull(getCommand("shop")).setExecutor(new ShopCommand());
+        Bukkit.getScheduler().runTaskTimer(this,
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        for (Player player : Bukkit.getOnlinePlayers()) {
+                            CombatPoints.PlayerStats stats = CombatPoint.INSTANCE.getPlayerStats().get(player.getUniqueId());
+                            if (stats == null) continue;
+
+                            int score = stats.getPoints();
+
+                            Component subtitle = Component.text("格斗点数: " + score)
+                                    .color(TextColor.color(0, 255, 255));
+
+                            Title title = Title.title(
+                                    Component.empty(),
+                                    subtitle,
+                                    Title.Times.times(Duration.ZERO, Duration.ofDays(9999), Duration.ZERO)
+                            );
+
+                            player.showTitle(title);
+                        }
+                    }
+                },
+                0L,
+                40L
+        );
+    }
+    @Override
+    public void onEnable() {
+        instance = this;
+        //init();
+        initCombat();
     }
 
     public static QuantumPlugin getInstance() {
@@ -353,6 +390,13 @@ public final class QuantumPlugin extends JavaPlugin {
             return leaveMessageComponent.handlePlayerMessageUpload(s, args[0], args[1]);
         } else if(command.getName().equalsIgnoreCase("lock")) {
             locker.onCommand(sender, args);
+            return true;
+        } else if(command.getName().equalsIgnoreCase("shop")) {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage("Only players can use this command!");
+                return true;
+            }
+            new Shop().openShop((Player) sender);
             return true;
         }
         return false;

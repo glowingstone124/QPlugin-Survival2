@@ -46,3 +46,6 @@ commands:
   leavemessage:
     description: Send messages to an offline player.
     usage: /leavemessage <player> <message>
+  shop:
+    description: 打开出售商店
+    usage: /shop
