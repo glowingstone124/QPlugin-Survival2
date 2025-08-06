@@ -44,7 +44,7 @@ class ShopCommand : CommandExecutor {
 			if (isLeaves(material)) {
 				totalLeaves += amount
 				leavesTypes[material] = (leavesTypes[material] ?: 0) + amount
-				inventory.setItem(slot, null) // 先移除，稍后统一处理剩余
+				inventory.setItem(slot, null)
 			} else if (priceMap.containsKey(material)) {
 				val rate = priceMap[material]!!
 				val points = amount / rate
@@ -69,7 +69,6 @@ class ShopCommand : CommandExecutor {
 		if (leavesPoints > 0) {
 			totalPoints += leavesPoints
 
-			// 退还叶子余数
 			if (leavesRemainder > 0) {
 				var remaining = leavesRemainder
 				for ((type, amount) in leavesTypes) {
@@ -82,7 +81,6 @@ class ShopCommand : CommandExecutor {
 					}
 				}
 				if (remaining > 0) {
-					// 剩余未退完的直接退还任意一种叶子
 					val type = leavesTypes.keys.first()
 					player.inventory.addItem(ItemStack(type, remaining))
 				}
@@ -93,7 +91,6 @@ class ShopCommand : CommandExecutor {
 			val stats = combatPoints.getStats(player)
 			stats.addPoints(totalPoints, CombatPoints.AddReason.SELL)
 
-			// 反馈消息
 			player.sendMessage(Component.text("=== 出售成功 ===").color(TextColor.color(0, 255, 0)))
 			soldItems.forEach { (material, amount) ->
 				val rate = priceMap[material]!!
