@@ -89,7 +89,7 @@ class ShopCommand : CommandExecutor {
 
 		if (totalPoints > 0) {
 			val stats = combatPoints.getStats(player)
-			stats.addPoints(totalPoints, CombatPoints.AddReason.SELL)
+			stats.addPoints(totalPoints, CombatPoints.AddReason.SELL, player.location)
 
 			player.sendMessage(Component.text("=== 出售成功 ===").color(TextColor.color(0, 255, 0)))
 			soldItems.forEach { (material, amount) ->
