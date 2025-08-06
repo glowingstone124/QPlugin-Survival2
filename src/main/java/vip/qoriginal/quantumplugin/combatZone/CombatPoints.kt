@@ -12,8 +12,12 @@ import org.bukkit.event.Listener
 import org.bukkit.event.entity.PlayerDeathEvent
 import vip.qoriginal.quantumplugin.combatZone.CombatPoint.playerStats
 import vip.qoriginal.quantumplugin.combatZone.CombatPoints.Companion.centerLocation
+import vip.qoriginal.quantumplugin.combatZone.CombatPoints.Companion.hotZoneMainCity
+import vip.qoriginal.quantumplugin.combatZone.CombatPoints.Companion.hotZoneSpawn
+import vip.qoriginal.quantumplugin.combatZone.CombatPoints.Companion.hotZoneTinCity
 import vip.qoriginal.quantumplugin.combatZone.CombatPoints.PlayerStats
 import vip.qoriginal.quantumplugin.combatZone.RestrictZones.Companion.ArenaLoc1
+import vip.qoriginal.quantumplugin.combatZone.Utils.isInZone
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.floor
@@ -27,7 +31,16 @@ class CombatPoints : Listener {
 
 	companion object {
 		val centerLocation = Location(ArenaLoc1.world, -2140.0, 0.0, 1150.0);
+		val hotZoneTinCity = HotZone("热区-锡城", Location(ArenaLoc1.world, -4191.0, 0.0, 1537.0), Location(ArenaLoc1.world, -3761.0,0.0, 2015.0))
+		val hotZoneMainCity = HotZone("热区-主城", Location(ArenaLoc1.world, -2655.0, 0.0,1455.0), Location(ArenaLoc1.world, -1441.0,0.0, 641.0))
+		val hotZoneSpawn = HotZone("热区-出生点", Location(ArenaLoc1.world, -225.0, 0.0, -223.0), Location(ArenaLoc1.world, 527.0,0.0, 237.0))
 	}
+
+	data class HotZone (
+		val name: String,
+		val LeftTop: Location,
+		val RightBottom: Location
+	)
 
 	enum class AddReason {
 		KILL,
@@ -134,6 +147,12 @@ class CombatPoints : Listener {
 	}
 }
 fun getLocationMultiplier(loc: Location) : Double{
+	if (isInZone(loc, hotZoneMainCity.LeftTop, hotZoneMainCity.RightBottom)) {
+		return 1.5
+	}
+	if (isInZone(loc, hotZoneTinCity.LeftTop, hotZoneTinCity.RightBottom) || isInZone(loc, hotZoneSpawn.LeftTop, hotZoneSpawn.RightBottom)) {
+		return 1.3
+	}
 	val distance =  getHorizontalDistance(loc, centerLocation)
 	return if (distance <= 700) {
 		1.0

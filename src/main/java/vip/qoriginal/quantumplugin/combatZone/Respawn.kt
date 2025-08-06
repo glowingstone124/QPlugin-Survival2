@@ -5,19 +5,11 @@ import org.bukkit.World
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerRespawnEvent
+import vip.qoriginal.quantumplugin.combatZone.Utils.isInZone
 import java.util.Random
 
 
 class Respawn : Listener{
-
-	private fun isInZone(loc: Location, corner1: Location, corner2: Location): Boolean {
-		val minX: Double = Math.min(corner1.getX(), corner2.getX())
-		val maxX: Double = Math.max(corner1.getX(), corner2.getX())
-		val minZ: Double = Math.min(corner1.getZ(), corner2.getZ())
-		val maxZ: Double = Math.max(corner1.getZ(), corner2.getZ())
-
-		return loc.x in minX..maxX && loc.z >= minZ && loc.z <= maxZ
-	}
 
 	private fun isInArena(loc: Location): Boolean {
 		return isInZone(loc, RestrictZones.ArenaLoc1, RestrictZones.ArenaLoc2)
