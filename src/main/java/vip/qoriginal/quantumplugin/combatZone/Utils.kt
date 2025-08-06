@@ -1,6 +1,7 @@
 package vip.qoriginal.quantumplugin.combatZone
 
 import org.bukkit.Location
+import kotlin.math.sqrt
 
 object Utils {
 	fun isInZone(loc: Location, corner1: Location, corner2: Location): Boolean {
@@ -11,4 +12,18 @@ object Utils {
 
 		return loc.x in minX..maxX && loc.z >= minZ && loc.z <= maxZ
 	}
+	fun getHorizontalDistance(loc1: Location, loc2: Location): Double {
+		val dx = loc1.x - loc2.x
+		val dz = loc1.z - loc2.z
+		return sqrt(dx * dx + dz * dz)
+	}
+	fun getCurrentZone(loc: Location, zones: List<CombatPoints.HotZone>): CombatPoints.HotZone? {
+		for (zone in zones) {
+			if (isInZone(loc, zone.LeftTop, zone.RightBottom)) {
+				return zone
+			}
+		}
+		return null
+	}
+
 }

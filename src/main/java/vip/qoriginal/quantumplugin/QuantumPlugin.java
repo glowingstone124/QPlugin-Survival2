@@ -144,30 +144,9 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new Respawn(), this);
         Objects.requireNonNull(getCommand("shop")).setExecutor(new ShopCommand());
         Bukkit.getScheduler().runTaskTimer(this,
-                new Runnable() {
-                    @Override
-                    public void run() {
-                        for (Player player : Bukkit.getOnlinePlayers()) {
-                            CombatPoints.PlayerStats stats = CombatPoint.INSTANCE.getPlayerStats().get(player.getUniqueId());
-                            if (stats == null) continue;
-
-                            int score = stats.getPoints();
-
-                            Component subtitle = Component.text("格斗点数: " + score)
-                                    .color(TextColor.color(0, 255, 255));
-
-                            Title title = Title.title(
-                                    Component.empty(),
-                                    subtitle,
-                                    Title.Times.times(Duration.ZERO, Duration.ofDays(9999), Duration.ZERO)
-                            );
-
-                            player.showTitle(title);
-                        }
-                    }
-                },
+             new GUI(),
                 0L,
-                40L
+                20L
         );
     }
     @Override

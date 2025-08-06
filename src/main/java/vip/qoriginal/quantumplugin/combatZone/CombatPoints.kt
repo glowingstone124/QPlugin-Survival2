@@ -1,6 +1,5 @@
 package vip.qoriginal.quantumplugin.combatZone
 
-import it.unimi.dsi.fastutil.doubles.DoubleList
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
 import org.bukkit.Location
@@ -17,12 +16,11 @@ import vip.qoriginal.quantumplugin.combatZone.CombatPoints.Companion.hotZoneSpaw
 import vip.qoriginal.quantumplugin.combatZone.CombatPoints.Companion.hotZoneTinCity
 import vip.qoriginal.quantumplugin.combatZone.CombatPoints.PlayerStats
 import vip.qoriginal.quantumplugin.combatZone.RestrictZones.Companion.ArenaLoc1
+import vip.qoriginal.quantumplugin.combatZone.Utils.getHorizontalDistance
 import vip.qoriginal.quantumplugin.combatZone.Utils.isInZone
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.floor
-import kotlin.math.sqrt
-
 object CombatPoint {
 	val playerStats = ConcurrentHashMap<UUID, PlayerStats>()
 }
@@ -165,8 +163,3 @@ fun getLocationMultiplier(loc: Location) : Double{
 	}
 }
 fun Double.floor() = floor(this).toInt()
-fun getHorizontalDistance(loc1: Location, loc2: Location): Double {
-	val dx = loc1.x - loc2.x
-	val dz = loc1.z - loc2.z
-	return sqrt(dx * dx + dz * dz)
-}
