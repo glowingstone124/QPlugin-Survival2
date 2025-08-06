@@ -25,6 +25,8 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
+import vip.qoriginal.quantumplugin.combatZone.CombatPoints;
+import vip.qoriginal.quantumplugin.combatZone.Shop;
 import vip.qoriginal.quantumplugin.event.Locker;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
@@ -52,7 +54,7 @@ public final class QuantumPlugin extends JavaPlugin {
     public void onEnable() {
         instance = this;
         webMsgGetterTask = new WebMsgGetter();
-        System.out.println("1.14.5.5.1 Started.");
+        System.out.println("QPlugin for Combat Zone, Please do not use this version in regular server!!!");
         try {
             JoinLeaveListener.init();
         } catch (IOException e) {
@@ -85,7 +87,9 @@ public final class QuantumPlugin extends JavaPlugin {
                 new BuffSnowball(),
                 new CustomItemStack(),
                 new FriendlyTnt(),
-                new Locker()
+                new Locker(),
+                new CombatPoints(),
+                new Shop()
         };
         Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
         ChatSync cs = new ChatSync();
