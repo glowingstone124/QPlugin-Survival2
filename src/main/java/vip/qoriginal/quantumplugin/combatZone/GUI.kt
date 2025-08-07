@@ -15,14 +15,32 @@ import vip.qoriginal.quantumplugin.combatZone.CombatPoints.Companion.hotZoneTinC
 import java.util.*
 
 class GUI : Runnable {
+
+	val combatPoints = CombatPoints()
+
 	companion object {
 		val activeBossBars: MutableMap<UUID, BossBar> = mutableMapOf()
+		var currentKillLeader: Player? = null
 	}
 
 	override fun run() {
 		for (player in Bukkit.getOnlinePlayers()) {
 			showActionBar(player)
+			showCurrentKillLeader()
 			showOrUpdateBossBar(player)
+		}
+	}
+
+	private inline fun showCurrentKillLeader() {
+		val currentKillLeader = combatPoints.getTopKiller() ?: return
+		val player = Bukkit.getPlayer(currentKillLeader.first) ?: return
+		if (player == currentKillLeader) return
+		GUI.currentKillLeader = player
+		Bukkit.getOnlinePlayers().forEach {
+			it.sendMessage(Utils.prependBroadCast(Component.text("诞生了新的击杀王：")
+				.append(Component.text(player.name).color(NamedTextColor.GOLD))
+				.append(Component.text("击杀数:"))
+				.append(Component.text(currentKillLeader.second.kills).color(NamedTextColor.RED))))
 		}
 	}
 

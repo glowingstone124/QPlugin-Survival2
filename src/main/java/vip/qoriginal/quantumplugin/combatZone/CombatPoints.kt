@@ -1,5 +1,7 @@
 package vip.qoriginal.quantumplugin.combatZone
 
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
 import org.bukkit.Location
@@ -26,7 +28,7 @@ object CombatPoint {
 }
 
 class CombatPoints : Listener {
-
+	private val gson = Gson()
 	companion object {
 		val centerLocation = Location(ArenaLoc1.world, -2140.0, 0.0, 1150.0);
 		val hotZoneTinCity = HotZone("热区-锡城", Location(ArenaLoc1.world, -4191.0, 0.0, 1537.0), Location(ArenaLoc1.world, -3761.0,0.0, 2015.0))
@@ -76,6 +78,26 @@ class CombatPoints : Listener {
 			kills++
 			addPoints(50, AddReason.KILL, loc)
 		}
+	}
+
+	fun getTopKiller(): Pair<UUID,PlayerStats>? {
+		val entry = CombatPoint.playerStats.maxByOrNull { it.value.kills }
+		if (entry == null || entry.value.kills  < 3) {
+			return null
+		}
+		return Pair(entry.key, entry.value)
+	}
+
+	fun serialize(): String {
+		val mapToSave = playerStats.mapKeys { it.key.toString() }
+		return gson.toJson(mapToSave)
+	}
+
+	fun deserialize(json: String) {
+		val type = object : TypeToken<Map<String, CombatPoints.PlayerStats>>() {}.type
+		val loadedMap: Map<String, PlayerStats> = gson.fromJson(json, type)
+		playerStats.clear()
+		playerStats.putAll(loadedMap.mapKeys { UUID.fromString(it.key) })
 	}
 
 	fun getStats(player: Player) = playerStats.getOrPut(player.uniqueId) { PlayerStats() }

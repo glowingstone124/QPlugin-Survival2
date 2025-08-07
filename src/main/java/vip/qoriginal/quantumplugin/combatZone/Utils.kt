@@ -1,5 +1,7 @@
 package vip.qoriginal.quantumplugin.combatZone
 
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Location
 import kotlin.math.sqrt
 
@@ -25,5 +27,8 @@ object Utils {
 		}
 		return null
 	}
-
+	fun prependBroadCast(component: Component): Component {
+		val prefix = Component.text("[奥林匹斯工业] ", NamedTextColor.YELLOW)
+		return prefix.append(component)
+	}
 }
