@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
+import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.entity.Arrow
@@ -23,20 +24,35 @@ import vip.qoriginal.quantumplugin.combatZone.Utils.isInZone
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.floor
+import vip.qoriginal.quantumplugin.combatZone.Utils.setPlayerMaxHealth
+
 object CombatPoint {
 	val playerStats = ConcurrentHashMap<UUID, PlayerStats>()
 }
 
 class CombatPoints : Listener {
 	private val gson = Gson()
+
 	companion object {
 		val centerLocation = Location(ArenaLoc1.world, -2140.0, 0.0, 1150.0);
-		val hotZoneTinCity = HotZone("热区-锡城", Location(ArenaLoc1.world, -4191.0, 0.0, 1537.0), Location(ArenaLoc1.world, -3761.0,0.0, 2015.0))
-		val hotZoneMainCity = HotZone("热区-主城", Location(ArenaLoc1.world, -2655.0, 0.0,1455.0), Location(ArenaLoc1.world, -1441.0,0.0, 641.0))
-		val hotZoneSpawn = HotZone("热区-出生点", Location(ArenaLoc1.world, -225.0, 0.0, -223.0), Location(ArenaLoc1.world, 527.0,0.0, 237.0))
+		val hotZoneTinCity = HotZone(
+			"热区-锡城",
+			Location(ArenaLoc1.world, -4191.0, 0.0, 1537.0),
+			Location(ArenaLoc1.world, -3761.0, 0.0, 2015.0)
+		)
+		val hotZoneMainCity = HotZone(
+			"热区-主城",
+			Location(ArenaLoc1.world, -2655.0, 0.0, 1455.0),
+			Location(ArenaLoc1.world, -1441.0, 0.0, 641.0)
+		)
+		val hotZoneSpawn = HotZone(
+			"热区-出生点",
+			Location(ArenaLoc1.world, -225.0, 0.0, -223.0),
+			Location(ArenaLoc1.world, 527.0, 0.0, 237.0)
+		)
 	}
 
-	data class HotZone (
+	data class HotZone(
 		val name: String,
 		val LeftTop: Location,
 		val RightBottom: Location
@@ -63,6 +79,21 @@ class CombatPoints : Listener {
 	) {
 		fun addPoints(amount: Int, reason: AddReason, loc: Location) {
 			points += (amount * getLocationMultiplier(loc)).floor()
+			handlePointsEvent { player ->
+				run {
+					if (points <= 50) {
+						setPlayerMaxHealth(player, 20.0)
+					} else if (points in 50..120 ) {
+						setPlayerMaxHealth(player, 25.0)
+					} else if (points in 120..200 ) {
+						setPlayerMaxHealth(player, 30.0)
+					} else if (points in 200..250) {
+						setPlayerMaxHealth(player, 35.0)
+					} else {
+						setPlayerMaxHealth(player, 40.0)
+					}
+				}
+			}
 		}
 
 		fun minusPoints(amount: Int, reason: RemoveReason) {
@@ -78,11 +109,21 @@ class CombatPoints : Listener {
 			kills++
 			addPoints(50, AddReason.KILL, loc)
 		}
+
+		private fun handlePointsEvent(action: (Player) -> Unit) {
+			val uuid = playerStats.entries
+				.firstOrNull { it.value == this }
+				?.key
+				?: return
+
+			val player = Bukkit.getPlayer(uuid) ?: return
+			action(player)
+		}
 	}
 
-	fun getTopKiller(): Pair<UUID,PlayerStats>? {
+	fun getTopKiller(): Pair<UUID, PlayerStats>? {
 		val entry = CombatPoint.playerStats.maxByOrNull { it.value.kills }
-		if (entry == null || entry.value.kills  < 3) {
+		if (entry == null || entry.value.kills < 3) {
 			return null
 		}
 		return Pair(entry.key, entry.value)
@@ -166,22 +207,29 @@ class CombatPoints : Listener {
 		}
 	}
 }
-fun getLocationMultiplier(loc: Location) : Double{
+
+fun getLocationMultiplier(loc: Location): Double {
 	if (isInZone(loc, hotZoneMainCity.LeftTop, hotZoneMainCity.RightBottom)) {
 		return 1.5
 	}
-	if (isInZone(loc, hotZoneTinCity.LeftTop, hotZoneTinCity.RightBottom) || isInZone(loc, hotZoneSpawn.LeftTop, hotZoneSpawn.RightBottom)) {
+	if (isInZone(loc, hotZoneTinCity.LeftTop, hotZoneTinCity.RightBottom) || isInZone(
+			loc,
+			hotZoneSpawn.LeftTop,
+			hotZoneSpawn.RightBottom
+		)
+	) {
 		return 1.3
 	}
-	val distance =  getHorizontalDistance(loc, centerLocation)
+	val distance = getHorizontalDistance(loc, centerLocation)
 	return if (distance <= 700) {
 		1.0
-	} else if(700 < distance && distance < 1200){
+	} else if (700 < distance && distance < 1200) {
 		0.8
-	} else if(distance in 1200.0..<1600.0){
+	} else if (distance in 1200.0..<1600.0) {
 		0.6
 	} else {
 		0.25
 	}
 }
+
 fun Double.floor() = floor(this).toInt()
