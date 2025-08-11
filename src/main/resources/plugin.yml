@@ -49,3 +49,6 @@ commands:
   shop:
     description: 打开出售商店
     usage: /shop
+  buy:
+    description: 购买物品
+    usage: /buy <number>
