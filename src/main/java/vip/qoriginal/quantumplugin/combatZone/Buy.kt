@@ -29,6 +29,7 @@ class Buy : CommandExecutor {
 		Merchandise(ItemStack(Material.GOLDEN_CARROT, 1), 1),
 		Merchandise(ItemStack(Material.LAVA_BUCKET, 1), 10),
 		Merchandise(ItemStack(Material.END_CRYSTAL, 2), 5),
+		Merchandise(ItemStack(Material.SPECTRAL_ARROW, 4), 5),
 		Merchandise(givePotion(0), 15),
 		Merchandise(givePotion(1), 30),
 		Merchandise(givePotion(2), 25),
