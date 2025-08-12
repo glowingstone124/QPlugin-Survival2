@@ -37,6 +37,7 @@ class GUI : Runnable {
 			showCurrentKillLeader()
 			showKillLeaderDistance(player)
 			showOrUpdateHotZone(player)
+			Utils.updatePlayerHealth(player, CombatPoint.playerStats[player.uniqueId]!!.points)
 		}
 		updateResistanceBuff()
 	}
