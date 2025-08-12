@@ -1,5 +1,8 @@
 package vip.qoriginal.quantumplugin.combatZone
 
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextColor
 import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -16,6 +19,8 @@ class Buy : CommandExecutor {
 		val itemStack: ItemStack,
 		val price: Int,
 	)
+
+	val combatPoints = CombatPoints()
 
 	val merchandiseList = listOf(
 		Merchandise(ItemStack(Material.EXPERIENCE_BOTTLE, 1), 5),
@@ -71,11 +76,39 @@ class Buy : CommandExecutor {
 			return true
 		}
 
-		val amount = if (args.size >= 2) {
+		val buyAmount = if (args.size >= 2) {
 			args[1].toIntOrNull() ?: 1
 		} else {
 			1
 		}.coerceAtLeast(1)
+
+		val price = merchandiseList[id].price * buyAmount
+
+		val items = merchandiseList[id].itemStack.apply {
+			amount *= buyAmount
+		}
+		val playerStat = CombatPoint.playerStats[player.uniqueId] ?: return false
+
+		if (playerStat.points < price) {
+			player.sendMessage(Component.text("购买失败：点数不足。").color(NamedTextColor.YELLOW))
+			return true
+		}
+
+		playerStat.minusPoints(price, CombatPoints.RemoveReason.BUY)
+
+		val remaining = player.inventory.addItem(items)
+		if (remaining.isNotEmpty()) {
+			remaining.values.forEach { leftover ->
+				player.world.dropItemNaturally(player.location, leftover)
+			}
+			player.sendMessage(Component.text("背包已满，部分物品已掉落在地上。").color(NamedTextColor.RED))
+		}
+
+		player.sendMessage(
+			Component.text("购买成功：").color(NamedTextColor.GREEN)
+				.append(items.displayName().color(NamedTextColor.GOLD))
+				.append(Component.text(" x${buyAmount}"))
+		)
 
 		return true
 	}
