@@ -51,4 +51,4 @@ commands:
     usage: /shop
   buy:
     description: 购买物品
-    usage: /buy <number>
+    usage: /buy <number> <amount>

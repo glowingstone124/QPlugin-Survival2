@@ -59,7 +59,7 @@ class Buy : CommandExecutor {
 			return true
 		}
 		if (args.size !in 1..3) {
-			player.sendMessage("/buy <id> <数量>，输入/buy查看可购买物品列表")
+			player.sendMessage("/buy <id> <数量>，输入/buy list查看可购买物品列表")
 			return true
 		}
 
@@ -85,9 +85,10 @@ class Buy : CommandExecutor {
 
 		val price = merchandiseList[id].price * buyAmount
 
-		val items = merchandiseList[id].itemStack.apply {
-			amount *= buyAmount
+		val items = merchandiseList[id].itemStack.clone().apply {
+			amount = buyAmount
 		}
+
 		val playerStat = CombatPoint.playerStats[player.uniqueId] ?: return false
 
 		if (playerStat.points < price) {

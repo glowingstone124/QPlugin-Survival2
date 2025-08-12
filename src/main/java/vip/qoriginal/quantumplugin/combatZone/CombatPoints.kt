@@ -98,6 +98,21 @@ class CombatPoints : Listener {
 
 		fun minusPoints(amount: Int, reason: RemoveReason) {
 			points -= amount
+			handlePointsEvent { player ->
+				run {
+					if (points <= 50) {
+						setPlayerMaxHealth(player, 20.0)
+					} else if (points in 50..120 ) {
+						setPlayerMaxHealth(player, 25.0)
+					} else if (points in 120..200 ) {
+						setPlayerMaxHealth(player, 30.0)
+					} else if (points in 200..250) {
+						setPlayerMaxHealth(player, 35.0)
+					} else {
+						setPlayerMaxHealth(player, 40.0)
+					}
+				}
+			}
 		}
 
 		fun addDamage(amount: Int, loc: Location) {
