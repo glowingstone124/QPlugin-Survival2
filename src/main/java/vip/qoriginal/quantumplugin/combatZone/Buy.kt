@@ -18,22 +18,23 @@ class Buy : CommandExecutor {
 	data class Merchandise(
 		val itemStack: ItemStack,
 		val price: Int,
+		val displayName: String,
 	)
 
 	val combatPoints = CombatPoints()
 
 	val merchandiseList = listOf(
-		Merchandise(ItemStack(Material.EXPERIENCE_BOTTLE, 1), 5),
-		Merchandise(ItemStack(Material.GOLDEN_APPLE, 2), 5),
-		Merchandise(ItemStack(Material.ENCHANTED_GOLDEN_APPLE, 1), 15),
-		Merchandise(ItemStack(Material.GOLDEN_CARROT, 1), 1),
-		Merchandise(ItemStack(Material.LAVA_BUCKET, 1), 10),
-		Merchandise(ItemStack(Material.END_CRYSTAL, 2), 5),
-		Merchandise(ItemStack(Material.SPECTRAL_ARROW, 4), 5),
-		Merchandise(givePotion(0), 15),
-		Merchandise(givePotion(1), 30),
-		Merchandise(givePotion(2), 25),
-		Merchandise(givePotion(3), 30),
+		Merchandise(ItemStack(Material.EXPERIENCE_BOTTLE, 1), 5, "经验瓶"),
+		Merchandise(ItemStack(Material.GOLDEN_APPLE, 2), 5, "金苹果"),
+		Merchandise(ItemStack(Material.ENCHANTED_GOLDEN_APPLE, 1), 15, "附魔金苹果"),
+		Merchandise(ItemStack(Material.GOLDEN_CARROT, 1), 1, "金胡萝卜"),
+		Merchandise(ItemStack(Material.LAVA_BUCKET, 1), 10, "岩浆桶"),
+		Merchandise(ItemStack(Material.END_CRYSTAL, 2), 5, "末影水晶"),
+		Merchandise(ItemStack(Material.SPECTRAL_ARROW, 4), 5, "光灵箭"),
+		Merchandise(givePotion(0), 15, "药水-力量I"),
+		Merchandise(givePotion(1), 30, "药水-力量II"),
+		Merchandise(givePotion(2), 25, "药水-治疗"),
+		Merchandise(givePotion(3), 30, "药水-HIDE"),
 	)
 	fun givePotion(id: Int) : ItemStack {
 		val potion = ItemStack(Material.POTION)

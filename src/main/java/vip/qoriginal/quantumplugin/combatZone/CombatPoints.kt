@@ -3,6 +3,7 @@ package vip.qoriginal.quantumplugin.combatZone
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import org.bukkit.Bukkit
 import org.bukkit.Location
@@ -12,6 +13,7 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.PlayerDeathEvent
+import org.bukkit.scoreboard.Scoreboard
 import vip.qoriginal.quantumplugin.combatZone.CombatPoint.playerStats
 import vip.qoriginal.quantumplugin.combatZone.CombatPoints.Companion.centerLocation
 import vip.qoriginal.quantumplugin.combatZone.CombatPoints.Companion.hotZoneMainCity
@@ -24,7 +26,6 @@ import vip.qoriginal.quantumplugin.combatZone.Utils.isInZone
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.floor
-import vip.qoriginal.quantumplugin.combatZone.Utils.setPlayerMaxHealth
 import vip.qoriginal.quantumplugin.combatZone.Utils.updatePlayerHealth
 
 object CombatPoint {
@@ -33,7 +34,6 @@ object CombatPoint {
 
 class CombatPoints : Listener {
 	private val gson = Gson()
-
 	companion object {
 		val centerLocation = Location(ArenaLoc1.world, -2140.0, 0.0, 1150.0);
 		val hotZoneTinCity = HotZone(
@@ -76,12 +76,16 @@ class CombatPoints : Listener {
 		var points: Int = 0,
 		var kills: Int = 0,
 		var deaths: Int = 0,
-		var damageDealt: Int = 0
+		var damageDealt: Int = 0,
+		var scoreboard: Scoreboard? = null
 	) {
+		val scoreBoardManager = ScoreboardManager()
 		fun addPoints(amount: Int, reason: AddReason, loc: Location) {
-			points += (amount * getLocationMultiplier(loc)).floor()
+			val multiplier = if (reason == AddReason.SELL) 1.0 else getLocationMultiplier(loc)
+			points += (amount * multiplier).floor()
 			handlePointsEvent { player ->
 				updatePlayerHealth(player, points)
+				scoreBoardManager.updateScoreboard(player, points)
 			}
 		}
 
@@ -89,6 +93,7 @@ class CombatPoints : Listener {
 			points -= amount
 			handlePointsEvent { player ->
 				updatePlayerHealth(player, points)
+				scoreBoardManager.updateScoreboard(player, points)
 			}
 		}
 
@@ -140,6 +145,10 @@ class CombatPoints : Listener {
 		val dead = event.entity
 		val killer = event.entity.killer
 
+		if (dead.uniqueId == GUI.currentKillLeader) {
+			Utils.broadcast(Utils.prependBroadCast(Component.text("击杀王已被清除").color(NamedTextColor.DARK_RED)))
+		}
+
 		val deadStats = getStats(dead)
 		if (killer != null && killer != dead) {
 			val killerStats = getStats(killer)
@@ -149,6 +158,7 @@ class CombatPoints : Listener {
 
 			deadStats.minusPoints(deadStats.points, RemoveReason.KILLED_PLAYER)
 			deadStats.deaths++
+
 		} else {
 			deadStats.minusPoints((deadStats.points * 0.25).floor(), RemoveReason.KILLED_ACCIDENT)
 		}
@@ -160,7 +170,6 @@ class CombatPoints : Listener {
 		val player = event.player
 		val block = event.block.type
 		val bonus = when (block) {
-			Material.ANCIENT_DEBRIS -> 4;
 			Material.DIAMOND_ORE, Material.DEEPSLATE_DIAMOND_ORE -> 2;
 			Material.REDSTONE_ORE, Material.DEEPSLATE_REDSTONE_ORE -> 1;
 			else -> 0;

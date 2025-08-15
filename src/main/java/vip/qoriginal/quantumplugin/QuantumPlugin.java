@@ -141,6 +141,7 @@ public final class QuantumPlugin extends JavaPlugin {
     public void initCombat() {
         getServer().getPluginManager().registerEvents(new RestrictZones(), this);
         getServer().getPluginManager().registerEvents(new CombatPoints(), this);
+        getServer().getPluginManager().registerEvents(new ScoreboardManager(), this);
         getServer().getPluginManager().registerEvents(new Respawn(), this);
         getServer().getPluginManager().registerEvents(new ModifyElytra(), this);
         Objects.requireNonNull(getCommand("shop")).setExecutor(new ShopCommand());

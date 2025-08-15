@@ -2,6 +2,7 @@ package vip.qoriginal.quantumplugin.combatZone
 
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.attribute.Attribute
 import org.bukkit.entity.Player
@@ -50,6 +51,24 @@ object Utils {
 			setPlayerMaxHealth(player, 35.0)
 		} else {
 			setPlayerMaxHealth(player, 40.0)
+		}
+	}
+
+	data class LevelInfo(val level: Int, val pointsToNext: Int?)
+
+	fun getPlayerLevel(points: Int): LevelInfo {
+		return when {
+			points <= 50 -> LevelInfo(level = 1, pointsToNext = 50 - points)
+			points in 51..120 -> LevelInfo(level = 2, pointsToNext = 120 - points)
+			points in 121..200 -> LevelInfo(level = 3, pointsToNext = 200 - points)
+			points in 201..250 -> LevelInfo(level = 4, pointsToNext = 250 - points)
+			else -> LevelInfo(level = 5, pointsToNext = null)
+		}
+	}
+
+	fun broadcast(message: Component) {
+		Bukkit.getOnlinePlayers().forEach {
+			it.sendMessage(message)
 		}
 	}
 }

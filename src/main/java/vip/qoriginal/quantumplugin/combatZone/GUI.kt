@@ -66,12 +66,10 @@ class GUI : Runnable {
 		if (currentKillLeader?.name == cPlayer.name) return
 
 		GUI.currentKillLeader = cPlayer
-		Bukkit.getOnlinePlayers().forEach {
-			it.sendMessage(Utils.prependBroadCast(Component.text("诞生了新的击杀王：")
+		Utils.broadcast(Utils.prependBroadCast(Component.text("诞生了新的击杀王：")
 				.append(Component.text(cPlayer.name).color(NamedTextColor.GOLD))
 				.append(Component.text("击杀数:"))
 				.append(Component.text(currentKiller.second.kills).color(NamedTextColor.RED))))
-		}
 	}
 
 	private fun updateResistanceBuff() {
