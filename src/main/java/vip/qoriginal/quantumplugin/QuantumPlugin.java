@@ -303,10 +303,11 @@ public final class QuantumPlugin extends JavaPlugin {
                 throw new RuntimeException(e);
             }
         } else if (sender instanceof Player player && command.getName().equalsIgnoreCase("summontext")) {
-            if (args.length == 1) {
-                td.exec(player, args[0]);
+            if (args.length >= 1) {
+                String jsonText = String.join(" ", args);
+                td.exec(player, jsonText);
             } else {
-                player.sendMessage("如果有空格，请使用“”包裹");
+                player.sendMessage("请提供文本参数，如果有空格，请用引号包裹整个 JSON");
             }
         } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("login")) {
             if (args.length != 1) {
