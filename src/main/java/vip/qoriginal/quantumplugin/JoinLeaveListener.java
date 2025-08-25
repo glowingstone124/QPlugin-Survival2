@@ -97,7 +97,7 @@ public class JoinLeaveListener implements Listener {
         } else if (relationship.get("affiliated").getAsBoolean()) {
             player.sendMessage(Component.text("欢迎回到Quantum Original，输入/login 你的密码来登录")
                     .appendNewline()
-                    .append(Component.text("您正在使用附属账户，归属于： " + relationship.get("host").getAsLong())
+                    .append(Component.text("您正在使用附属账户，归属于： " + relationship.get("host").getAsString())
                             .color(TextColor.color(114, 114, 114))));
             login.handleJoin(event.getPlayer(), true);
         }

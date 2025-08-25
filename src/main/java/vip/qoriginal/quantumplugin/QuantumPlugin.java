@@ -117,15 +117,22 @@ public final class QuantumPlugin extends JavaPlugin {
         new BukkitRunnable() {
             @Override
             public void run() {
-                getServer().getOnlinePlayers().forEach(player -> {
-                    try {
-                        Request.sendPostRequest((Config.INSTANCE.getAPI_ENDPOINT()+ "/qo/online?name=" + player.getName() + "&ip=" + Objects.requireNonNull(player.getAddress()).getHostName()).trim(), "");
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+                for (Player player : getServer().getOnlinePlayers()) {
+                    if (player.getScoreboardTags().contains("visitor_online")) continue;
+
+                    Bukkit.getScheduler().runTaskAsynchronously(QuantumPlugin.this, () -> {
+                        try {
+                            String url = (Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName()
+                                    + "&ip=" + Objects.requireNonNull(player.getAddress()).getHostName()).trim();
+                            Request.sendPostRequest(url, "");
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    });
+                }
             }
-        }.runTaskTimer(this, 0L, 20*20L/* 20 seconds */);
+        }.runTaskTimer(this, 0L, 20*20L); // 每20秒
+
         Block b = Objects.requireNonNull(Bukkit.getWorld("world")).getBlockAt(-1782, 68, 720);
         if (b.getChunk().load()) {
             if (b.getType() == Material.LEVER) {
