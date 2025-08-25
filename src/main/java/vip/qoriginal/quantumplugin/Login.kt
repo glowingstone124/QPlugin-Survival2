@@ -76,11 +76,15 @@ class Login : Listener {
 				).asJsonObject
 			}
 			if (loginResult.get("result").asBoolean) {
-				player.removeScoreboardTag("guest")
 				player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
-				abstractLoginLogic(player)
-				player.removeScoreboardTag("guest")
-				sendLoginAttempt(player, true)
+				if (player.scoreboardTags.contains("guest")) {
+					abstractLoginLogic(player)
+					player.removeScoreboardTag("guest")
+					sendLoginAttempt(player, true)
+				} else {
+					player.removeScoreboardTag("visitor")
+					player.addScoreboardTag("visitor_login")
+				}
 			} else {
 				logger.log("${player.name} kicked due to wrong password.", "LoginAction")
 				player.sendMessage(Component.text("登录失败，原因：密码不正确").color(NamedTextColor.RED))
@@ -97,49 +101,22 @@ class Login : Listener {
 	fun handleJoin(player: Player, visitor: Boolean) {
 		if (!visitor) {
 			player.addScoreboardTag("guest")
+			Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
+				CoroutineScope(Dispatchers.Default).launch {
+					val resultJson = JsonParser.parseString(Request.sendGetRequest(Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}").get()).asJsonObject
+					if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address.hostName) {
+						player.sendTitlePart(TitlePart.TITLE, Component.text("自动登录成功").color(NamedTextColor.GREEN))
+						abstractLoginLogic(player)
+						player.removeScoreboardTag("guest")
+					}
+				}
+			})
 		} else {
 			player.addScoreboardTag("visitor")
-			GlobalScope.launch {
-				val timeObj = withContext(Dispatchers.IO) {
-					JsonParser.parseString(
-						Request.sendGetRequest(Config.API_ENDPOINT + "/qo/download/getgametime?username=${player.name}")
-							.get()
-					).asJsonObject.takeIf { it.has("time") }?.asJsonObject
-				}
-				val time = if (timeObj == null) {
-					0
-				} else {
-					timeObj.get("time").asLong
-				}
-				if (time > 180) performKick(player, Component.text("体验时间已经结束，欢迎转正！"))
-				visitorPlayedMap[player] = time
-				object : BukkitRunnable() {
-					override fun run() {
-						visitorPlayedMap.forEach { (player, time) ->
-							visitorPlayedMap[player]?.let {
-								if (it >= 180) {
-									performKick(player, Component.text("体验时间已经结束，欢迎转正！"))
-								}
-							}
-							visitorPlayedMap[player] = time + 1
-						}
-					}
-				}.runTaskTimer(QuantumPlugin.getInstance(), 0L, 1200L)
-			}
 		}
-		Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
-			CoroutineScope(Dispatchers.Default).launch {
-				val resultJson = JsonParser.parseString(Request.sendGetRequest(Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}").get()).asJsonObject
-				if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address.hostName) {
-					player.sendTitlePart(TitlePart.TITLE, Component.text("自动登录成功").color(NamedTextColor.GREEN))
-					abstractLoginLogic(player)
-					player.removeScoreboardTag("guest")
-				}
-			}
-		})
 		Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
 			CoroutineScope(Dispatchers.Default).launch {
-				if (player.scoreboardTags.contains("guest")) {
+				if (player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor")) {
 					player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
 				}
 			}
