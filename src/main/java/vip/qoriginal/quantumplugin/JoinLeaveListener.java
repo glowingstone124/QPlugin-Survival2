@@ -1,6 +1,8 @@
 package vip.qoriginal.quantumplugin;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import kotlinx.coroutines.Dispatchers;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
@@ -43,9 +45,9 @@ public class JoinLeaveListener implements Listener {
             return;
         }
 
-        BindResponse relationship = null;
+        JsonObject relationship = null;
         try {
-            relationship = new Gson().fromJson(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + playerName).get(), BindResponse.class);
+            relationship = JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + playerName).get()).getAsJsonObject();
         } catch (Exception e) {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[500 Internal Server Error]内部验证出现错误。请等待之后再试。。。"));
         }
@@ -54,11 +56,11 @@ public class JoinLeaveListener implements Listener {
             return;
         }
         logger.log("Player " + playerName + " didn't register but wanted to join in", "LoginManager");
-        if (relationship.code == 1) {
+        if (relationship.has("code") && relationship.get("code").getAsInt() == 1) {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     Component.text("[401 Unauthorized]您还没有注册QO账号，请前往app.qoriginal.vip注册您的账号并加入群946085440来验。")
                             .append(Component.text("你的游戏名：" + playerName).decorate(TextDecoration.BOLD)));
-        } else if (relationship.frozen) {
+        } else if (relationship.has("frozen ") && relationship.get("frozen").getAsBoolean()) {
             logger.log("Player " + playerName + " was frozen.", "LoginManager");
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     Component.text("[403 Forbidden]验证失败，原因：您的账户已经被冻结！")
@@ -80,20 +82,25 @@ public class JoinLeaveListener implements Listener {
                 throw new RuntimeException(e);
             }
         });
-        BindResponse relationship = new Gson().fromJson(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + player.getName()).get(), BindResponse.class);
-        if (relationship.code == 0) {
-            player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original，输入/login 你的密码来登录")
+        JsonObject relationship = JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + player.getName()).get()).getAsJsonObject();
+        if (relationship.has("code")) {
+            if (relationship.get("code").getAsInt() == 0) {
+                player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original，输入/login 你的密码来登录")
+                        .appendNewline()
+                        .append(Component.text("QQ: " + relationship.get("qq").getAsLong())
+                                .color(TextColor.color(114, 114, 114))));
+                login.handleJoin(event.getPlayer(), false);
+            }
+            sessionStartTimes.put(player, System.currentTimeMillis());
+
+            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName(), "");
+        } else if (relationship.get("affiliated").getAsBoolean()) {
+            player.sendMessage(Component.text("欢迎回到Quantum Original，输入/login 你的密码来登录")
                     .appendNewline()
-                    .append(Component.text("QQ: " + relationship.qq)
+                    .append(Component.text("您正在使用附属账户，归属于： " + relationship.get("host").getAsLong())
                             .color(TextColor.color(114, 114, 114))));
-            login.handleJoin(event.getPlayer(), false);
-        } else if (relationship.code == 2) {
-            player.sendMessage(Component.text("欢迎！请输入您的访问key来登录。"));
             login.handleJoin(event.getPlayer(), true);
         }
-        sessionStartTimes.put(player, System.currentTimeMillis());
-
-        Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName(), "");
     }
 
     @EventHandler

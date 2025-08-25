@@ -46,7 +46,7 @@ class Login : Listener {
 	val gson = Gson()
 	val leaveMessageComponent = LeaveMessageComponent()
 
-	suspend fun abstractLoginLogic(player: Player){
+	suspend fun abstractLoginLogic(player: Player) {
 		val time = withContext(Dispatchers.IO) {
 			JsonParser.parseString(
 				Request.sendGetRequest(Config.API_ENDPOINT + "/qo/download/logingreeting?username=${player.name}")
@@ -54,19 +54,29 @@ class Login : Listener {
 			).asJsonObject
 		}
 		player.sendMessage(
-            Component.text("登录成功，您已经游玩 ${time["time"].asJsonObject["time"].asLong} 分钟").color(NamedTextColor.GREEN)
-                .appendNewline()
-                .append(Component.text("生存在线玩家：${time["online"].asJsonArray.firstOrNull { 
-					it.asJsonObject["id"].asInt == 1 
-				}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
-                .appendNewline()
-                .append(Component.text("创造在线玩家：${time["online"].asJsonArray.firstOrNull { 
-					it.asJsonObject["id"].asInt == 4 
-				}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
+			Component.text("登录成功，您已经游玩 ${time["time"].asJsonObject["time"].asLong} 分钟")
+				.color(NamedTextColor.GREEN)
+				.appendNewline()
+				.append(
+					Component.text(
+						"生存在线玩家：${
+							time["online"].asJsonArray.firstOrNull {
+								it.asJsonObject["id"].asInt == 1
+							}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"
+						}"))
+				.appendNewline()
+				.append(
+					Component.text(
+						"创造在线玩家：${
+							time["online"].asJsonArray.firstOrNull {
+								it.asJsonObject["id"].asInt == 4
+							}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"
+						}"))
 		)
 		logger.log("${player.name} logged in.", "LoginAction")
 		ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
 	}
+
 	@OptIn(DelicateCoroutinesApi::class)
 	fun performLogin(player: Player, password: String) {
 		GlobalScope.launch {
@@ -77,11 +87,16 @@ class Login : Listener {
 				).asJsonObject
 			}
 			if (loginResult.get("result").asBoolean) {
-				player.removeScoreboardTag("guest")
 				player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
-				abstractLoginLogic(player)
-				player.removeScoreboardTag("guest")
-				sendLoginAttempt(player, true)
+				if (!player.scoreboardTags.contains("visitor")) {
+					abstractLoginLogic(player)
+					player.removeScoreboardTag("guest")
+					sendLoginAttempt(player, true)
+				} else {
+					player.removeScoreboardTag("visitor")
+					player.addScoreboardTag("visitor_login")
+					ChatSync().sendChatMsg("附属账户${player.name}加入了服务器");
+				}
 			} else {
 				logger.log("${player.name} kicked due to wrong password.", "LoginAction")
 				player.sendMessage(Component.text("登录失败，原因：密码不正确").color(NamedTextColor.RED))
@@ -98,54 +113,29 @@ class Login : Listener {
 	fun handleJoin(player: Player, visitor: Boolean) {
 		if (!visitor) {
 			player.addScoreboardTag("guest")
+			Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
+				CoroutineScope(Dispatchers.Default).launch {
+					val resultJson = JsonParser.parseString(
+						Request.sendGetRequest(Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}")
+							.get()
+					).asJsonObject
+					if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address.hostName) {
+						player.sendTitlePart(TitlePart.TITLE, Component.text("自动登录成功").color(NamedTextColor.GREEN))
+						abstractLoginLogic(player)
+						player.removeScoreboardTag("guest")
+					}
+				}
+			})
 		} else {
 			player.addScoreboardTag("visitor")
-			GlobalScope.launch {
-				val timeObj = withContext(Dispatchers.IO) {
-					JsonParser.parseString(
-						Request.sendGetRequest(Config.API_ENDPOINT + "/qo/download/getgametime?username=${player.name}")
-							.get()
-					).asJsonObject.takeIf { it.has("time") }?.asJsonObject
-				}
-				val time = if (timeObj == null) {
-					0
-				} else {
-					timeObj.get("time").asLong
-				}
-				if (time > 180) performKick(player, Component.text("体验时间已经结束，欢迎转正！"))
-				visitorPlayedMap[player] = time
-				object : BukkitRunnable() {
-					override fun run() {
-						visitorPlayedMap.forEach { (player, time) ->
-							visitorPlayedMap[player]?.let {
-								if (it >= 180) {
-									performKick(player, Component.text("体验时间已经结束，欢迎转正！"))
-								}
-							}
-							visitorPlayedMap[player] = time + 1
-						}
-					}
-				}.runTaskTimer(QuantumPlugin.getInstance(), 0L, 1200L)
-			}
 		}
-		Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
-			CoroutineScope(Dispatchers.Default).launch {
-				val resultJson = JsonParser.parseString(Request.sendGetRequest(Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}").get()).asJsonObject
-				if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address.hostName) {
-					player.sendTitlePart(TitlePart.TITLE, Component.text("自动登录成功").color(NamedTextColor.GREEN))
-					abstractLoginLogic(player)
-					player.removeScoreboardTag("guest")
-				}
-			}
-		})
 		Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
 			CoroutineScope(Dispatchers.Default).launch {
-				if (player.scoreboardTags.contains("guest")) {
-					player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
-				}
+				player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
 			}
 		}, 0, 20)
 	}
+
 	@EventHandler
 	fun onPlayerMove(event: PlayerMoveEvent) = handleEvent(event)
 
@@ -164,12 +154,10 @@ class Login : Listener {
 	@EventHandler
 	fun onPlayerCommandPreprocess(event: PlayerCommandPreprocessEvent) {
 		val player = event.player
-		if (player.scoreboardTags.contains("guest")) {
-			val message = event.message.lowercase()
-			if (!message.startsWith("/login")) {
-				event.isCancelled = true
-				player.sendMessage("§c你只能使用 /login 命令！")
-			}
+		val message = event.message.lowercase()
+		if (!message.startsWith("/login")) {
+			event.isCancelled = true
+			player.sendMessage("§c你只能使用 /login 命令！")
 		}
 	}
 
@@ -196,6 +184,7 @@ class Login : Listener {
 			event.isCancelled = true
 		}
 	}
+
 	fun performKick(player: Player, reason: Component) {
 		Utils.runTaskOnMainThread {
 			player.kick(reason)
@@ -208,9 +197,13 @@ class Login : Listener {
 			System.currentTimeMillis(),
 			success,
 		)
-		Request.sendPostRequest(Config.API_ENDPOINT + "/qo/upload/loginattempt?auth=2djg45uifjs034", gson.toJson(logClazz))
+		Request.sendPostRequest(
+			Config.API_ENDPOINT + "/qo/upload/loginattempt?auth=2djg45uifjs034",
+			gson.toJson(logClazz)
+		)
 	}
 }
+
 data class LoginLog(
 	val user: String,
 	val date: Long,

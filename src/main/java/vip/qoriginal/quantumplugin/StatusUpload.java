@@ -44,6 +44,9 @@ public class StatusUpload {
         status.timestamp = System.currentTimeMillis();
         status.onlinecount = Bukkit.getOnlinePlayers().size();
         for (Player p : Bukkit.getOnlinePlayers()) {
+            if (p.getScoreboardTags().contains("visitor_login")) {
+                continue;
+            }
             BriefPlayerInfo info = new BriefPlayerInfo();
             info.ping = p.getPing();
             info.world = p.getWorld().getName();
