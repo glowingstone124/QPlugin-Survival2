@@ -25,6 +25,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
+import vip.qoriginal.quantumplugin.adventures.Trigger;
 import vip.qoriginal.quantumplugin.event.Locker;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
@@ -51,6 +52,8 @@ public final class QuantumPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
+        Trigger trigger = new Trigger();
+        trigger.scan("vip.qoriginal.quantumplugin");
         webMsgGetterTask = new WebMsgGetter();
         System.out.println("1.14.5.5.1 Started.");
         try {
@@ -85,8 +88,10 @@ public final class QuantumPlugin extends JavaPlugin {
                 new BuffSnowball(),
                 new CustomItemStack(),
                 new FriendlyTnt(),
-                new Locker()
+                new Locker(),
+                new Trigger(),
         };
+
         Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
         ChatSync cs = new ChatSync();
         cs.init();
