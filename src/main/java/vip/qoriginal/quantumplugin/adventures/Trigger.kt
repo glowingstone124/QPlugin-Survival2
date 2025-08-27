@@ -3,7 +3,6 @@ package vip.qoriginal.quantumplugin.adventures
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.enchantment.EnchantItemEvent
-import org.bukkit.event.player.PlayerMoveEvent
 import vip.qoriginal.quantumplugin.ClassScanner
 import kotlin.reflect.full.callSuspend
 import kotlin.reflect.jvm.kotlinFunction
@@ -14,12 +13,7 @@ class Trigger : Listener {
 	}
 	@EventHandler
 	fun onPlayerEnchant(event: EnchantItemEvent) {
-		if (event.isCancelled) {
-			return
-		}
-		if (event.enchanter.scoreboardTags.contains("visitor")) {
-			return
-		}
+
 	}
 	private fun scanTriggers(): List<Pair<Any, java.lang.reflect.Method>> {
 		val classes = ClassScanner.scanPackage("vip.qoriginal.quantumplugin")
@@ -44,11 +38,19 @@ class Trigger : Listener {
 			for (method in clazz.declaredMethods) {
 				val anno = method.getAnnotation(SubscribeTrigger::class.java) ?: continue
 				val type = anno.value
-				val instance = clazz.getDeclaredConstructor().newInstance()
-				triggerMap.computeIfAbsent(type) { mutableListOf() }
-					.add(instance to method)
 
-				println("[TriggerManager] 注册触发器: ${clazz.name}.${method.name} -> $type")
+				val instance = clazz.getDeclaredConstructor().newInstance()
+				val noVisitor: NoVisitor? = method.getAnnotation(NoVisitor::class.java)
+				val finalMethod = if (noVisitor != null) {
+					val wrapperName = "${method.name}_safe"
+					clazz.methods.find { it.name == wrapperName } ?: method
+				} else {
+					method
+				}
+				triggerMap.computeIfAbsent(type) { mutableListOf() }
+					.add(instance to finalMethod)
+
+				println("[TriggerManager] 注册触发器: ${clazz.name}.${finalMethod.name} -> $type")
 			}
 		}
 	}
@@ -81,3 +83,7 @@ enum class TriggerType {
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class SubscribeTrigger(val value: TriggerType)
+
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.SOURCE)
+annotation class NoVisitor

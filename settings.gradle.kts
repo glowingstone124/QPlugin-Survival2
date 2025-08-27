@@ -3,6 +3,8 @@ pluginManagement {
 		kotlin("jvm") version "2.2.0"
 	}
 }
+include(":processor")
+
 plugins {
 	id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }

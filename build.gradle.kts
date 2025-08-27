@@ -7,7 +7,8 @@
 plugins {
     `java-library`
     `maven-publish`
-	kotlin("jvm")
+	id("com.google.devtools.ksp") version "2.2.0-2.0.2"
+	kotlin("jvm") version "2.2.0"
 }
 
 repositories {
@@ -31,7 +32,10 @@ dependencies {
     api(libs.org.jetbrains.kotlin.kotlin.stdlib)
     api(libs.org.jetbrains.kotlin.kotlin.reflect)
     api(libs.org.jetbrains.kotlinx.kotlinx.coroutines.core)
+	implementation(kotlin("compiler-embeddable"))
     compileOnly(libs.io.papermc.paper.paper.api)
+	ksp(project(":processor"))
+	implementation("com.google.devtools.ksp:symbol-processing-api:2.2.0-2.0.2")
 	implementation(kotlin("stdlib-jdk8"))
 }
 
