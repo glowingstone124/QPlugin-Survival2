@@ -9,6 +9,7 @@ plugins {
     `maven-publish`
 	id("com.google.devtools.ksp") version "2.2.0-2.0.2"
 	kotlin("jvm") version "2.2.0"
+	id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 repositories {
@@ -37,6 +38,7 @@ dependencies {
 	ksp(project(":processor"))
 	implementation("com.google.devtools.ksp:symbol-processing-api:2.2.0-2.0.2")
 	implementation(kotlin("stdlib-jdk8"))
+	implementation("io.github.classgraph:classgraph:4.8.181")
 }
 
 group = "vip.qoriginal"
@@ -58,4 +60,14 @@ tasks.withType<Javadoc>() {
 }
 kotlin {
 	jvmToolchain(21)
+}
+tasks {
+	named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+		archiveClassifier.set("")
+		mergeServiceFiles()
+	}
+
+	build {
+		dependsOn(shadowJar)
+	}
 }

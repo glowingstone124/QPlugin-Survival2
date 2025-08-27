@@ -53,7 +53,9 @@ public final class QuantumPlugin extends JavaPlugin {
     public void onEnable() {
         instance = this;
         Trigger trigger = new Trigger();
+        System.out.println("starting scanning triggers");
         trigger.scan("vip.qoriginal.quantumplugin");
+        System.out.println("end scanning triggers");
         webMsgGetterTask = new WebMsgGetter();
         System.out.println("1.14.5.5.1 Started.");
         try {

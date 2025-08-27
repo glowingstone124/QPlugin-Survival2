@@ -5,10 +5,14 @@ import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.entity.Player
 import vip.qoriginal.quantumplugin.adventures.NoVisitor
+import vip.qoriginal.quantumplugin.adventures.SubscribeTrigger
+import vip.qoriginal.quantumplugin.adventures.TriggerType
 
 class CardsTrigger {
 	@NoVisitor
+	@SubscribeTrigger(TriggerType.PATCHOULI)
 	fun onPatchouliEventGet(player: Player){
+		println("triggered sender")
 		val achievement = Achievement(
 			"帕秋莉的魔法",
 			"在帕秋莉岛使用附魔台附魔一个物品"
@@ -17,10 +21,12 @@ class CardsTrigger {
 	}
 
 	@NoVisitor
+	@SubscribeTrigger(TriggerType.KOISHI)
 	fun onKoishiEventGet(player: Player){
+		println("triggered sender")
 		val achievement = Achievement(
 			"无意识的存在",
-			"在隐身时使用近战击杀一只僵尸"
+			"在隐身时使用铁剑击杀一只僵尸"
 		)
 		player.sendMessage(composeAchievementMessage(achievement))
 	}

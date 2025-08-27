@@ -1,6 +1,6 @@
 package vip.qoriginal.quantumplugin.adventures
 
-import kotlinx.coroutines.Runnable
+import io.github.classgraph.ClassGraph
 import kotlinx.coroutines.runBlocking
 import org.bukkit.Bukkit
 import org.bukkit.Location
@@ -12,7 +12,6 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.enchantment.EnchantItemEvent
 import org.bukkit.event.entity.EntityDeathEvent
-import vip.qoriginal.quantumplugin.ClassScanner
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.reflect.full.callSuspend
@@ -27,6 +26,7 @@ class Trigger : Listener {
 	fun onPlayerEnchant(event: EnchantItemEvent) = runBlocking{
 		//帕秋莉岛
 		if (event.enchanter.isInZone(Location(mainWorld,-2421.0, -64.0, 320.0), Location(mainWorld,-2399.0, 32.0, 342.0))) {
+			println("triggered eventhandler")
 			call(TriggerType.PATCHOULI, event.enchanter)
 		}
 	}
@@ -38,53 +38,51 @@ class Trigger : Listener {
 
 		val weapon = killer.inventory.itemInMainHand
 		if (weapon.type != Material.IRON_SWORD) return@runBlocking
+		println("triggered eventhandler")
 		call(TriggerType.KOISHI, killer)
 	}
 
-	private fun scanTriggers(): List<Pair<Any, java.lang.reflect.Method>> {
-		val classes = ClassScanner.scanPackage("vip.qoriginal.quantumplugin")
+	fun scan(packageName: String) {
 		val result = mutableListOf<Pair<Any, java.lang.reflect.Method>>()
 
-		for (clazz in classes) {
-			for (method in clazz.declaredMethods) {
-				if (method.isAnnotationPresent(SubscribeTrigger::class.java)) {
-					val instance = clazz.getDeclaredConstructor().newInstance()
-					result.add(instance to method)
-					println("[Trigger] 发现触发器: ${clazz.name}.${method.name}")
+		ClassGraph()
+			.acceptPackages(packageName)
+			.enableClassInfo()
+			.enableMethodInfo()
+			.enableAnnotationInfo()
+			.scan().use { scanResult ->
+				val classesWithAnnotation = scanResult.getClassesWithMethodAnnotation(SubscribeTrigger::class.java.name)
+				println("扫描到类数量: ${classesWithAnnotation.size}")
+
+				for (classInfo in classesWithAnnotation) {
+					val clazz = classInfo.loadClass()
+					for (methodInfo in classInfo.methodInfo.filter { it.hasAnnotation(SubscribeTrigger::class.java.name) }) {
+						val method = methodInfo.loadClassAndGetMethod()
+						val anno = method.getAnnotation(SubscribeTrigger::class.java) ?: continue
+						val type = anno.value
+
+						val instance = clazz.kotlin.objectInstance ?: clazz.getDeclaredConstructor().newInstance()
+
+						val noVisitor: NoVisitor? = method.getAnnotation(NoVisitor::class.java)
+						val finalMethod = if (noVisitor != null) {
+							val wrapperName = "${method.name}_safe"
+							clazz.methods.find { it.name == wrapperName } ?: method
+						} else {
+							method
+						}
+						triggerMap.computeIfAbsent(type) { mutableListOf() }
+							.add(instance to finalMethod)
+
+						println("[TriggerManager] 注册触发器: ${clazz.name}.${finalMethod.name} -> $type")
+					}
 				}
 			}
-		}
-		return result
 	}
-
-	fun scan(packageName: String) {
-		val classes = ClassScanner.scanPackage(packageName)
-
-		for (clazz in classes) {
-			for (method in clazz.declaredMethods) {
-				val anno = method.getAnnotation(SubscribeTrigger::class.java) ?: continue
-				val type = anno.value
-
-				val instance = clazz.getDeclaredConstructor().newInstance()
-				val noVisitor: NoVisitor? = method.getAnnotation(NoVisitor::class.java)
-				val finalMethod = if (noVisitor != null) {
-					val wrapperName = "${method.name}_safe"
-					clazz.methods.find { it.name == wrapperName } ?: method
-				} else {
-					method
-				}
-				triggerMap.computeIfAbsent(type) { mutableListOf() }
-					.add(instance to finalMethod)
-
-				println("[TriggerManager] 注册触发器: ${clazz.name}.${finalMethod.name} -> $type")
-			}
-		}
-	}
-
 	suspend fun call(type: TriggerType, vararg args: Any?) {
 		val methods = triggerMap[type] ?: return
-
+		println("calling eventhandler")
 		for ((instance, method) in methods) {
+			println("calling eventhandler ${method.name}")
 			try {
 				val kfun = method.kotlinFunction
 				if (kfun?.isSuspend == true) {
