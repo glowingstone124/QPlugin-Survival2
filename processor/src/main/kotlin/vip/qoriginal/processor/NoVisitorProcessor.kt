@@ -18,14 +18,13 @@ class NoVisitorProcessor(
 	override fun process(resolver: Resolver): List<KSAnnotated> {
 		val symbols = resolver.getSymbolsWithAnnotation("vip.qoriginal.quantumplugin.adventures.NoVisitor")
 			.filterIsInstance<KSFunctionDeclaration>()
-
+		val scannedClasses = mutableSetOf<String>()
 		symbols.forEach { func ->
 			if (!func.validate()) return@forEach
-
 			val pkgName = func.packageName.asString()
 			val className = func.parentDeclaration?.simpleName?.asString() ?: return@forEach
 			val funcName = func.simpleName.asString()
-
+			scannedClasses.add("$pkgName.$className")
 			val file = codeGenerator.createNewFile(
 				Dependencies(true, func.containingFile!!),
 				pkgName,
@@ -42,9 +41,11 @@ class NoVisitorProcessor(
                 """.trimIndent())
 			}
 
-			logger.info("生成 NoVisitor wrapper: $className.$funcName -> ${funcName}_safe")
+			println("生成 NoVisitor wrapper: $className.$funcName -> ${funcName}_safe")
 		}
-
+		scannedClasses.forEach { className ->
+			println("扫描到类: $className")
+		}
 		return emptyList()
 	}
 }
