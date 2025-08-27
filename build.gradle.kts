@@ -7,6 +7,7 @@
 plugins {
     `java-library`
     `maven-publish`
+	kotlin("jvm")
 }
 
 repositories {
@@ -22,6 +23,7 @@ repositories {
     maven {
         url = uri("https://oss.sonatype.org/content/groups/public/")
     }
+	mavenCentral()
 }
 
 dependencies {
@@ -30,12 +32,12 @@ dependencies {
     api(libs.org.jetbrains.kotlin.kotlin.reflect)
     api(libs.org.jetbrains.kotlinx.kotlinx.coroutines.core)
     compileOnly(libs.io.papermc.paper.paper.api)
+	implementation(kotlin("stdlib-jdk8"))
 }
 
 group = "vip.qoriginal"
 version = "1.14.5.5.1"
 description = "QuantumPlugin"
-java.sourceCompatibility = JavaVersion.VERSION_21
 
 publishing {
     publications.create<MavenPublication>("maven") {
@@ -49,4 +51,7 @@ tasks.withType<JavaCompile>() {
 
 tasks.withType<Javadoc>() {
     options.encoding = "UTF-8"
+}
+kotlin {
+	jvmToolchain(21)
 }
