@@ -7,6 +7,7 @@ import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
+import org.bukkit.entity.Item
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.PotionMeta
@@ -31,6 +32,7 @@ class Buy : CommandExecutor {
 		Merchandise(ItemStack(Material.LAVA_BUCKET, 1), 10, "岩浆桶"),
 		Merchandise(ItemStack(Material.END_CRYSTAL, 2), 5, "末影水晶"),
 		Merchandise(ItemStack(Material.SPECTRAL_ARROW, 4), 5, "光灵箭"),
+		Merchandise(ItemStack(Material.COBWEB, 2), 10, "蜘蛛网"),
 		Merchandise(givePotion(0), 15, "药水-力量I"),
 		Merchandise(givePotion(1), 30, "药水-力量II"),
 		Merchandise(givePotion(2), 25, "药水-治疗"),
