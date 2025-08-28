@@ -31,6 +31,16 @@ class CardsTrigger {
 		player.sendMessage(composeAchievementMessage(achievement))
 	}
 
+	@NoVisitor
+	@SubscribeTrigger(TriggerType.REIMU_AND_MARISA)
+	fun onReimuEvent(player: Player){
+		val achievement = Achievement(
+			"畅玩于幻想之庭",
+			"造访普罗米斯"
+		)
+		player.sendMessage(composeAchievementMessage(achievement))
+	}
+
 	fun composeAchievementMessage(achievement: Achievement): Component {
 		return Component.text("=====成就达成=====").color(NamedTextColor.GREEN)
 			.append(Component.newline())
@@ -38,6 +48,7 @@ class CardsTrigger {
 			.append(Component.text(achievement.name).color(NamedTextColor.YELLOW).decorate(TextDecoration.UNDERLINED))
 			.hoverEvent(Component.text(achievement.description))
 	}
+
 }
 
 data class Achievement(

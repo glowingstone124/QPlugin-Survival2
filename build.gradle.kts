@@ -65,6 +65,10 @@ tasks {
 	named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
 		archiveClassifier.set("")
 		mergeServiceFiles()
+		dependencies {
+			exclude(dependency("com.google.devtools.ksp:.*"))
+			exclude(dependency("org.jetbrains.kotlin:kotlin-compiler-embeddable.*"))
+		}
 	}
 
 	build {
