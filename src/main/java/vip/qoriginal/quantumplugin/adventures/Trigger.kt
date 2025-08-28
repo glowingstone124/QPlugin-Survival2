@@ -29,6 +29,11 @@ class Trigger : Listener {
 			println("triggered eventhandler")
 			call(TriggerType.PATCHOULI, event.enchanter)
 		}
+		//普罗米斯
+		if (event.enchanter.isInZone(Location(mainWorld, -1577.0, 32.0, 615.0), Location(mainWorld, -1406.0, -64.0, 785.0))) {
+			println("triggered eventhandler")
+			call(TriggerType.REIMU_AND_MARISA, event.enchanter)
+		}
 	}
 	@EventHandler
 	fun onZombieDeath(event: EntityDeathEvent) = runBlocking{
@@ -107,6 +112,17 @@ class Trigger : Listener {
 		val loc = this.location
 		return loc.x in minX..maxX &&
 				loc.y in minY..maxY &&
+				loc.z in minZ..maxZ
+	}
+
+	fun Player.isInZone2D(coordStart: Location, coordEnd: Location): Boolean {
+		val minX = min(coordStart.x, coordEnd.x)
+		val maxX = max(coordStart.x, coordEnd.x)
+		val minZ = min(coordStart.z, coordEnd.z)
+		val maxZ = max(coordStart.z, coordEnd.z)
+
+		val loc = this.location
+		return loc.x in minX..maxX &&
 				loc.z in minZ..maxZ
 	}
 }
