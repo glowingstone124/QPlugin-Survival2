@@ -11,12 +11,13 @@ import vip.qoriginal.quantumplugin.adventures.NoVisitor
 import vip.qoriginal.quantumplugin.adventures.SubscribeTrigger
 import vip.qoriginal.quantumplugin.adventures.TriggerType
 import vip.qoriginal.quantumplugin.patch.Utils
+import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 
 class CardsTrigger {
 
 	private val achievementCache = ConcurrentHashMap<String, MutableSet<Int>>()
-	private val headerMap = mapOf("Token" to Config.API_SECRET)
+	private val headerMap: Map<String, String> = mapOf("Token" to Config.API_SECRET)
 
 	@NoVisitor
 	@SubscribeTrigger(TriggerType.PATCHOULI)
@@ -48,7 +49,8 @@ class CardsTrigger {
 					JsonObject().apply {
 						addProperty("player", player.name)
 						addProperty("advancement", advancementId)
-					}.toString()
+					}.toString(),
+					Optional.of(headerMap)
 				).get().asJsonObject()
 
 				if (result.get("error").asString == "already achieved advancement") {
