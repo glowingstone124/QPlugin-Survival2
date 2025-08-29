@@ -184,7 +184,7 @@ class Login : Listener {
 			System.currentTimeMillis(),
 			success,
 		)
-		Request.sendPostRequest(Config.API_ENDPOINT + "/qo/upload/loginattempt?auth=2djg45uifjs034", gson.toJson(logClazz))
+		Request.sendPostRequest(Config.API_ENDPOINT + "/qo/upload/loginattempt?auth=${Config.API_PERM_KEY}", gson.toJson(logClazz))
 	}
 }
 data class LoginLog(

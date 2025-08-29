@@ -55,4 +55,8 @@ object Config {
 
 	val API_ENDPOINT: String
 		get() = (configData["API_ENDPOINT"] ?: "http://127.0.0.1:8080") as String
+	val API_SECRET: String
+		get() = (configData["API_SECRET"] ?: "") as String
+	val API_PERM_KEY: String
+		get() = (configData["API_PERM_KEY"] ?: "") as String
 }
