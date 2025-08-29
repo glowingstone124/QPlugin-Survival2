@@ -26,23 +26,23 @@ public class PlayerEventListener implements Listener {
         Player player = event.getEntity();
         cs.sendChatMsg("玩家" + player.getName() + "死了，" + event.getDeathMessage());
     }
-
     @EventHandler
     public void onPlayerExpChange(PlayerExpChangeEvent event) {
         Player player = event.getPlayer();
-        int oldLevel = player.getLevel();
-        int totalExp = getTotalExperience(player) + event.getAmount();
+        int newTotalExp = getTotalExperience(player) + event.getAmount();
 
-        int newLevel = 0;
-        while (totalExp >= getExpToLevel(newLevel)) {
-            totalExp -= getExpToLevel(newLevel);
-            newLevel++;
-        }
-        if (newLevel > oldLevel && newLevel >= 100) {
-            cs.sendChatMsg("玩家 " + player.getName() + " 的等级已经超过了100级，现在等级为：" + newLevel);
+        int simulatedLevel = 0;
+        int exp = newTotalExp;
+        while (exp >= getExpToLevel(simulatedLevel)) {
+            exp -= getExpToLevel(simulatedLevel);
+            simulatedLevel++;
         }
 
+        if (simulatedLevel >= 100 && simulatedLevel % 100 == 0) {
+            cs.sendChatMsg("玩家 " + player.getName() + " 的等级已经达到了 " + simulatedLevel);
+        }
     }
+
 
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
