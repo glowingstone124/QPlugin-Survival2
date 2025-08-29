@@ -1,3 +1,4 @@
+package vip.qoriginal.quantumplugin
 import com.google.gson.JsonObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -6,12 +7,9 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.entity.Player
-import vip.qoriginal.quantumplugin.Config
-import vip.qoriginal.quantumplugin.Request
 import vip.qoriginal.quantumplugin.adventures.NoVisitor
 import vip.qoriginal.quantumplugin.adventures.SubscribeTrigger
 import vip.qoriginal.quantumplugin.adventures.TriggerType
-import vip.qoriginal.quantumplugin.asJsonObject
 import vip.qoriginal.quantumplugin.patch.Utils
 import java.util.concurrent.ConcurrentHashMap
 

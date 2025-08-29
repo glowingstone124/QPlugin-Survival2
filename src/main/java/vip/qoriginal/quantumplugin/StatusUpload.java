@@ -16,7 +16,7 @@ public class StatusUpload {
     private static final boolean DEBUG = true;
 
     static {
-        header.put("Authorization", AuthUtils.INSTANCE.getToken());
+        header.put("Authorization", Config.INSTANCE.getAPI_PERM_KEY());
     }
 
     public static int totalUser = 0;
