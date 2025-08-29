@@ -25,16 +25,24 @@ class Trigger : Listener {
 	@EventHandler
 	fun onPlayerEnchant(event: EnchantItemEvent) = runBlocking{
 		//帕秋莉岛
-		if (event.enchanter.isInZone(Location(mainWorld,-2421.0, -64.0, 320.0), Location(mainWorld,-2399.0, 32.0, 342.0))) {
+		if (event.enchanter.isInZone2D(Location(mainWorld,-2401.0, -64.0, 1432.0), Location(mainWorld,-2197.0, 320.0, 1624.0))) {
 			println("triggered eventhandler")
 			call(TriggerType.PATCHOULI, event.enchanter)
 		}
+	}
+
+	@EventHandler
+	fun onPlayerMove(event: org.bukkit.event.player.PlayerMoveEvent) = runBlocking{
+
 		//普罗米斯
-		if (event.enchanter.isInZone(Location(mainWorld, -1577.0, 32.0, 615.0), Location(mainWorld, -1406.0, -64.0, 785.0))) {
+		if (event.player.isInZone2D(Location(mainWorld, -1590.0, 320.0, 779.0), Location(mainWorld, -1456.0, -64.0, 596.0)) && !event.player.scoreboardTags.contains("inPrometheus")) {
 			println("triggered eventhandler")
-			call(TriggerType.REIMU_AND_MARISA, event.enchanter)
+			call(TriggerType.REIMU_AND_MARISA, event.player)
+			event.player.scoreboardTags.add("inPrometheus")
 		}
 	}
+
+
 	@EventHandler
 	fun onZombieDeath(event: EntityDeathEvent) = runBlocking{
 		val killer = event.entity.killer ?: return@runBlocking
