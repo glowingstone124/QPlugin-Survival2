@@ -1,6 +1,9 @@
 package vip.qoriginal.quantumplugin.adventures
 
 import io.github.classgraph.ClassGraph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.bukkit.Bukkit
 import org.bukkit.Location
@@ -12,6 +15,8 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.enchantment.EnchantItemEvent
 import org.bukkit.event.entity.EntityDeathEvent
+import org.bukkit.potion.PotionEffectType
+import java.util.UUID
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.reflect.full.callSuspend
@@ -19,6 +24,8 @@ import kotlin.reflect.jvm.kotlinFunction
 
 class Trigger : Listener {
 	val mainWorld: World? = Bukkit.getWorlds().firstOrNull { it.name == "world" } ?: Bukkit.getWorlds().firstOrNull()
+	private val lastTriggerTime = mutableMapOf<UUID, Long>()
+	private val COOLDOWN = 10_000L
 	companion object {
 		private val triggerMap: MutableMap<TriggerType, MutableList<Pair<Any, java.lang.reflect.Method>>> = mutableMapOf()
 	}
@@ -32,13 +39,30 @@ class Trigger : Listener {
 	}
 
 	@EventHandler
-	fun onPlayerMove(event: org.bukkit.event.player.PlayerMoveEvent) = runBlocking{
+	fun onPlayerMove(event: org.bukkit.event.player.PlayerMoveEvent) {
+		val player = event.player
+		val uuid = player.uniqueId
+		val now = System.currentTimeMillis()
 
 		//普罗米斯
-		if (event.player.isInZone2D(Location(mainWorld, -1590.0, 320.0, 779.0), Location(mainWorld, -1456.0, -64.0, 596.0)) && !event.player.scoreboardTags.contains("inPrometheus")) {
-			println("triggered eventhandler")
-			call(TriggerType.REIMU_AND_MARISA, event.player)
-			event.player.scoreboardTags.add("inPrometheus")
+		val inZone = player.isInZone2D(
+			Location(mainWorld, -1590.0, 320.0, 779.0),
+			Location(mainWorld, -1456.0, -64.0, 596.0)
+		)
+
+		if (inZone && !player.scoreboardTags.contains("inPrometheus")) {
+			val lastTime = lastTriggerTime[uuid] ?: 0
+			if (now - lastTime >= COOLDOWN) {
+				println("player entered Prometheus zone")
+				CoroutineScope(Dispatchers.IO).launch {
+					call(TriggerType.REIMU_AND_MARISA, player)
+				}
+				player.scoreboardTags.add("inPrometheus")
+				lastTriggerTime[uuid] = now
+			}
+		} else if (!inZone && player.scoreboardTags.contains("inPrometheus")) {
+			println("player left Prometheus zone")
+			player.scoreboardTags.remove("inPrometheus")
 		}
 	}
 
@@ -51,6 +75,7 @@ class Trigger : Listener {
 
 		val weapon = killer.inventory.itemInMainHand
 		if (weapon.type != Material.IRON_SWORD) return@runBlocking
+		if (!killer.hasPotionEffect(PotionEffectType.INVISIBILITY)) return@runBlocking
 		println("triggered eventhandler")
 		call(TriggerType.KOISHI, killer)
 	}
