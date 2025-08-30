@@ -29,17 +29,16 @@ public class PlayerEventListener implements Listener {
     @EventHandler
     public void onPlayerExpChange(PlayerExpChangeEvent event) {
         Player player = event.getPlayer();
-        int newTotalExp = getTotalExperience(player) + event.getAmount();
+        int oldLevel = player.getLevel();
+        int totalExp = getTotalExperience(player) + event.getAmount();
 
-        int simulatedLevel = 0;
-        int exp = newTotalExp;
-        while (exp >= getExpToLevel(simulatedLevel)) {
-            exp -= getExpToLevel(simulatedLevel);
-            simulatedLevel++;
+        int newLevel = 0;
+        while (totalExp >= getExpToLevel(newLevel)) {
+            totalExp -= getExpToLevel(newLevel);
+            newLevel++;
         }
-
-        if (simulatedLevel >= 100 && simulatedLevel % 100 == 0) {
-            cs.sendChatMsg("玩家 " + player.getName() + " 的等级已经达到了 " + simulatedLevel);
+        if (newLevel > oldLevel && newLevel >= 100 && newLevel % 100 == 0) {
+            cs.sendChatMsg("玩家 " + player.getName() + " 的等级已经超过了100级，现在等级为：" + newLevel);
         }
     }
 
