@@ -6,6 +6,7 @@ plugins {
     `java-library`
     `maven-publish`
 	id("com.github.johnrengelman.shadow") version "8.1.0"
+	kotlin("jvm")
 }
 
 repositories {
@@ -21,6 +22,7 @@ repositories {
     maven {
         url = uri("https://oss.sonatype.org/content/groups/public/")
     }
+	mavenCentral()
 }
 
 dependencies {
@@ -28,12 +30,12 @@ dependencies {
     api(libs.org.jetbrains.kotlin.kotlin.stdlib)
     api(libs.org.jetbrains.kotlinx.kotlinx.coroutines.core)
     compileOnly(libs.io.papermc.paper.paper.api)
+	implementation(kotlin("stdlib-jdk8"))
 }
 
 group = "vip.qoriginal"
 version = "1.14.5.5.1"
 description = "QuantumPlugin"
-java.sourceCompatibility = JavaVersion.VERSION_21
 
 publishing {
     publications.create<MavenPublication>("maven") {
@@ -47,4 +49,14 @@ tasks.withType<JavaCompile>() {
 
 tasks.withType<Javadoc>() {
     options.encoding = "UTF-8"
+}
+tasks {
+	named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+		archiveClassifier.set("")
+		mergeServiceFiles()
+	}
+
+	build {
+		dependsOn(shadowJar)
+	}
 }

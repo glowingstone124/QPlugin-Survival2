@@ -24,6 +24,7 @@ import org.bukkit.metadata.MetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.checkerframework.checker.units.qual.C;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.combatZone.*;
@@ -34,7 +35,6 @@ import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -139,6 +139,19 @@ public final class QuantumPlugin extends JavaPlugin {
     }
 
     public void initCombat() {
+        CombatPoints cb = new CombatPoints();
+        cb.deserialize(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/combatzone/download");
+        Bukkit.getScheduler().runTaskTimer(this,
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/combatzone/upload?token=" + Config.INSTANCE.getAPI_KEY(), cb.serialize());
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }, 20L, 20 * 30L);
         getServer().getPluginManager().registerEvents(new RestrictZones(), this);
         getServer().getPluginManager().registerEvents(new CombatPoints(), this);
         getServer().getPluginManager().registerEvents(new ScoreboardManager(), this);
@@ -155,7 +168,7 @@ public final class QuantumPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
-        //init();
+        init();
         initCombat();
     }
 
