@@ -1,7 +1,9 @@
 package vip.qoriginal.quantumplugin;
 
+import kotlinx.coroutines.Dispatchers;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Arrow;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -37,9 +39,22 @@ public class PlayerEventListener implements Listener {
             totalExp -= getExpToLevel(newLevel);
             newLevel++;
         }
-        if (newLevel > oldLevel && newLevel >= 100 && newLevel % 100 == 0) {
+
+        CoroutineJava cj = new CoroutineJava();
+        int finalNewLevel = newLevel;
+        cj.push(
+                () ->{
+                    try {
+                        Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "?token=" + Config.INSTANCE.getAPI_SECRET() + "&username=" + player.getName() + "&lvl=" + finalNewLevel, "");
+                    } catch (Exception e) {
+                        QuantumPlugin.getInstance().getLogger().warning("Failed to upload exp data to Quantum Original");
+                    }
+                }, Dispatchers.getIO()
+        );
+
+        /*if (newLevel > oldLevel && newLevel >= 100 && newLevel % 100 == 0) {
             cs.sendChatMsg("玩家 " + player.getName() + " 的等级已经超过了100级，现在等级为：" + newLevel);
-        }
+        }*/
     }
 
 
