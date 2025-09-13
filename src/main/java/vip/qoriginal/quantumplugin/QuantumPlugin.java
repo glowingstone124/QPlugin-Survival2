@@ -36,6 +36,7 @@ import vip.qoriginal.quantumplugin.metro.LoadChunk;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 
@@ -68,6 +69,7 @@ public final class QuantumPlugin extends JavaPlugin {
             throw new RuntimeException(e);
         }
         piv.init();
+        webMsgGetterTask = new WebMsgGetter();
         getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
         Listener[] needReg = {
                 new Login(),
@@ -138,9 +140,12 @@ public final class QuantumPlugin extends JavaPlugin {
         Ranking ranking = new Ranking();
     }
 
-    public void initCombat() {
+    public void initCombat() throws ExecutionException, InterruptedException {
         CombatPoints cb = new CombatPoints();
-        cb.deserialize(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/combatzone/download");
+        var answer = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/combatzone/download").get();
+        if (!answer.isEmpty()) {
+            cb.deserialize(answer);
+        }
         Bukkit.getScheduler().runTaskTimer(this,
                 new Runnable() {
                     @Override
@@ -169,7 +174,11 @@ public final class QuantumPlugin extends JavaPlugin {
     public void onEnable() {
         instance = this;
         init();
-        initCombat();
+        try {
+            initCombat();
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static QuantumPlugin getInstance() {

@@ -31,12 +31,12 @@ class LeaveMessageComponent {
 
 		val res = Request.sendPostRequest(Config.API_ENDPOINT + "/qo/leavemessage/upload?from=${player.name}&to=${target}&message=${message}", "").get().asJsonObject()
 		when(res.get("code").asInt) {
-			0 -> player.sendMessage("发送成功。"); return true,
+			0 -> player.sendMessage("发送成功。")
 			1 -> player.sendMessage("您不被允许发送消息。")
 			2 -> player.sendMessage("您发送的留言太多了，您最多只能同时拥有五条留言。")
 			3 -> player.sendMessage("对方的留言箱已满！")
 		}
-		return false;
+		return true;
 	}
 
 	fun getMessages(player: Player): List<Component> {

@@ -1,6 +1,8 @@
 package vip.qoriginal.quantumplugin.combatZone
 
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.annotations.Expose
 import com.google.gson.reflect.TypeToken
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -33,7 +35,8 @@ object CombatPoint {
 }
 
 class CombatPoints : Listener {
-	private val gson = Gson()
+	private val gson = GsonBuilder().excludeFieldsWithoutExposeAnnotation()
+	.create()
 	companion object {
 		val centerLocation = Location(ArenaLoc1.world, -2140.0, 0.0, 1150.0);
 		val hotZoneTinCity = HotZone(
@@ -73,13 +76,13 @@ class CombatPoints : Listener {
 	}
 
 	data class PlayerStats(
-		var points: Int = 0,
-		var kills: Int = 0,
-		var deaths: Int = 0,
-		var damageDealt: Int = 0,
-		var scoreboard: Scoreboard? = null
+		@Expose var points: Int = 0,
+		@Expose var kills: Int = 0,
+		@Expose var deaths: Int = 0,
+		@Expose var damageDealt: Int = 0,
+		@Transient var scoreboard: Scoreboard? = null
 	) {
-		val scoreBoardManager = ScoreboardManager()
+		@Transient val scoreBoardManager = ScoreboardManager()
 		fun addPoints(amount: Int, reason: AddReason, loc: Location) {
 			val multiplier = if (reason == AddReason.SELL) 1.0 else getLocationMultiplier(loc)
 			points += (amount * multiplier).floor()
