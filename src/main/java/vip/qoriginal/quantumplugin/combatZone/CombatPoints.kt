@@ -145,7 +145,7 @@ class CombatPoints : Listener {
 		val dead = event.entity
 		val killer = event.entity.killer
 
-		if (dead.uniqueId == GUI.currentKillLeader) {
+		if (dead.uniqueId == GUI.currentKillLeader?.uniqueId) {
 			Utils.broadcast(Utils.prependBroadCast(Component.text("击杀王已被清除").color(NamedTextColor.DARK_RED)))
 		}
 
