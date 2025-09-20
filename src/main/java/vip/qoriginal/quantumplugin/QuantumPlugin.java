@@ -49,8 +49,11 @@ public final class QuantumPlugin extends JavaPlugin {
     Login login = new Login();
     ChatSync cs = new ChatSync();
 
+    public static World WORLD_MAIN;
+
     @Override
     public void onEnable() {
+         WORLD_MAIN = Bukkit.getWorld("world");
         instance = this;
         Trigger trigger = new Trigger();
         System.out.println("starting scanning triggers");

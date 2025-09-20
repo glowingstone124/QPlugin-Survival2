@@ -16,6 +16,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.enchantment.EnchantItemEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.potion.PotionEffectType
+import vip.qoriginal.quantumplugin.QuantumPlugin.WORLD_MAIN
 import java.util.UUID
 import kotlin.math.max
 import kotlin.math.min
@@ -23,16 +24,22 @@ import kotlin.reflect.full.callSuspend
 import kotlin.reflect.jvm.kotlinFunction
 
 class Trigger : Listener {
-	val mainWorld: World? = Bukkit.getWorlds().firstOrNull { it.name == "world" } ?: Bukkit.getWorlds().firstOrNull()
 	private val lastTriggerTime = mutableMapOf<UUID, Long>()
 	private val COOLDOWN = 10_000L
+
 	companion object {
-		private val triggerMap: MutableMap<TriggerType, MutableList<Pair<Any, java.lang.reflect.Method>>> = mutableMapOf()
+		private val triggerMap: MutableMap<TriggerType, MutableList<Pair<Any, java.lang.reflect.Method>>> =
+			mutableMapOf()
 	}
+
 	@EventHandler
-	fun onPlayerEnchant(event: EnchantItemEvent) = runBlocking{
+	fun onPlayerEnchant(event: EnchantItemEvent) = runBlocking {
 		//帕秋莉岛
-		if (event.enchanter.isInZone2D(Location(mainWorld,-2401.0, -64.0, 1432.0), Location(mainWorld,-2197.0, 320.0, 1624.0))) {
+		if (event.enchanter.isInZone2D(
+				Location(WORLD_MAIN, -2401.0, -64.0, 1432.0),
+				Location(WORLD_MAIN, -2197.0, 320.0, 1624.0)
+			)
+		) {
 			println("triggered eventhandler")
 			call(TriggerType.PATCHOULI, event.enchanter)
 		}
@@ -41,34 +48,25 @@ class Trigger : Listener {
 	@EventHandler
 	fun onPlayerMove(event: org.bukkit.event.player.PlayerMoveEvent) {
 		val player = event.player
-		val uuid = player.uniqueId
-		val now = System.currentTimeMillis()
 
-		//普罗米斯
-		val inZone = player.isInZone2D(
-			Location(mainWorld, -1590.0, 320.0, 779.0),
-			Location(mainWorld, -1456.0, -64.0, 596.0)
-		)
+		val currentZone = Zones.ZONE_LIST.find { it.isInZone(player) }
 
-		if (inZone && !player.scoreboardTags.contains("inPrometheus")) {
-			val lastTime = lastTriggerTime[uuid] ?: 0
-			if (now - lastTime >= COOLDOWN) {
-				println("player entered Prometheus zone")
-				CoroutineScope(Dispatchers.IO).launch {
-					call(TriggerType.REIMU_AND_MARISA, player)
-				}
-				player.scoreboardTags.add("inPrometheus")
-				lastTriggerTime[uuid] = now
-			}
-		} else if (!inZone && player.scoreboardTags.contains("inPrometheus")) {
-			println("player left Prometheus zone")
-			player.scoreboardTags.remove("inPrometheus")
+		if (currentZone != null) {
+			currentZone.executeEnter(player)
+
+			Zones.ZONE_LIST
+				.filter { it != currentZone && player.scoreboardTags.contains("in${it.name}") }
+				.forEach { it.executeExit(player) }
+		} else {
+			Zones.ZONE_LIST
+				.filter { player.scoreboardTags.contains("in${it.name}") }
+				.forEach { it.executeExit(player) }
 		}
 	}
 
 
 	@EventHandler
-	fun onZombieDeath(event: EntityDeathEvent) = runBlocking{
+	fun onZombieDeath(event: EntityDeathEvent) = runBlocking {
 		val killer = event.entity.killer ?: return@runBlocking
 
 		if (event.entity.type != EntityType.ZOMBIE) return@runBlocking
@@ -116,6 +114,7 @@ class Trigger : Listener {
 				}
 			}
 	}
+
 	suspend fun call(type: TriggerType, vararg args: Any?) {
 		val methods = triggerMap[type] ?: return
 		println("calling eventhandler")
@@ -163,7 +162,8 @@ class Trigger : Listener {
 enum class TriggerType {
 	PATCHOULI,
 	KOISHI,
-	REIMU_AND_MARISA
+	REIMU_AND_MARISA,
+	ORIN
 }
 
 @Target(AnnotationTarget.FUNCTION)
