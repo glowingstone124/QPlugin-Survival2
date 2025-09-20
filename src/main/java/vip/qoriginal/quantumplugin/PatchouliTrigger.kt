@@ -37,6 +37,13 @@ class CardsTrigger {
 		sendAchievementIfNotCached(player, 4, Advancements.Reimu_Achievement)
 	}
 
+	@NoVisitor
+	@SubscribeTrigger(TriggerType.ORIN)
+	fun onOrinEventGet(player: Player) {
+		sendAchievementIfNotCached(player, 5, Advancements.Orin_Achievement)
+	}
+
+
 	private fun sendAchievementIfNotCached(player: Player, advancementId: Int, achievement: Achievement) {
 		val playerCache = achievementCache.computeIfAbsent(player.name) { mutableSetOf() }
 
@@ -99,5 +106,9 @@ object Advancements {
 	val Reimu_Achievement = Achievement(
 		"畅玩于幻想之庭",
 		"造访普罗米斯"
+	)
+	val Orin_Achievement = Achievement(
+		"世外桃源",
+		"造访芙岛"
 	)
 }
