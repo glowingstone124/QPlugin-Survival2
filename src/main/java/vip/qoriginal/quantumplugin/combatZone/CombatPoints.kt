@@ -11,7 +11,13 @@ import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.entity.Arrow
+import org.bukkit.entity.Creeper
+import org.bukkit.entity.Entity
+import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
+import org.bukkit.entity.Skeleton
+import org.bukkit.entity.Spider
+import org.bukkit.entity.Zombie
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.PlayerDeathEvent
@@ -36,7 +42,8 @@ object CombatPoint {
 
 class CombatPoints : Listener {
 	private val gson = GsonBuilder().excludeFieldsWithoutExposeAnnotation()
-	.create()
+		.create()
+
 	companion object {
 		val centerLocation = Location(ArenaLoc1.world, -2140.0, 0.0, 1150.0);
 		val hotZoneTinCity = HotZone(
@@ -82,7 +89,8 @@ class CombatPoints : Listener {
 		@Expose var damageDealt: Int = 0,
 		@Transient var scoreboard: Scoreboard? = null
 	) {
-		@Transient val scoreBoardManager = ScoreboardManager()
+		@Transient
+		val scoreBoardManager = ScoreboardManager()
 		fun addPoints(amount: Int, reason: AddReason, loc: Location) {
 			val multiplier = if (reason == AddReason.SELL) 1.0 else getLocationMultiplier(loc)
 			points += (amount * multiplier).floor()
@@ -188,6 +196,7 @@ class CombatPoints : Listener {
 		val damage = event.finalDamage
 		var attacker: Player? = null
 		var receiver: Player? = null
+
 		when (event.entity) {
 			is Player -> receiver = event.entity as Player
 		}
@@ -208,6 +217,38 @@ class CombatPoints : Listener {
 					)
 			)
 			stats.addDamage(damage.toInt(), attacker.location)
+		}
+	}
+
+	@EventHandler
+	fun onEntityDeath(event: org.bukkit.event.entity.EntityDeathEvent) {
+		val killer = event.entity.killer
+		if (killer != null) {
+			val points = when (event.entityType) {
+				EntityType.ZOMBIE -> 1;
+				EntityType.SKELETON -> 1;
+				EntityType.CREEPER -> 4;
+				EntityType.SPIDER -> 2;
+				EntityType.CAVE_SPIDER -> 8;
+				else -> 0;
+			}
+
+			val chineseName = when (event.entityType) {
+				EntityType.ZOMBIE -> "僵尸";
+				EntityType.SKELETON -> "骷髅";
+				EntityType.CREEPER -> "苦力怕";
+				EntityType.SPIDER -> "蜘蛛";
+				EntityType.CAVE_SPIDER -> "洞穴蜘蛛";
+				else -> "";
+			}
+			if (points > 0) {
+				killer.sendMessage(
+					Component.text("击杀").color(TextColor.color(255, 255, 255))
+						.append(Component.text(chineseName).color(TextColor.color(255, 0, 0)))
+						.append(Component.text("获得${points}点积分"))
+				)
+				getStats(killer).addPoints(points, AddReason.KILL, killer.location)
+			}
 		}
 	}
 }
