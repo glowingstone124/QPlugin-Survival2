@@ -52,3 +52,6 @@ commands:
   buy:
     description: 购买物品
     usage: /buy <number> <amount>
+  ranking:
+    description: 查看排行
+    usage: /<command>

@@ -164,6 +164,7 @@ public final class QuantumPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ModifyElytra(), this);
         Objects.requireNonNull(getCommand("shop")).setExecutor(new ShopCommand());
         Objects.requireNonNull(getCommand("buy")).setExecutor(new Buy());
+        Objects.requireNonNull(getCommand("ranking")).setExecutor(new RankingCmd());
         Bukkit.getScheduler().runTaskTimer(this,
              new GUI(),
                 0L,

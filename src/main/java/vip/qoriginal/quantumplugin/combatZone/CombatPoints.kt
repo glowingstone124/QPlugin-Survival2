@@ -277,4 +277,5 @@ fun getLocationMultiplier(loc: Location): Double {
 	}
 }
 
+
 fun Double.floor() = floor(this).toInt()
