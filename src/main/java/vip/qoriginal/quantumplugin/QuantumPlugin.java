@@ -35,6 +35,10 @@ import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.OpenOption;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -140,11 +144,14 @@ public final class QuantumPlugin extends JavaPlugin {
         Ranking ranking = new Ranking();
     }
 
-    public void initCombat() throws ExecutionException, InterruptedException {
+    public void initCombat() throws ExecutionException, InterruptedException, IOException {
         CombatPoints cb = new CombatPoints();
         var answer = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/combatzone/download").get();
+        var answerFromLocal = Files.readString(Path.of("combatzone.json"));
         if (!answer.isEmpty()) {
             cb.deserialize(answer);
+        } else if (!answerFromLocal.isEmpty()) {
+            cb.deserialize(answerFromLocal);
         }
         Bukkit.getScheduler().runTaskTimer(this,
                 new Runnable() {
@@ -152,6 +159,13 @@ public final class QuantumPlugin extends JavaPlugin {
                     public void run() {
                         try {
                             Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/combatzone/upload?token=" + Config.INSTANCE.getAPI_KEY(), cb.serialize());
+                            Files.writeString(
+                                    Path.of("combatzone.json"),
+                                    cb.serialize(),
+                                    StandardOpenOption.CREATE,
+                                    StandardOpenOption.TRUNCATE_EXISTING
+                            );
+
                         } catch (Exception e) {
                             throw new RuntimeException(e);
                         }
@@ -177,7 +191,7 @@ public final class QuantumPlugin extends JavaPlugin {
         init();
         try {
             initCombat();
-        } catch (ExecutionException | InterruptedException e) {
+        } catch (ExecutionException | InterruptedException | IOException e) {
             throw new RuntimeException(e);
         }
     }
