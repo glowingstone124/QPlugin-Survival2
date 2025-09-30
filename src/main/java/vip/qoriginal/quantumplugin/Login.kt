@@ -81,7 +81,7 @@ class Login : Listener {
 					abstractLoginLogic(player)
 					player.removeScoreboardTag("guest")
 					sendLoginAttempt(player, true)
-				} else {
+				} else if (player.scoreboardTags.contains("visitor")) {
 					player.removeScoreboardTag("visitor")
 					player.addScoreboardTag("visitor_login")
 				}

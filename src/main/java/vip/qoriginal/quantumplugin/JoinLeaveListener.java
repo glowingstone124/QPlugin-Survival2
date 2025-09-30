@@ -75,6 +75,7 @@ public class JoinLeaveListener implements Listener {
         Player player = event.getPlayer();
         player.removeScoreboardTag("guest");
         player.removeScoreboardTag("visitor");
+        player.removeScoreboardTag("visitor_login");
         Thread.startVirtualThread(() -> {
             try {
                 IPUtils.locIsCn(event, quantumPlugin);

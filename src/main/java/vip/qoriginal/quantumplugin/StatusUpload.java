@@ -43,8 +43,10 @@ public class StatusUpload {
         StatusSample status = new StatusSample();
         status.timestamp = System.currentTimeMillis();
         status.onlinecount = Bukkit.getOnlinePlayers().size();
+        totalUser = Bukkit.getOfflinePlayers().length;
         for (Player p : Bukkit.getOnlinePlayers()) {
             if (p.getScoreboardTags().contains("visitor_login")) {
+                System.out.println(p.name() + " skipped");
                 continue;
             }
             BriefPlayerInfo info = new BriefPlayerInfo();
@@ -63,9 +65,9 @@ public class StatusUpload {
         //getR3S will clear msptList so invoke recent60 before R3S.
         float mspt_3s = MSPTCalculator.getR3s();
         status.mspt_3s = Float.isNaN(mspt_3s) ? 0 : mspt_3s;
-        String data = gson.toJson(status);
         status.tick_time = Bukkit.getServer().getTickTimes();
         status.game_time = Objects.requireNonNull(Bukkit.getServer().getWorld("world")).getGameTime();
+        String data = gson.toJson(status);
         try {
             Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/upload/status", data, Optional.of(header));
         } catch (Exception e) {
