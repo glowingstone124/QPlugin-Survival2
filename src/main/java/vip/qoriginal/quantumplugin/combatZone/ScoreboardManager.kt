@@ -23,49 +23,43 @@ class ScoreboardManager : Listener {
 	)
 
 	val combatPoints = CombatPoints()
+
 	@EventHandler
 	fun onJoin(event: PlayerJoinEvent) {
 		val player = event.player
 		val pStat = combatPoints.getStats(player)
 		val points = pStat.points
-		val board = createScoreboard(player, points)
+		val board = createOrGetScoreboard(player, points)
 		player.scoreboard = board
 	}
 
-	fun createScoreboard(player: Player, points: Int): Scoreboard {
-		playerBoardInfo.getOrPut(player.uniqueId) { PlayerScoreboardInfo() }
-		val manager = Bukkit.getScoreboardManager()
-		val board = manager.newScoreboard
-		val objective = board.registerNewObjective("info", Criteria.DUMMY, Component.text("Olympus HUD"))
+	fun createOrGetScoreboard(player: Player, points: Int): Scoreboard {
+		val manager = Bukkit.getScoreboardManager() ?: return Bukkit.getScoreboardManager().newScoreboard
+		val board = player.scoreboard.takeIf { it != manager.mainScoreboard } ?: manager.newScoreboard
+
+		val objective = board.getObjective("info")
+			?: board.registerNewObjective("info", Criteria.DUMMY, Component.text("Olympus HUD"))
 		objective.displaySlot = DisplaySlot.SIDEBAR
-		objective.getScore("战斗点数: $points").score = 3
+
 		val levelInfo = getPlayerLevel(points)
-		objective.getScore("当前等级${levelInfo.level}").score = 2
-		levelInfo.pointsToNext.let {
-			objective.getScore("距离升级还需要$it").score = 1
-		}
+
+		val pointsTeam = board.getTeam("points") ?: board.registerNewTeam("points").apply { addEntry("§1") }
+		pointsTeam.prefix(Component.text("战斗点数: $points"))
+		objective.getScore("§1").score = 3
+
+		val levelTeam = board.getTeam("level") ?: board.registerNewTeam("level").apply { addEntry("§2") }
+		levelTeam.prefix(Component.text("当前等级${levelInfo.level}"))
+		objective.getScore("§2").score = 2
+
+		val nextTeam = board.getTeam("next") ?: board.registerNewTeam("next").apply { addEntry("§3") }
+		nextTeam.prefix(Component.text("距离升级还需要${levelInfo.pointsToNext}"))
+		objective.getScore("§3").score = 1
+
 		return board
 	}
 
-
 	fun updateScoreboard(player: Player, points: Int) {
-		val board = player.scoreboard
-		val objective = board.getObjective(DisplaySlot.SIDEBAR) ?: return
-		val levelInfo = getPlayerLevel(points)
-
-		val info = playerBoardInfo.getOrPut(player.uniqueId) { PlayerScoreboardInfo() }
-
-		board.resetScores("战斗点数: ${info.lastPoints}")
-		board.resetScores("当前等级${info.lastLevel}")
-
-		objective.getScore("战斗点数: $points").score = 3
-		objective.getScore("当前等级${levelInfo.level}").score = 2
-		levelInfo.pointsToNext.let {
-			objective.getScore("距离升级还需要$it").score = 1
-		}
-
-		info.lastPoints = points
-		info.lastLevel = levelInfo.level
+		val board = createOrGetScoreboard(player, points)
+		player.scoreboard = board
 	}
-
 }

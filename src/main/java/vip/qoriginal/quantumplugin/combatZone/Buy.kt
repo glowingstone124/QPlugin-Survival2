@@ -69,7 +69,7 @@ class Buy : CommandExecutor {
 		if (args[0].equals("list", ignoreCase = true)) {
 			player.sendMessage("商品列表：")
 			merchandiseList.forEachIndexed { index, merchandise ->
-				player.sendMessage("$index: ${merchandise.itemStack.type} - 价格: ${merchandise.price}")
+				player.sendMessage("$index: ${merchandise.displayName} - 价格: ${merchandise.price}")
 			}
 			return true
 		}

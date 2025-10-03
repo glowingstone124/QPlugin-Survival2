@@ -8,7 +8,10 @@ import org.bukkit.attribute.Attribute
 import org.bukkit.entity.Player
 import kotlin.math.sqrt
 
+
 object Utils {
+	private val lastPoints = mutableMapOf<Player, Int>()
+
 	fun isInZone(loc: Location, corner1: Location, corner2: Location): Boolean {
 		val minX: Double = Math.min(corner1.getX(), corner2.getX())
 		val maxX: Double = Math.max(corner1.getX(), corner2.getX())
@@ -37,20 +40,25 @@ object Utils {
 
 	fun setPlayerMaxHealth(player: Player, health: Double) {
 		player.getAttribute(Attribute.MAX_HEALTH)?.baseValue = health
-		player.health = health
+		if (player.health > health) {
+			player.health = health
+		}
 	}
 
+
 	fun updatePlayerHealth(player: Player, points: Int) {
-		if (points <= 50) {
-			setPlayerMaxHealth(player, 20.0)
-		} else if (points in 50..120 ) {
-			setPlayerMaxHealth(player, 25.0)
-		} else if (points in 120..200 ) {
-			setPlayerMaxHealth(player, 30.0)
-		} else if (points in 200..250) {
-			setPlayerMaxHealth(player, 35.0)
-		} else {
-			setPlayerMaxHealth(player, 40.0)
+		val prev = lastPoints[player]
+
+		if (prev != null && prev == points) return
+
+		lastPoints[player] = points
+
+		when {
+			points <= 50 -> setPlayerMaxHealth(player, 20.0)
+			points in 51..120 -> setPlayerMaxHealth(player, 25.0)
+			points in 121..200 -> setPlayerMaxHealth(player, 30.0)
+			points in 201..250 -> setPlayerMaxHealth(player, 35.0)
+			else -> setPlayerMaxHealth(player, 40.0)
 		}
 	}
 
