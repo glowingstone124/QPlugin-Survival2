@@ -21,6 +21,7 @@ import org.bukkit.event.player.PlayerEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.scheduler.BukkitRunnable
+import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponData
 import vip.qoriginal.quantumplugin.patch.Utils
 import java.lang.Runnable
 import java.util.concurrent.ConcurrentHashMap
@@ -44,6 +45,7 @@ class Login : Listener {
 
 	val logger = Logger()
 	val gson = Gson()
+	val eliteWeaponData = EliteWeaponData()
 
 	suspend fun abstractLoginLogic(player: Player){
 		val time = withContext(Dispatchers.IO) {
@@ -64,6 +66,7 @@ class Login : Listener {
 				}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
 		)
 		logger.log("${player.name} logged in.", "LoginAction")
+		eliteWeaponData.cacheWeaponsForSpecUser(player.name)
 		ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
 	}
 	@OptIn(DelicateCoroutinesApi::class)
