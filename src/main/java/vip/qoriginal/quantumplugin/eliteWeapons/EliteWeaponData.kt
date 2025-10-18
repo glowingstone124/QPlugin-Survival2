@@ -17,7 +17,7 @@ import vip.qoriginal.quantumplugin.asJsonObject
 class EliteWeaponData {
 
 	val gson: Gson = GsonBuilder().setPrettyPrinting().create()
-	val listType = object : TypeToken<List<EliteWeapon>>(){}.type
+	val listType = object : TypeToken<MutableList<EliteWeapon>>(){}.type
 	enum class WeaponReason() {
 		HAS_ALREADY_UPDATED,
 		NOT_A_VALID_ITEM,
@@ -49,7 +49,7 @@ class EliteWeaponData {
 			Material.TRIDENT
 		)
 
-		val EliteWeaponCache = mutableMapOf<String, List<EliteWeapon>>()
+		val EliteWeaponCache = mutableMapOf<String, MutableList<EliteWeapon>>()
 	}
 
 	fun checkIfWeaponHasEliteData(item: ItemStack): Boolean {
@@ -63,8 +63,19 @@ class EliteWeaponData {
 		return false
 	}
 
+	fun getWeaponUuid(item: ItemStack): String? {
+		val meta = item.itemMeta ?: return null
+		meta?.persistentDataContainer?.get(
+			NamespacedKey("qplugin", "uuid"),
+			PersistentDataType.STRING
+		)?.let {
+			return meta.persistentDataContainer.get(NamespacedKey("qplugin", "uuid"), PersistentDataType.STRING)
+		}
+		return null
+	}
+
 	fun cacheWeaponsForSpecUser(username: String) {
-		val list = gson.fromJson<List<EliteWeapon>>(Request.sendGetRequest(Config.API_ENDPOINT + "/qo/elite/download?username=$username").get(), listType)
+		val list = gson.fromJson<MutableList<EliteWeapon>>(Request.sendGetRequest(Config.API_ENDPOINT + "/qo/elite/download?username=$username").get(), listType)
 		EliteWeaponCache[username] = list
 	}
 
@@ -83,8 +94,21 @@ class EliteWeaponData {
 			meta.persistentDataContainer.set(NamespacedKey("qplugin", "uuid"), PersistentDataType.STRING, result.get("uuid").asString)
 			item.itemMeta = meta
 		}
+
 		val lore =  listOf(Component.text(desc).color(TextColor.fromHexString("#414DA7")))
 		meta.lore(lore)
+		addWeaponInfoToCache(player.name, EliteWeapon(
+			uuid = result.get("uuid").asString,
+			owner = player.name,
+			type = type.name,
+			damage = 0,
+			kills = 0,
+			description = desc
+		))
 		return Pair(item, WeaponReason.OK)
+	}
+
+	fun addWeaponInfoToCache(username: String, eliteWeapon: EliteWeapon) {
+		EliteWeaponCache[username]?.add(eliteWeapon)
 	}
 }

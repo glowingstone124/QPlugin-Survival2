@@ -26,6 +26,8 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.adventures.Trigger;
+import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponCmd;
+import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponListener;
 import vip.qoriginal.quantumplugin.event.Locker;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
@@ -95,6 +97,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 new FriendlyTnt(),
                 new Locker(),
                 new Trigger(),
+                new EliteWeaponListener()
         };
 
         Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
@@ -151,6 +154,7 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         }
         SegmentMap.init();
+        Objects.requireNonNull(this.getCommand("elite")).setExecutor(new EliteWeaponCmd());
         /*Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
         Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
         Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());*/

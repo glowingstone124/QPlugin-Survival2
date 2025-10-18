@@ -46,3 +46,6 @@ commands:
   leavemessage:
     description: Send messages to an offline player.
     usage: /leavemessage <player> <message>
+  elite:
+    description: Make your weapon on main hand a elite weapon/
+    usage: /<command> <description>
