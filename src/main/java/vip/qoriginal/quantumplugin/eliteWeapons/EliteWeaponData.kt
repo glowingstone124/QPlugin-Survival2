@@ -2,9 +2,9 @@ package vip.qoriginal.quantumplugin.eliteWeapons
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
-import io.papermc.paper.command.brigadier.argument.ArgumentTypes.player
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.TextColor
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
@@ -83,6 +83,8 @@ class EliteWeaponData {
 			meta.persistentDataContainer.set(NamespacedKey("qplugin", "uuid"), PersistentDataType.STRING, result.get("uuid").asString)
 			item.itemMeta = meta
 		}
+		val lore =  listOf(Component.text(desc).color(TextColor.fromHexString("#414DA7")))
+		meta.lore(lore)
 		return Pair(item, WeaponReason.OK)
 	}
 }
