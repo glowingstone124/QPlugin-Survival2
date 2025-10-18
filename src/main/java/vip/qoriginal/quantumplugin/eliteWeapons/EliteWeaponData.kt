@@ -79,34 +79,56 @@ class EliteWeaponData {
 		EliteWeaponCache[username] = list
 	}
 
-	fun applyWeaponData(item: ItemStack, player: Player,desc:String):Pair<ItemStack, WeaponReason> {
-		val meta = item.itemMeta
-		if (meta.persistentDataContainer.get(NamespacedKey("qplugin", "uuid"), PersistentDataType.STRING) != null) return Pair(item, WeaponReason.HAS_ALREADY_UPDATED)
+	fun applyWeaponData(item: ItemStack, player: Player, desc: String, name: String): Pair<ItemStack, WeaponReason> {
+		val meta = item.itemMeta ?: return Pair(item, WeaponReason.NOT_A_VALID_ITEM)
+
+		// 判断是否已绑定
+		if (meta.persistentDataContainer.get(NamespacedKey("qplugin", "uuid"), PersistentDataType.STRING) != null) {
+			return Pair(item, WeaponReason.HAS_ALREADY_UPDATED)
+		}
 
 		val type = item.type
 		if (type !in ELITE_ITEMS_CLOSECOMBAT && type !in ELITE_ITEMS_RANGED) {
 			return Pair(item, WeaponReason.NOT_A_VALID_ITEM)
 		}
 
-		val result = Request.sendGetRequest(Config.API_ENDPOINT + "/qo/elite/create?owner=${player.name}&type=${item.type.name}&description=$desc").get().asJsonObject()
+		val result = Request
+			.sendGetRequest("${Config.API_ENDPOINT}/qo/elite/create?owner=${player.name}&type=${item.type.name}&description=$desc&name=$name")
+			.get()
+			.asJsonObject()
 
 		if (result.get("result").asBoolean) {
-			meta.persistentDataContainer.set(NamespacedKey("qplugin", "uuid"), PersistentDataType.STRING, result.get("uuid").asString)
+			val uuid = result.get("uuid").asString
+
+			meta.persistentDataContainer.set(
+				NamespacedKey("qplugin", "uuid"),
+				PersistentDataType.STRING,
+				uuid
+			)
+
+			meta.displayName(Component.text(name).color(TextColor.fromHexString("#FFD700"))) // 金色标题
+			meta.lore(listOf(Component.text(desc).color(TextColor.fromHexString("#414DA7"))))
+
 			item.itemMeta = meta
+
+			addWeaponInfoToCache(
+				player.name,
+				EliteWeapon(
+					uuid = uuid,
+					owner = player.name,
+					type = type.name,
+					damage = 0,
+					kills = 0,
+					description = desc
+				)
+			)
+
+			return Pair(item, WeaponReason.OK)
 		}
 
-		val lore =  listOf(Component.text(desc).color(TextColor.fromHexString("#414DA7")))
-		meta.lore(lore)
-		addWeaponInfoToCache(player.name, EliteWeapon(
-			uuid = result.get("uuid").asString,
-			owner = player.name,
-			type = type.name,
-			damage = 0,
-			kills = 0,
-			description = desc
-		))
-		return Pair(item, WeaponReason.OK)
+		return Pair(item, WeaponReason.NOT_A_VALID_ITEM)
 	}
+
 
 	fun addWeaponInfoToCache(username: String, eliteWeapon: EliteWeapon) {
 		EliteWeaponCache[username]?.add(eliteWeapon)

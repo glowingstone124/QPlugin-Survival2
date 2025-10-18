@@ -5,6 +5,10 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDeathEvent
+import org.bukkit.event.inventory.InventoryClickEvent
+import org.bukkit.event.inventory.InventoryType
+import org.bukkit.event.inventory.PrepareAnvilEvent
+import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.ItemStack
 import vip.qoriginal.quantumplugin.Config
 import vip.qoriginal.quantumplugin.Request
@@ -35,4 +39,23 @@ class EliteWeaponListener : Listener {
 		}
 	}
 
+	@EventHandler
+	fun onAnvilPrepare(event: PrepareAnvilEvent) {
+		val result = event.result ?: return
+
+		if (eldata.checkIfWeaponHasEliteData(result)) {
+			event.result = null
+		}
+	}
+
+	@EventHandler
+	fun onAnvilClick(event: InventoryClickEvent) {
+		val inv = event.inventory
+		if (inv.type != InventoryType.ANVIL) return
+
+		val current = event.currentItem ?: return
+		if (eldata.checkIfWeaponHasEliteData(current)) {
+			event.isCancelled = true
+		}
+	}
 }

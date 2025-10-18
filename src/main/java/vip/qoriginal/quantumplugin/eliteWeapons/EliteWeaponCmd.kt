@@ -17,11 +17,12 @@ class EliteWeaponCmd: CommandExecutor {
 	): Boolean {
 		val player = p0 as Player
 		if (p3.isEmpty()) {
-			player.sendMessage(Component.text("您需要为elite weapon指定一个铭文。若有空格，使用“”包裹整段文字。"))
+			player.sendMessage(Component.text("您需要为elite weapon指定一个名字和对应的铭文，格式为/elite <name> <inscriptions>。若有空格，使用“”包裹整段文字。"))
 			return true
 		}
-		val inscription = p3.joinToString(" ").trim('"')
-		val result = eliteWeaponData.applyWeaponData(player.inventory.itemInMainHand, player, inscription)
+		val name = p3[0]
+		val inscription = p3.drop(1).joinToString(" ").trim('"')
+		val result = eliteWeaponData.applyWeaponData(player.inventory.itemInMainHand, player, inscription, name)
 		when (result.second) {
 			EliteWeaponData.WeaponReason.NOT_A_VALID_ITEM -> {
 				player.sendMessage(Component.text("您的物品不合法。"))
