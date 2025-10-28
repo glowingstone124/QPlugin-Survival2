@@ -13,6 +13,8 @@ import org.bukkit.persistence.PersistentDataType
 import vip.qoriginal.quantumplugin.Config
 import vip.qoriginal.quantumplugin.Request
 import vip.qoriginal.quantumplugin.asJsonObject
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 class EliteWeaponData {
 
@@ -92,8 +94,12 @@ class EliteWeaponData {
 			return Pair(item, WeaponReason.NOT_A_VALID_ITEM)
 		}
 
+		val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
+		val encodedDesc = URLEncoder.encode(desc, StandardCharsets.UTF_8)
+
+
 		val result = Request
-			.sendGetRequest("${Config.API_ENDPOINT}/qo/elite/create?owner=${player.name}&type=${item.type.name}&description=$desc&name=$name")
+			.sendGetRequest("${Config.API_ENDPOINT}/qo/elite/create?owner=${player.name}&type=${item.type.name}&description=$encodedDesc&name=$encodedName")
 			.get()
 			.asJsonObject()
 

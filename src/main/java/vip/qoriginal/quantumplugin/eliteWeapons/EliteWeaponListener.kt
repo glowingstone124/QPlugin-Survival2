@@ -12,6 +12,7 @@ import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.ItemStack
 import vip.qoriginal.quantumplugin.Config
 import vip.qoriginal.quantumplugin.Request
+import kotlin.math.roundToInt
 
 class EliteWeaponListener : Listener {
 	val eldata = EliteWeaponData()
@@ -24,7 +25,7 @@ class EliteWeaponListener : Listener {
 		val dmg = event.damage
 		val uuid = eldata.getWeaponUuid(item)
 		if (EliteWeaponData.EliteWeaponCache[player.name]?.find { it.uuid == uuid } != null) {
-			Request.sendPostRequest(Config.API_ENDPOINT + "/qo/elite/add?type=dmg&requester=${player.name}&uuid=${uuid}&amount=${dmg}", "")
+			Request.sendPostRequest(Config.API_ENDPOINT + "/qo/elite/add?type=dmg&requester=${player.name}&uuid=${uuid}&amount=${dmg.roundToInt()}", "")
 		}
 	}
 
