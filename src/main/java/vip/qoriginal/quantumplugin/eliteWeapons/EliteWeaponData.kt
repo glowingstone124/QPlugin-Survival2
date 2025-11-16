@@ -11,6 +11,8 @@ import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import vip.qoriginal.quantumplugin.Config
+import vip.qoriginal.quantumplugin.Logger
+import vip.qoriginal.quantumplugin.LoggerProvider
 import vip.qoriginal.quantumplugin.Request
 import vip.qoriginal.quantumplugin.asJsonObject
 import java.net.URLEncoder
@@ -18,6 +20,7 @@ import java.nio.charset.StandardCharsets
 
 class EliteWeaponData {
 
+	val logger = LoggerProvider.getLogger("EliteWeaponData")
 	val gson: Gson = GsonBuilder().setPrettyPrinting().create()
 	val listType = object : TypeToken<MutableList<EliteWeapon>>(){}.type
 	enum class WeaponReason() {
@@ -84,7 +87,6 @@ class EliteWeaponData {
 	fun applyWeaponData(item: ItemStack, player: Player, desc: String, name: String): Pair<ItemStack, WeaponReason> {
 		val meta = item.itemMeta ?: return Pair(item, WeaponReason.NOT_A_VALID_ITEM)
 
-		// 判断是否已绑定
 		if (meta.persistentDataContainer.get(NamespacedKey("qplugin", "uuid"), PersistentDataType.STRING) != null) {
 			return Pair(item, WeaponReason.HAS_ALREADY_UPDATED)
 		}
@@ -99,7 +101,7 @@ class EliteWeaponData {
 
 
 		val result = Request
-			.sendGetRequest("${Config.API_ENDPOINT}/qo/elite/create?owner=${player.name}&type=${item.type.name}&description=$encodedDesc&name=$encodedName")
+			.sendGetRequest(logger.strWithDebugPrint("${Config.API_ENDPOINT}/qo/elite/create?owner=${player.name}&type=${item.type.name}&description=$encodedDesc&name=$encodedName"))
 			.get()
 			.asJsonObject()
 
@@ -112,7 +114,7 @@ class EliteWeaponData {
 				uuid
 			)
 
-			meta.displayName(Component.text(name).color(TextColor.fromHexString("#FFD700"))) // 金色标题
+			meta.displayName(Component.text(name).color(TextColor.fromHexString("#FFD700")))
 			meta.lore(listOf(Component.text(desc).color(TextColor.fromHexString("#414DA7"))))
 
 			item.itemMeta = meta

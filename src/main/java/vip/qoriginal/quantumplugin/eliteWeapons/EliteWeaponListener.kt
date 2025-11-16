@@ -11,11 +11,13 @@ import org.bukkit.event.inventory.PrepareAnvilEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.ItemStack
 import vip.qoriginal.quantumplugin.Config
+import vip.qoriginal.quantumplugin.LoggerProvider
 import vip.qoriginal.quantumplugin.Request
 import kotlin.math.roundToInt
 
 class EliteWeaponListener : Listener {
 	val eldata = EliteWeaponData()
+	val logger = LoggerProvider.getLogger("EliteWeaponListener")
 	@EventHandler
 	fun onPlayerAttack(event: EntityDamageByEntityEvent) {
 		val player = event.damager
@@ -25,7 +27,7 @@ class EliteWeaponListener : Listener {
 		val dmg = event.damage
 		val uuid = eldata.getWeaponUuid(item)
 		if (EliteWeaponData.EliteWeaponCache[player.name]?.find { it.uuid == uuid } != null) {
-			Request.sendPostRequest(Config.API_ENDPOINT + "/qo/elite/add?type=dmg&requester=${player.name}&uuid=${uuid}&amount=${dmg.roundToInt()}", "")
+			Request.sendPostRequest(logger.strWithDebugPrint(Config.API_ENDPOINT + "/qo/elite/add?type=dmg&requester=${player.name}&uuid=${uuid}&amount=${dmg.roundToInt()}"), "")
 		}
 	}
 
@@ -36,7 +38,7 @@ class EliteWeaponListener : Listener {
 		if (!eldata.checkIfWeaponHasEliteData(item)) return
 		val uuid = eldata.getWeaponUuid(item)
 		if (EliteWeaponData.EliteWeaponCache[entity.name]?.find { it.uuid == uuid } != null) {
-			Request.sendPostRequest(Config.API_ENDPOINT + "/qo/elite/add?type=kill&requester=${entity.name}&uuid=${uuid}&amount=1", "")
+			Request.sendPostRequest(logger.strWithDebugPrint(Config.API_ENDPOINT + "/qo/elite/add?type=kill&requester=${entity.name}&uuid=${uuid}&amount=1"), "")
 		}
 	}
 

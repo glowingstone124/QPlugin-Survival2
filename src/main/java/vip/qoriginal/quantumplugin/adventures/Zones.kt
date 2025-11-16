@@ -5,12 +5,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.bukkit.Location
 import org.bukkit.entity.Player
+import vip.qoriginal.quantumplugin.Logger
+import vip.qoriginal.quantumplugin.LoggerProvider
 import vip.qoriginal.quantumplugin.QuantumPlugin.WORLD_MAIN
 import java.util.UUID
 
 class Zones {
-
 	companion object {
+		val logger = LoggerProvider.getLogger("AdventureZone")
 		val trigger = Trigger()
 		val ZONE_LIST = listOf(
 			Zone(
@@ -19,13 +21,13 @@ class Zones {
 				Location(WORLD_MAIN, -1456.0, -64.0, 596.0),
 				10_000L,
 				{ player ->
-					println("player entered Prometheus zone")
+					logger.debug("player entered Prometheus zone")
 					CoroutineScope(Dispatchers.IO).launch {
 						trigger.call(TriggerType.REIMU_AND_MARISA, player)
 					}
 				},
 				{ player ->
-					println("player left Prometheus zone")
+					logger.debug("player left Prometheus zone")
 				}
 			),
 
@@ -35,13 +37,13 @@ class Zones {
 				Location(WORLD_MAIN, -11627.0, 320.0, 1042.0),
 				10_000L,
 				{ player ->
-					println("player entered FuIsland")
+					logger.debug("player entered FuIsland")
 					CoroutineScope(Dispatchers.IO).launch {
 						trigger.call(TriggerType.ORIN)
 					}
 				},
 				{ player ->
-					println("player left FuIsland")
+					logger.debug("player left FuIsland")
 				}
 			)
 		)

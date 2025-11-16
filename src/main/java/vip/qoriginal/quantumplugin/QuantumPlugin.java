@@ -51,11 +51,13 @@ public final class QuantumPlugin extends JavaPlugin {
     Login login = new Login();
     ChatSync cs = new ChatSync();
 
+    public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
 
     @Override
     public void onEnable() {
-         WORLD_MAIN = Bukkit.getWorld("world");
+        DEBUG_FLAG = System.getenv("DEBUG").equals("true");
+        WORLD_MAIN = Bukkit.getWorld("world");
         instance = this;
         Trigger trigger = new Trigger();
         System.out.println("starting scanning triggers");
@@ -63,6 +65,9 @@ public final class QuantumPlugin extends JavaPlugin {
         System.out.println("end scanning triggers");
         webMsgGetterTask = new WebMsgGetter();
         System.out.println("1.14.5.5.1 Started.");
+        if (DEBUG_FLAG) {
+            System.out.println("QPlugin is running in debug mode. More logs will be written. Set DEBUG=false to disable this feature.");
+        }
         try {
             JoinLeaveListener.init();
         } catch (IOException e) {

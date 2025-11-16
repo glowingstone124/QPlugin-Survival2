@@ -16,6 +16,8 @@ import org.bukkit.event.Listener
 import org.bukkit.event.enchantment.EnchantItemEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.potion.PotionEffectType
+import vip.qoriginal.quantumplugin.Logger
+import vip.qoriginal.quantumplugin.LoggerProvider
 import vip.qoriginal.quantumplugin.QuantumPlugin.WORLD_MAIN
 import java.util.UUID
 import kotlin.math.max
@@ -26,7 +28,7 @@ import kotlin.reflect.jvm.kotlinFunction
 class Trigger : Listener {
 	private val lastTriggerTime = mutableMapOf<UUID, Long>()
 	private val COOLDOWN = 10_000L
-
+	private val logger = LoggerProvider.getLogger("AdventuresTrigger")
 	companion object {
 		private val triggerMap: MutableMap<TriggerType, MutableList<Pair<Any, java.lang.reflect.Method>>> =
 			mutableMapOf()
@@ -40,7 +42,7 @@ class Trigger : Listener {
 				Location(WORLD_MAIN, -2197.0, 320.0, 1624.0)
 			)
 		) {
-			println("triggered eventhandler")
+			logger.debug("triggered eventhandler")
 			call(TriggerType.PATCHOULI, event.enchanter)
 		}
 	}
@@ -74,7 +76,7 @@ class Trigger : Listener {
 		val weapon = killer.inventory.itemInMainHand
 		if (weapon.type != Material.IRON_SWORD) return@runBlocking
 		if (!killer.hasPotionEffect(PotionEffectType.INVISIBILITY)) return@runBlocking
-		println("triggered eventhandler")
+		logger.debug("triggered eventhandler")
 		call(TriggerType.KOISHI, killer)
 	}
 
@@ -88,7 +90,7 @@ class Trigger : Listener {
 			.enableAnnotationInfo()
 			.scan().use { scanResult ->
 				val classesWithAnnotation = scanResult.getClassesWithMethodAnnotation(SubscribeTrigger::class.java.name)
-				println("扫描到类数量: ${classesWithAnnotation.size}")
+				logger.debug("扫描到类数量: ${classesWithAnnotation.size}")
 
 				for (classInfo in classesWithAnnotation) {
 					val clazz = classInfo.loadClass()
@@ -117,9 +119,9 @@ class Trigger : Listener {
 
 	suspend fun call(type: TriggerType, vararg args: Any?) {
 		val methods = triggerMap[type] ?: return
-		println("calling eventhandler")
+		logger.debug("calling eventhandler")
 		for ((instance, method) in methods) {
-			println("calling eventhandler ${method.name}")
+			logger.debug("calling eventhandler ${method.name}")
 			try {
 				val kfun = method.kotlinFunction
 				if (kfun?.isSuspend == true) {
