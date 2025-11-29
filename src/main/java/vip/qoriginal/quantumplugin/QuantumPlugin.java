@@ -56,6 +56,7 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        System.out.println(System.getenv("DEBUG"));
         DEBUG_FLAG = System.getenv("DEBUG").equals("true");
         WORLD_MAIN = Bukkit.getWorld("world");
         instance = this;
@@ -160,9 +161,9 @@ public final class QuantumPlugin extends JavaPlugin {
         }
         SegmentMap.init();
         Objects.requireNonNull(this.getCommand("elite")).setExecutor(new EliteWeaponCmd());
-        /*Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
+        Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
         Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
-        Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());*/
+        Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());
         Ranking ranking = new Ranking();
     }
 
@@ -172,6 +173,7 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        LoggerProvider.INSTANCE.closeAll();
         webMsgGetterTask.cancel();
         JSONObject stopObj = new JSONObject();
         stopObj.put("timestamp", System.currentTimeMillis());

@@ -15,7 +15,7 @@ import java.util.concurrent.ExecutionException;
 
 public class IPUtils {
     public static void locIsCn(PlayerJoinEvent event, Plugin plugin) {
-        Logger logger = new Logger();
+        Logger logger = LoggerProvider.INSTANCE.getLogger("IPUtils");
         Player player = event.getPlayer();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -27,7 +27,7 @@ public class IPUtils {
                 //JSONObject ipLocObj = fetchIpLocationWithRetries(ip, 3); Old ways
                 Boolean ipIsInCn = fetchIpLocationWithRetries(ip, 3);
                 if (ipIsInCn == null) {
-                    logger.log("无法获取IP地址信息", "IPUtils");
+                    logger.log("无法获取IP地址信息");
                     Utils.INSTANCE.runTaskOnMainThread(() ->
                     {
                         player.kick(Component.text("无法获取IP属地信息，看上去似乎API失效了，请联系glowingstone124."));
@@ -35,7 +35,7 @@ public class IPUtils {
                     return;
                 }
 
-                logger.log("Player " + player.getName() + " logging in with an IP " + ip , "IPUtils");
+                logger.log("Player " + player.getName() + " logging in with an IP " + ip );
                 if (!ipIsInCn) {
                     player.sendMessage("你正在使用一个非中国大陆IP登录。");
                     cs.sendChatMsg("玩家 " + player.getName() + " 正在使用一个非中国大陆IP登录");

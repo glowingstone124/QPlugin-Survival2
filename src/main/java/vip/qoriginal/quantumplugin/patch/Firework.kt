@@ -22,6 +22,10 @@ import kotlin.random.Random
 class Firework : CommandExecutor {
 	val list = Files.readString(Path.of("newyear.txt")).split("\n".toRegex())
 	override fun onCommand(p0: CommandSender, p1: Command, p2: String, p3: Array<out String>): Boolean {
+		if (!EventTiming.isEventActive(Events.NEWYEAR_2026)) {
+			p0.sendMessage("该活动还未开始。")
+			return false
+		}
 		if (p0 !is Player) {
 			p0.sendMessage("只有玩家可以使用该指令！")
 			return false
@@ -52,7 +56,7 @@ class Firework : CommandExecutor {
 				val selection = Random.nextInt(0, list.size)
 				displayName(Component.text("新年烟花").decoration(TextDecoration.BOLD, true).color(NamedTextColor.YELLOW))
 				lore(listOf(
-					Component.text("庆祝2025新年快乐的庆祝烟花: 方案${opt}").color(NamedTextColor.GREEN),
+					Component.text("庆祝2026新年的庆祝烟花: 方案${opt}").color(NamedTextColor.GREEN),
 					Component.text("由glowingstone124和古老师献上").color(NamedTextColor.AQUA),
 					Component.text(list[selection]).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, true),
 				))

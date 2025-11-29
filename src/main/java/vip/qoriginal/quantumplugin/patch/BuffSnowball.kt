@@ -42,6 +42,10 @@ class BuffSnowball: CommandExecutor, Listener {
 		label: String,
 		args: Array<out String>
 	): Boolean {
+		if (!EventTiming.isEventActive(Events.NEWYEAR_2026)) {
+			sender.sendMessage("该活动还未开始。")
+			return false
+		}
 		if (sender !is Player) {
 			sender.sendMessage("Only players can use BuffSnowball")
 			return true
@@ -54,7 +58,7 @@ class BuffSnowball: CommandExecutor, Listener {
 			meta.lore(
 				listOf<Component>(
 					Component.text("试试看扔出去？").color(NamedTextColor.YELLOW),
-					Component.text("此物品用于庆祝2025年农历春节").color(NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true),
+					Component.text("此物品用于庆祝2026年新年").color(NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true),
 					Component.text(list[selection]).color(NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, true),
 				)
 			)
@@ -74,24 +78,25 @@ class BuffSnowball: CommandExecutor, Listener {
 				val isBuffSnowball = itemInHand.itemMeta?.persistentDataContainer?.has(customSnowball, PersistentDataType.BYTE) == true
 
 				if (isBuffSnowball) {
-					/*
-					projectile.persistentDataContainer.set(customSnowball, PersistentDataType.BYTE, 1)
-					Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
-						if (!projectile.isDead && !projectile.isOnGround) {
-							projectile.world.spawnParticle(
-								Particle.FIREWORK,
-								projectile.location,
-								5,
-								0.2,
-								0.2,
-								0.2,
-								0.01
-							)
-						}
-					}, 0L, 1L)
-					*/
-					event.isCancelled = true
-					itemInHand.amount -= 1
+					if (EventTiming.isEventActive(Events.NEWYEAR_2026)) {
+						projectile.persistentDataContainer.set(customSnowball, PersistentDataType.BYTE, 1)
+						Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
+							if (!projectile.isDead && !projectile.isOnGround) {
+								projectile.world.spawnParticle(
+									Particle.FIREWORK,
+									projectile.location,
+									5,
+									0.2,
+									0.2,
+									0.2,
+									0.01
+								)
+							}
+						}, 0L, 1L)
+					} else {
+						event.isCancelled = true
+						itemInHand.amount -= 1
+					}
 				}
 			}
 		}

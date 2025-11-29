@@ -11,7 +11,7 @@ public class StatusUpload {
     public static final Map<String, String> header = new HashMap<>();
     public static final List<Long> time = new ArrayList<>();
     private static final CoroutineJava cj = new CoroutineJava();
-    private static final Logger logger = new Logger();
+    private static final Logger logger = LoggerProvider.INSTANCE.getLogger("StatusUpload");
     private static final Gson gson = new Gson();
     private static final boolean DEBUG = true;
 
@@ -26,7 +26,7 @@ public class StatusUpload {
         if (DEBUG) {
             cj.run(() -> {
                 if (time.size() >= 50) {
-                    logger.log(time.toString(), "LoggerHealth");
+                    logger.log(time.toString());
                     time.clear();
                 }
                 return null;

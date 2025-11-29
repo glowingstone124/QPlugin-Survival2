@@ -28,7 +28,7 @@ public class JoinLeaveListener implements Listener {
     Login login = new Login();
     public static final String[] blocklist = {"ServerSeeker.net"};
     public static Set<String> ip_whitelist = new HashSet<>();
-    public static final Logger logger = new Logger();
+    public static final Logger logger = LoggerProvider.INSTANCE.getLogger("JoinLeaveListener");
 
     public static void init() throws IOException {
     }
@@ -38,7 +38,7 @@ public class JoinLeaveListener implements Listener {
         String playerName = event.getName();
 
         if (Arrays.asList(blocklist).contains(playerName)) {
-            logger.log("Player " + playerName + " was blocked and wanted to join in", "LoginManager");
+            logger.log("Player " + playerName + " was blocked and wanted to join in");
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     Component.text("[403 Forbidden]")
                             .append(Component.text("this server doesn't allows ServerSeeker.").decorate(TextDecoration.BOLD)));
@@ -55,13 +55,13 @@ public class JoinLeaveListener implements Listener {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[500 Internal Server Error]内部验证出现错误。请等待之后再试。。。"));
             return;
         }
-        logger.log("Player " + playerName + " didn't register but wanted to join in", "LoginManager");
+        logger.log("Player " + playerName + " didn't register but wanted to join in");
         if (relationship.has("code") && relationship.get("code").getAsInt() == 1) {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     Component.text("[401 Unauthorized]您还没有注册QO账号，请前往app.qoriginal.vip注册您的账号并加入群946085440来验。")
                             .append(Component.text("你的游戏名：" + playerName).decorate(TextDecoration.BOLD)));
         } else if (relationship.has("frozen ") && relationship.get("frozen").getAsBoolean()) {
-            logger.log("Player " + playerName + " was frozen.", "LoginManager");
+            logger.log("Player " + playerName + " was frozen.");
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     Component.text("[403 Forbidden]验证失败，原因：您的账户已经被冻结！")
                             .append(Component.text("您的游戏名：" + playerName).decorate(TextDecoration.BOLD))

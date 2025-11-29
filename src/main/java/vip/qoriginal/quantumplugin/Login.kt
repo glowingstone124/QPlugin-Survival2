@@ -43,7 +43,7 @@ class Login : Listener {
 		val visitorPlayedMap = ConcurrentHashMap<Player, Long>()
 	}
 
-	val logger = Logger()
+	val logger = LoggerProvider.getLogger("LoginImpl")
 	val gson = Gson()
 	val eliteWeaponData = EliteWeaponData()
 
@@ -65,7 +65,7 @@ class Login : Listener {
 					it.asJsonObject["id"].asInt == 4
 				}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
 		)
-		logger.log("${player.name} logged in.", "LoginAction")
+		logger.log("${player.name} logged in.")
 		eliteWeaponData.cacheWeaponsForSpecUser(player.name)
 		ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
 	}
@@ -89,7 +89,7 @@ class Login : Listener {
 					player.addScoreboardTag("visitor_login")
 				}
 			} else {
-				logger.log("${player.name} kicked due to wrong password.", "LoginAction")
+				logger.log("${player.name} kicked due to wrong password.")
 				player.sendMessage(Component.text("登录失败，原因：密码不正确").color(NamedTextColor.RED))
 				playerLoginMap[player] = (playerLoginMap[player] ?: 0) + 1
 				if (playerLoginMap[player]!! >= 3) {

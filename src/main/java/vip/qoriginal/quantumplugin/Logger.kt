@@ -60,14 +60,14 @@ class Logger(private val clazz: String) {
 	fun debug(input: String){
 		if(!QuantumPlugin.DEBUG_FLAG) return
 		val time = LocalDateTime.now().format(sdf)
-
+		println("[DEBUG][$time][$clazz]$input")
 		channel.trySend("[DEBUG][$time][$clazz]$input")
 	}
 
 	fun strWithDebugPrint(input: String): String{
 		if(!QuantumPlugin.DEBUG_FLAG) return input
 		val time = LocalDateTime.now().format(sdf)
-
+		println("[DEBUG][$time][$clazz]$input")
 		channel.trySend("[DEBUG][$time][$clazz]$input")
 		return input
 	}

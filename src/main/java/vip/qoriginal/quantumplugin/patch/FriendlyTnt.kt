@@ -29,6 +29,10 @@ class FriendlyTnt : CommandExecutor, Listener {
 		label: String,
 		args: Array<out String>
 	): Boolean {
+		if (!EventTiming.isEventActive(Events.NEWYEAR_2026)) {
+			sender.sendMessage("该活动还未开始。")
+			return false
+		}
 		if (sender !is Player) {
 			sender.sendMessage("Only players can use this command")
 			return false
@@ -45,7 +49,7 @@ class FriendlyTnt : CommandExecutor, Listener {
 			meta.lore(
 				listOf<Component>(
 					Component.text("成分改变了不少的TNT。据说会让人飞的更高，也许依然符合物理定律吧（笑），顺便，新年快乐！说不定里面有什么惊喜...").color(NamedTextColor.YELLOW),
-					Component.text("此物品用于庆祝2025年农历春节").color(NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true),
+					Component.text("此物品用于庆祝2026年新年").color(NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true),
 					Component.text("由QO-JPL荣誉出品").color(NamedTextColor.YELLOW),
 					)
 			)
@@ -63,15 +67,16 @@ class FriendlyTnt : CommandExecutor, Listener {
 		if (item.type === Material.TNT) {
 			val meta = item.itemMeta
 			if (meta != null && meta.persistentDataContainer.has(customTntKey, PersistentDataType.BYTE)) {
-				event.isCancelled = true
-				item.amount -= 1
-				/*
-				meta.persistentDataContainer.set(customTntKey, PersistentDataType.FLOAT, 0f)
-				val location = event.blockPlaced.location
-				val tnt = location.world!!.spawn(location, TNTPrimed::class.java)
-				tnt.fuseTicks = 60
-				tnt.persistentDataContainer.set(customTntKey, PersistentDataType.BYTE, 1.toByte());
-				*/
+				if (!EventTiming.isEventActive(Events.NEWYEAR_2026)) {
+					event.isCancelled = true
+					item.amount -= 1
+				} else {
+					meta.persistentDataContainer.set(customTntKey, PersistentDataType.FLOAT, 0f)
+					val location = event.blockPlaced.location
+					val tnt = location.world!!.spawn(location, TNTPrimed::class.java)
+					tnt.fuseTicks = 60
+					tnt.persistentDataContainer.set(customTntKey, PersistentDataType.BYTE, 1.toByte());
+				}
 			}
 		}
 	}
