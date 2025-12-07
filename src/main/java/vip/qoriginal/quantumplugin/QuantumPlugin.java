@@ -164,6 +164,7 @@ public final class QuantumPlugin extends JavaPlugin {
         Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
         Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
         Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());
+        Objects.requireNonNull(this.getCommand("gm")).setExecutor(new CustomGamemodeCmd());
         Ranking ranking = new Ranking();
     }
 

@@ -49,3 +49,6 @@ commands:
   elite:
     description: Make your weapon on main hand a elite weapon/
     usage: /<command> <description>
+  gm:
+    description: Change player's gamemode
+    usage: /<command> <s/sc>
