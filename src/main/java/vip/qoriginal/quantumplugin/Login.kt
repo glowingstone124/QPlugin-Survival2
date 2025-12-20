@@ -74,7 +74,7 @@ class Login : Listener {
 		GlobalScope.launch {
 			val loginResult = withContext(Dispatchers.IO) {
 				JsonParser.parseString(
-					Request.sendGetRequest(Config.API_ENDPOINT + "/qo/game/login?username=${player.name}&password=$password&ip=${player.address.hostName}".trimIndent())
+					Request.sendGetRequest(Config.API_ENDPOINT + "/qo/game/login?username=${player.name}&password=$password&ip=${player.address?.hostName}".trimIndent())
 						.get()
 				).asJsonObject
 			}
@@ -107,7 +107,7 @@ class Login : Listener {
 			Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
 				CoroutineScope(Dispatchers.Default).launch {
 					val resultJson = JsonParser.parseString(Request.sendGetRequest(Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}").get()).asJsonObject
-					if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address.hostName) {
+					if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address?.hostName) {
 						player.sendTitlePart(TitlePart.TITLE, Component.text("自动登录成功").color(NamedTextColor.GREEN))
 						abstractLoginLogic(player)
 						player.removeScoreboardTag("guest")

@@ -60,7 +60,7 @@ public class JoinLeaveListener implements Listener {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     Component.text("[401 Unauthorized]您还没有注册QO账号，请前往app.qoriginal.vip注册您的账号并加入群946085440来验。")
                             .append(Component.text("你的游戏名：" + playerName).decorate(TextDecoration.BOLD)));
-        } else if (relationship.has("frozen ") && relationship.get("frozen").getAsBoolean()) {
+        } else if (relationship.has("frozen") && relationship.get("frozen").getAsBoolean()) {
             logger.log("Player " + playerName + " was frozen.");
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     Component.text("[403 Forbidden]验证失败，原因：您的账户已经被冻结！")
