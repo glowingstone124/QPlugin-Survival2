@@ -52,3 +52,12 @@ commands:
   gm:
     description: Change player's gamemode
     usage: /<command> <s/sc>
+  firework:
+    description: 新年烟花
+    usage: /<command>
+  newyeartnt:
+    description: 新年爆竹
+    usage: /<command>
+  newyeardumplings:
+    description: 新年团子
+    usage: /<command>
