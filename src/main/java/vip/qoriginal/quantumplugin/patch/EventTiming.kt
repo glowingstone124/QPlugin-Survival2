@@ -8,7 +8,7 @@ object EventTiming {
 	private val formatter = DateTimeFormatter.ofPattern("yyyy/M/d'T'HH:mm:ss")
 
 	private val eventMap = mapOf(
-		Events.NEWYEAR_2026 to "2026/1/1T00:00:00-2026/2/29T00:00:00"
+		Events.NEWYEAR_2026 to "2025/12/31T00:00:00-2026/2/29T00:00:00"
 	)
 
 	fun isEventActive(
