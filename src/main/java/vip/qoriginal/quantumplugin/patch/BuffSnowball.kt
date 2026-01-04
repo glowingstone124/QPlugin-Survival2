@@ -77,6 +77,10 @@ class BuffSnowball: CommandExecutor, Listener {
 
 				if (isBuffSnowball) {
 					if (EventTiming.isEventActive(Events.NEWYEAR_2026)) {
+						val v = projectile.velocity
+						val horizontalMultiplier = 1.8
+						projectile.velocity = v.clone().setX(v.x * horizontalMultiplier)
+							.setZ(v.z * horizontalMultiplier)
 						projectile.persistentDataContainer.set(customSnowball, PersistentDataType.BYTE, 1)
 						Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
 							if (!projectile.isDead && !projectile.isOnGround) {
