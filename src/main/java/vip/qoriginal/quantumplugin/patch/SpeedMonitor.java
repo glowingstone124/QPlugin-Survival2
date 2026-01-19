@@ -18,7 +18,7 @@ import java.util.Map;
 
 public class SpeedMonitor implements Listener {
     private final Plugin plugin;
-    private final Map<Player, Location> previousLocations = new HashMap<>();
+    public static final Map<Player, Location> previousLocations = new HashMap<>();
 
     public SpeedMonitor(Plugin plugin) {
         this.plugin = plugin;
@@ -55,7 +55,7 @@ public class SpeedMonitor implements Listener {
         }
     }
 
-    private double calculatePlayerSpeed(Player player) {
+    public static double calculatePlayerSpeed(Player player) {
         Location currentLocation = player.getLocation();
         Location previousLocation = previousLocations.getOrDefault(player, currentLocation);
         double horizontalDistance = Math.sqrt(Math.pow(currentLocation.getX() - previousLocation.getX(), 2) +

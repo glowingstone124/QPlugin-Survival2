@@ -24,21 +24,30 @@ class FlightAutoDetector(
 
 	private fun checkPlayers() {
 		for (player in Bukkit.getOnlinePlayers()) {
+			val uuid = player.uniqueId
+
 			if (shouldTrack(player)) {
 				val now = System.currentTimeMillis()
-				val start = airborneSince.computeIfAbsent(player.uniqueId) { now }
+				val start = airborneSince.computeIfAbsent(uuid) { now }
 
 				if (now - start >= THRESHOLD_MS) {
 					if (!flight.isFlightEnabled(player)) {
-						Flight.players[player.uniqueId] =
-							Flight.FlightInfo(FlightDestination.NONE)
+						Flight.players[uuid] = Flight.FlightInfo(FlightDestination.NONE)
 						player.sendMessage(
 							Component.text("已检测到持续飞行，飞行仪表已自动启用。").color(NamedTextColor.GREEN)
 						)
 					}
 				}
 			} else {
-				airborneSince.remove(player.uniqueId)
+				airborneSince.remove(uuid)
+				if (flight.isFlightEnabled(player)) {
+					Flight.players.remove(uuid)
+					FlightGUI.clearPlayer(player)
+
+					player.sendMessage(
+						Component.text("已着陆，飞行仪表已自动关闭。").color(NamedTextColor.GRAY)
+					)
+				}
 			}
 		}
 	}
@@ -49,17 +58,7 @@ class FlightAutoDetector(
 	}
 	private fun shouldTrack(player: Player): Boolean {
 		if (player.isDead) return false
-		if (player.isInsideVehicle) return false
 
-		if (isOnSolidGround(player)) return false
-
-		return player.isGliding || player.velocity.lengthSquared() > 0.15
+		return player.isGliding || (player.vehicle?.type == org.bukkit.entity.EntityType.HAPPY_GHAST)
 	}
-
-	private fun isOnSolidGround(player: Player): Boolean {
-		val loc = player.location
-		val below = loc.clone().add(0.0, -0.1, 0.0)
-		return below.block.type.isSolid
-	}
-
 }

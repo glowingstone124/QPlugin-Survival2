@@ -56,8 +56,8 @@ enum class FlightDestination(
 	val display: String,
 	val location: Location
 ) {
-	XCA("XCA", "锡城机场" ,Location(QuantumPlugin.WORLD_MAIN, 0.0, 0.0, 0.0)),
-	ZCA("ZCA", "主城机场", Location(QuantumPlugin.WORLD_MAIN, 0.0, 0.0, 0.0)),
-	FDA("FDA", "芙岛机场", Location(QuantumPlugin.WORLD_MAIN, 0.0, 0.0, 0.0)),
+	XCA("XCA", "锡城机场" ,Location(QuantumPlugin.WORLD_MAIN, -3817.0, 0.0, 1449.0)),
+	ZCA("ZCA", "主城机场", Location(QuantumPlugin.WORLD_MAIN, -1895.0, 0.0, 484.0)),
+	FDA("FDA", "芙岛机场", Location(QuantumPlugin.WORLD_MAIN, -11760.0,0.0,808.0)),
 	NONE("NONE", "未设置" ,Location(QuantumPlugin.WORLD_MAIN, 0.0, 0.0, 0.0)),
 }

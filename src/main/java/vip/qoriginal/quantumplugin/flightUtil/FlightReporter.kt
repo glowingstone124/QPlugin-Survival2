@@ -1,16 +1,15 @@
 package vip.qoriginal.quantumplugin.flightUtil
 
-import com.google.common.base.Optional
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.bukkit.Bukkit
-import org.jetbrains.kotlin.backend.common.push
 import vip.qoriginal.quantumplugin.Config
 import vip.qoriginal.quantumplugin.QuantumPlugin
 import vip.qoriginal.quantumplugin.Request
+import java.util.Optional
 
 data class ReportObject(
 	val name: String,
@@ -19,6 +18,7 @@ data class ReportObject(
 	val speedKmh: Float,
 	val destination: String
 )
+
 object FlightReportScheduler {
 
 	fun start() {
@@ -35,7 +35,7 @@ object FlightReportScheduler {
 
 object FlightReporter {
 
-	private val authHeader = hashMapOf<String, String>(
+	private val authHeader = mapOf(
 		"auth" to Config.API_SECRET
 	)
 
@@ -71,10 +71,13 @@ object FlightReporter {
 
 		return result
 	}
+
 	private fun report(data: List<ReportObject>) {
 		val json = Gson().toJson(data)
-		Request.sendPostRequest("${Config.API_ENDPOINT}/flight/upload", json,
-			Optional.of(authHeader) as java.util.Optional<Map<String?, String?>?>?
+		Request.sendPostRequest(
+			"${Config.API_ENDPOINT}/flight/upload",
+			json,
+			Optional.of(authHeader)
 		)
 	}
 }
