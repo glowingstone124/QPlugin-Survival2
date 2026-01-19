@@ -73,7 +73,7 @@ object FlightReporter {
 	}
 	private fun report(data: List<ReportObject>) {
 		val json = Gson().toJson(data)
-		Request.sendPostRequest("${Config.API_ENDPOINT}/flight/report/upload", json,
+		Request.sendPostRequest("${Config.API_ENDPOINT}/flight/upload", json,
 			Optional.of(authHeader) as java.util.Optional<Map<String?, String?>?>?
 		)
 	}
