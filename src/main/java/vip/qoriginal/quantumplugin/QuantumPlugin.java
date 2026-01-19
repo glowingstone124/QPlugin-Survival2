@@ -158,7 +158,7 @@ public final class QuantumPlugin extends JavaPlugin {
         flightAutoDetector = new FlightAutoDetector(this, flight);
         flightAutoDetector.start();
         FlightGUI.INSTANCE.startTicking();
-
+        FlightReportScheduler.INSTANCE.start();
         Block b = Objects.requireNonNull(Bukkit.getWorld("world")).getBlockAt(-1782, 68, 720);
         if (b.getChunk().load()) {
             if (b.getType() == Material.LEVER) {
