@@ -1,12 +1,12 @@
 package vip.qoriginal.quantumplugin;
 
 import kotlinx.coroutines.Dispatchers;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.util.Map;
 import java.util.Optional;
@@ -14,47 +14,66 @@ import java.util.concurrent.CompletableFuture;
 
 public class Request {
     static CoroutineJava cj = new CoroutineJava();
+
     public static CompletableFuture<String> sendPostRequest(String targetUrl, String data) throws Exception {
         return sendPostRequest(targetUrl, data, Optional.empty());
     }
 
-    public static CompletableFuture<String> sendPostRequest(String targetUrl, String data, Optional<Map<String, String>> headers) throws Exception {
+    public static CompletableFuture<String> sendPostRequest(
+            String targetUrl,
+            String data,
+            Optional<Map<String, String>> headers
+    ) {
         return cj.run(() -> {
-            String result = "";
             HttpURLConnection connection = null;
             try {
-                URL url = new URL(targetUrl);
+                URL url = new URI(targetUrl).toURL();
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
-                connection.setRequestProperty("Content-Type", "application/json");
-                HttpURLConnection finalConnection = connection;
-                headers.ifPresent(h -> {
-                    for (Map.Entry<String, String> header : h.entrySet()) {
-                        finalConnection.setRequestProperty(header.getKey(), header.getValue());
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+
+                connection.setConnectTimeout(3000);
+                connection.setReadTimeout(3000);
+
+                if (headers.isPresent()) {
+                    for (Map.Entry<String, String> header : headers.get().entrySet()) {
+                        connection.setRequestProperty(header.getKey(), header.getValue());
                     }
-                });
+                }
+
                 connection.setDoOutput(true);
-                connection.setDoInput(true);
-                try (DataOutputStream outputStream = new DataOutputStream(connection.getOutputStream())) {
-                    outputStream.writeBytes(data);
+
+                byte[] payload = data.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                connection.setFixedLengthStreamingMode(payload.length);
+
+                try (DataOutputStream out = new DataOutputStream(connection.getOutputStream())) {
+                    out.write(payload);
                 }
-                int responseCode = connection.getResponseCode();
-                if (responseCode == HttpURLConnection.HTTP_OK) {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            result += line;
-                        }
+
+                int code = connection.getResponseCode();
+                if (code != HttpURLConnection.HTTP_OK) {
+                    return "";
+                }
+
+                StringBuilder sb = new StringBuilder(256);
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream(), java.nio.charset.StandardCharsets.UTF_8)
+                )) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        sb.append(line);
                     }
                 }
+
+                return sb.toString();
             } finally {
                 if (connection != null) {
                     connection.disconnect();
                 }
             }
-            return result;
         }, Dispatchers.getIO());
     }
+
 
     public static CompletableFuture<String> sendGetRequest(String targetUrl) {
         return sendGetRequest(targetUrl, Optional.empty());
@@ -62,25 +81,30 @@ public class Request {
 
     public static CompletableFuture<String> sendGetRequest(String targetUrl, Optional<Map<String, String>> headers) {
         return cj.run(() -> {
-            String result = "";
             HttpURLConnection connection = null;
+            StringBuilder result = new StringBuilder(256);
             try {
-                URL url = new URL(targetUrl);
+                URL url = new URI(targetUrl).toURL();
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
-                connection.setRequestProperty("Content-Type", "application/json");
-                HttpURLConnection finalConnection = connection;
-                headers.ifPresent(h -> {
-                    for (Map.Entry<String, String> header : h.entrySet()) {
-                        finalConnection.setRequestProperty(header.getKey(), header.getValue());
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                connection.setConnectTimeout(3000);
+                connection.setReadTimeout(3000);
+
+                if (headers.isPresent()) {
+                    for (Map.Entry<String, String> header : headers.get().entrySet()) {
+                        connection.setRequestProperty(header.getKey(), header.getValue());
                     }
-                });
+                }
+
                 int responseCode = connection.getResponseCode();
                 if (responseCode == HttpURLConnection.HTTP_OK) {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                    try (BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(connection.getInputStream(), java.nio.charset.StandardCharsets.UTF_8)
+                    )) {
                         String line;
                         while ((line = reader.readLine()) != null) {
-                            result += line;
+                            result.append(line);
                         }
                     }
                 }
@@ -89,7 +113,7 @@ public class Request {
                     connection.disconnect();
                 }
             }
-            return result;
+            return result.toString();
         }, Dispatchers.getIO());
     }
 }

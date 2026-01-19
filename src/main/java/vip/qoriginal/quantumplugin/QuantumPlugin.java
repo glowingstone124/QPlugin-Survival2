@@ -29,6 +29,7 @@ import vip.qoriginal.quantumplugin.adventures.Trigger;
 import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponCmd;
 import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponListener;
 import vip.qoriginal.quantumplugin.event.Locker;
+import vip.qoriginal.quantumplugin.flightUtil.*;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
@@ -50,7 +51,8 @@ public final class QuantumPlugin extends JavaPlugin {
     LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
     ChatSync cs = new ChatSync();
-
+    FlightAutoDetector flightAutoDetector;
+    Flight flight = new Flight();
     public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
 
@@ -103,7 +105,8 @@ public final class QuantumPlugin extends JavaPlugin {
                 new FriendlyTnt(),
                 new Locker(),
                 new Trigger(),
-                new EliteWeaponListener()
+                new EliteWeaponListener(),
+                new FlightListener(),
         };
 
         Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
@@ -152,6 +155,10 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         }.runTaskTimer(this, 0L, 20*20L); // 每20秒
 
+        flightAutoDetector = new FlightAutoDetector(this, flight);
+        flightAutoDetector.start();
+        FlightGUI.INSTANCE.startTicking();
+
         Block b = Objects.requireNonNull(Bukkit.getWorld("world")).getBlockAt(-1782, 68, 720);
         if (b.getChunk().load()) {
             if (b.getType() == Material.LEVER) {
@@ -165,6 +172,7 @@ public final class QuantumPlugin extends JavaPlugin {
         Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
         Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());
         Objects.requireNonNull(this.getCommand("gm")).setExecutor(new CustomGamemodeCmd());
+        Objects.requireNonNull(this.getCommand("flight")).setExecutor(new FlightCommandExecutor());
         Ranking ranking = new Ranking();
     }
 

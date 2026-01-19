@@ -61,3 +61,6 @@ commands:
   newyeardumplings:
     description: 新年团子
     usage: /<command>
+  flight:
+    description: 配置飞行面板
+    usage: /<command> [report|gui|dest]
