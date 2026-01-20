@@ -30,7 +30,7 @@ public class Request {
                 URL url = new URI(targetUrl).toURL();
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                connection.setRequestProperty("Content-Type", "application/json");
 
                 connection.setConnectTimeout(3000);
                 connection.setReadTimeout(3000);
@@ -43,11 +43,8 @@ public class Request {
 
                 connection.setDoOutput(true);
 
-                byte[] payload = data.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                connection.setFixedLengthStreamingMode(payload.length);
-
                 try (DataOutputStream out = new DataOutputStream(connection.getOutputStream())) {
-                    out.write(payload);
+                    out.writeBytes(data);
                 }
 
                 int code = connection.getResponseCode();
@@ -87,7 +84,7 @@ public class Request {
                 URL url = new URI(targetUrl).toURL();
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                connection.setRequestProperty("Content-Type", "application/json");
                 connection.setConnectTimeout(3000);
                 connection.setReadTimeout(3000);
 
@@ -100,7 +97,7 @@ public class Request {
                 int responseCode = connection.getResponseCode();
                 if (responseCode == HttpURLConnection.HTTP_OK) {
                     try (BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(connection.getInputStream(), java.nio.charset.StandardCharsets.UTF_8)
+                            new InputStreamReader(connection.getInputStream())
                     )) {
                         String line;
                         while ((line = reader.readLine()) != null) {
