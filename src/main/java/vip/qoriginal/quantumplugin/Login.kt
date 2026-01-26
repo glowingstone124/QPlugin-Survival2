@@ -24,6 +24,7 @@ import org.bukkit.scheduler.BukkitRunnable
 import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponData
 import vip.qoriginal.quantumplugin.patch.Utils
 import java.lang.Runnable
+import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 
 
@@ -40,6 +41,7 @@ class Login : Listener {
 
 	companion object {
 		val playerLoginMap = ConcurrentHashMap<Player, Int>()
+		val playerTokenMap = ConcurrentHashMap<Player, String>()
 		val visitorPlayedMap = ConcurrentHashMap<Player, Long>()
 	}
 
@@ -47,7 +49,7 @@ class Login : Listener {
 	val gson = Gson()
 	val eliteWeaponData = EliteWeaponData()
 
-	suspend fun abstractLoginLogic(player: Player){
+	suspend fun abstractLoginLogic(player: Player) {
 		val time = withContext(Dispatchers.IO) {
 			JsonParser.parseString(
 				Request.sendGetRequest(Config.API_ENDPOINT + "/qo/download/logingreeting?username=${player.name}")
@@ -55,20 +57,30 @@ class Login : Listener {
 			).asJsonObject
 		}
 		player.sendMessage(
-			Component.text("登录成功，您已经游玩 ${time["time"].asJsonObject["time"].asLong} 分钟").color(NamedTextColor.GREEN)
+			Component.text("登录成功，您已经游玩 ${time["time"].asJsonObject["time"].asLong} 分钟")
+				.color(NamedTextColor.GREEN)
 				.appendNewline()
-				.append(Component.text("生存在线玩家：${time["online"].asJsonArray.firstOrNull {
-					it.asJsonObject["id"].asInt == 1
-				}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
+				.append(
+					Component.text(
+						"生存在线玩家：${
+							time["online"].asJsonArray.firstOrNull {
+								it.asJsonObject["id"].asInt == 1
+							}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"
+						}"))
 				.appendNewline()
-				.append(Component.text("创造在线玩家：${time["online"].asJsonArray.firstOrNull {
-					it.asJsonObject["id"].asInt == 4
-				}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"}"))
+				.append(
+					Component.text(
+						"创造在线玩家：${
+							time["online"].asJsonArray.firstOrNull {
+								it.asJsonObject["id"].asInt == 4
+							}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"
+						}"))
 		)
 		logger.log("${player.name} logged in.")
 		eliteWeaponData.cacheWeaponsForSpecUser(player.name)
 		ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
 	}
+
 	@OptIn(DelicateCoroutinesApi::class)
 	fun performLogin(player: Player, password: String) {
 		GlobalScope.launch {
@@ -80,6 +92,10 @@ class Login : Listener {
 			}
 			if (loginResult.get("result").asBoolean) {
 				player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
+				val token = loginResult.get("token")?.asString ?: ""
+				if (token.isNotBlank()) {
+					playerTokenMap[player] = token
+				}
 				if (player.scoreboardTags.contains("guest")) {
 					abstractLoginLogic(player)
 					player.removeScoreboardTag("guest")
@@ -106,9 +122,18 @@ class Login : Listener {
 			player.addScoreboardTag("guest")
 			Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
 				CoroutineScope(Dispatchers.Default).launch {
-					val resultJson = JsonParser.parseString(Request.sendGetRequest(Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}").get()).asJsonObject
+					val token = playerTokenMap[player] ?: return@launch
+					val resultJson = JsonParser.parseString(
+						Request.sendGetRequest(
+							Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}",
+							Optional.of(mapOf("Authorization" to "Bearer $token"))
+						).get()
+					).asJsonObject
 					if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address?.hostName) {
-						player.sendTitlePart(TitlePart.TITLE, Component.text("自动登录成功").color(NamedTextColor.GREEN))
+						player.sendTitlePart(
+							TitlePart.TITLE,
+							Component.text("自动登录成功").color(NamedTextColor.GREEN)
+						)
 						abstractLoginLogic(player)
 						player.removeScoreboardTag("guest")
 					}
@@ -125,6 +150,7 @@ class Login : Listener {
 			}
 		}, 0, 20)
 	}
+
 	@EventHandler
 	fun onPlayerMove(event: PlayerMoveEvent) = handleEvent(event)
 
@@ -175,6 +201,7 @@ class Login : Listener {
 			event.isCancelled = true
 		}
 	}
+
 	fun performKick(player: Player, reason: Component) {
 		Utils.runTaskOnMainThread {
 			player.kick(reason)
@@ -187,9 +214,13 @@ class Login : Listener {
 			System.currentTimeMillis(),
 			success,
 		)
-		Request.sendPostRequest(Config.API_ENDPOINT + "/qo/upload/loginattempt?auth=${Config.API_PERM_KEY}", gson.toJson(logClazz))
+		Request.sendPostRequest(
+			Config.API_ENDPOINT + "/qo/upload/loginattempt?auth=${Config.API_PERM_KEY}",
+			gson.toJson(logClazz)
+		)
 	}
 }
+
 data class LoginLog(
 	val user: String,
 	val date: Long,
