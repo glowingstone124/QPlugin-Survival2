@@ -23,6 +23,7 @@ import org.bukkit.metadata.MetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.adventures.Trigger;
@@ -42,9 +43,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class QuantumPlugin extends JavaPlugin {
 
-    private WebMsgGetter webMsgGetterTask;
     boolean enableMetro = true;
     private static QuantumPlugin instance;
+    private BukkitTask webMsgGetterTask;
     PlayerInventoryViewer piv = new PlayerInventoryViewer();
     private TextDisplay td = new TextDisplay();
     Locker locker = new Locker();
@@ -66,7 +67,6 @@ public final class QuantumPlugin extends JavaPlugin {
         System.out.println("starting scanning triggers");
         trigger.scan("vip.qoriginal.quantumplugin");
         System.out.println("end scanning triggers");
-        webMsgGetterTask = new WebMsgGetter();
         System.out.println("1.14.5.5.1 Started.");
         if (DEBUG_FLAG) {
             System.out.println("QPlugin is running in debug mode. More logs will be written. Set DEBUG=false to disable this feature.");
@@ -77,7 +77,6 @@ public final class QuantumPlugin extends JavaPlugin {
             throw new RuntimeException(e);
         }
         int delay = 0;
-        int period = 20;
         JSONObject stopObj = new JSONObject();
         stopObj.put("timestamp", System.currentTimeMillis());
         stopObj.put("stat", 0);
@@ -87,14 +86,13 @@ public final class QuantumPlugin extends JavaPlugin {
             throw new RuntimeException(e);
         }
         piv.init();
-        getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
         Listener[] needReg = {
                 new Login(),
                 new JoinLeaveListener(),
                 new ChatCommandListener(),
                 new MSPTCalculator(),
                 new Knowledge(),
-                new ChatSync(),
+                cs,
                 /*new Chat(),*/
                 new SpeedMonitor(this),
                 new NamePrefix(),
@@ -110,8 +108,7 @@ public final class QuantumPlugin extends JavaPlugin {
         };
 
         Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
-        ChatSync cs = new ChatSync();
-        cs.init();
+        webMsgGetterTask = getServer().getScheduler().runTaskTimerAsynchronously(this, cs.createWebMsgGetter(), 0L, 40L);
         if (enableMetro) {
             getServer().getPluginManager().registerEvents(new Speed(), this);
             getServer().getPluginManager().registerEvents(new LoadChunk(this), this);

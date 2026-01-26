@@ -1,7 +1,6 @@
 package vip.qoriginal.quantumplugin;
 
 import com.google.gson.*;
-import io.papermc.paper.event.player.AsyncChatEvent;
 import kotlin.Pair;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -16,10 +15,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentHashMap;
+import java.net.HttpURLConnection;
 
 import static vip.qoriginal.quantumplugin.QuantumPlugin.isShutup;
 
@@ -30,16 +27,20 @@ public class ChatSync implements Listener {
     private final static int QO_CODE = 1;
     private final static int QQ_CODE = 0;
     private static Gson gson = new Gson();
-    static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private static final long QQ_CACHE_TTL_MS = 10 * 60 * 1000L;
+    private static final Map<Long, CachedName> qqNameCache = new ConcurrentHashMap<>();
 
-    public void init() {
-        WebMsgGetter webMsgGetter = new WebMsgGetter();
-
-        scheduler.scheduleAtFixedRate(webMsgGetter, 0, 500, TimeUnit.MILLISECONDS);
+    private static class CachedName {
+        final String name;
+        final long expiresAt;
+        CachedName(String name, long expiresAt) {
+            this.name = name;
+            this.expiresAt = expiresAt;
+        }
     }
 
-    public static void exit() {
-        scheduler.shutdown();
+    public Runnable createWebMsgGetter() {
+        return new WebMsgGetter();
     }
 
     @EventHandler
@@ -75,11 +76,36 @@ public class ChatSync implements Listener {
         private String buffer = "";
         private long lastTimestamp = 0L;
         private final Object lock = new Object();
+        private String lastResponse = null;
+        private String lastEtag = null;
 
         @Override
         public void run() {
             try {
-                String response = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/download").get();
+                Map<String, String> headers = new HashMap<>();
+                if (lastEtag != null && !lastEtag.isBlank()) {
+                    headers.put("If-None-Match", lastEtag);
+                }
+                Request.Response resp = Request.sendGetRequestWithStatus(
+                        Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/download",
+                        Optional.of(headers)
+                ).get();
+                if (resp.status == HttpURLConnection.HTTP_NOT_MODIFIED) {
+                    return;
+                }
+                String response = resp.body;
+                if (response != null && response.equals(lastResponse)) {
+                    return;
+                }
+                lastResponse = response;
+                String etag = null;
+                List<String> etagHeaders = resp.headers.get("ETag");
+                if (etagHeaders != null && !etagHeaders.isEmpty()) {
+                    etag = etagHeaders.get(0);
+                }
+                if (etag != null && !etag.isBlank()) {
+                    lastEtag = etag;
+                }
                 JsonElement jsonElement = JsonParser.parseString(response);
 
                 if (jsonElement.isJsonObject()) {
@@ -172,9 +198,15 @@ public class ChatSync implements Listener {
 
         private String getQQUsername(long qq) {
             try {
+                CachedName cached = qqNameCache.get(qq);
+                if (cached != null && System.currentTimeMillis() < cached.expiresAt) {
+                    return cached.name;
+                }
                 String url = Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/name?qq=" + qq;
                 JsonObject resp = (JsonObject) JsonParser.parseString(Request.sendGetRequest(url).get());
-                return resp.get("code").getAsInt() == 0 ? resp.get("username").getAsString() : null;
+                String result = resp.get("code").getAsInt() == 0 ? resp.get("username").getAsString() : null;
+                qqNameCache.put(qq, new CachedName(result, System.currentTimeMillis() + QQ_CACHE_TTL_MS));
+                return result;
             } catch (Exception e) {
                 e.printStackTrace();
                 return null;

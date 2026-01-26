@@ -11,9 +11,15 @@ import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.patch.Utils;
 
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.concurrent.ExecutionException;
 
 public class IPUtils {
+    private static final ScheduledExecutorService RETRY_SCHEDULER = Executors.newSingleThreadScheduledExecutor();
     public static void locIsCn(PlayerJoinEvent event, Plugin plugin) {
         Logger logger = LoggerProvider.INSTANCE.getLogger("IPUtils");
         Player player = event.getPlayer();
@@ -25,51 +31,58 @@ public class IPUtils {
                     return;
                 }
                 //JSONObject ipLocObj = fetchIpLocationWithRetries(ip, 3); Old ways
-                Boolean ipIsInCn = fetchIpLocationWithRetries(ip, 3);
-                if (ipIsInCn == null) {
-                    logger.log("无法获取IP地址信息");
-                    Utils.INSTANCE.runTaskOnMainThread(() ->
-                    {
-                        player.kick(Component.text("无法获取IP属地信息，看上去似乎API失效了，请联系glowingstone124."));
-                    });
-                    return;
-                }
-
-                logger.log("Player " + player.getName() + " logging in with an IP " + ip );
-                if (!ipIsInCn) {
-                    player.sendMessage("你正在使用一个非中国大陆IP登录。");
-                    cs.sendChatMsg("玩家 " + player.getName() + " 正在使用一个非中国大陆IP登录");
-                    if (!fetchIpIsWhitelisted(ip)) {
-                        player.sendMessage("你正在使用一个非中国大陆IP登录，请联系glowingstone124或者在app.qoriginal.vip过白您的ip。您的IP：" + ip);
-                        Utils.INSTANCE.runTaskOnMainThread(() -> {
-                            player.kick(Component.text("你正在使用一个非中国大陆IP登录，请联系glowingstone124过白您的IP。您的IP：" + ip));
+                fetchIpLocationWithRetriesAsync(ip, 3, result -> {
+                    if (result == null) {
+                        logger.log("无法获取IP地址信息");
+                        Utils.INSTANCE.runTaskOnMainThread(() ->
+                        {
+                            player.kick(Component.text("无法获取IP属地信息，看上去似乎API失效了，请联系glowingstone124."));
                         });
+                        return;
                     }
-                }
+
+                    logger.log("Player " + player.getName() + " logging in with an IP " + ip );
+                    if (!result) {
+                        player.sendMessage("你正在使用一个非中国大陆IP登录。");
+                        cs.sendChatMsg("玩家 " + player.getName() + " 正在使用一个非中国大陆IP登录");
+                        try {
+                            if (!fetchIpIsWhitelisted(ip)) {
+                                player.sendMessage("你正在使用一个非中国大陆IP登录，请联系glowingstone124或者在app.qoriginal.vip过白您的ip。您的IP：" + ip);
+                                Utils.INSTANCE.runTaskOnMainThread(() -> {
+                                    player.kick(Component.text("你正在使用一个非中国大陆IP登录，请联系glowingstone124过白您的IP。您的IP：" + ip));
+                                });
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
             } catch (Exception e) {
                 e.printStackTrace();
             }
         });
     }
 
-    private static Boolean fetchIpLocationWithRetries(String ip, int retries) {
-        int attempts = 0;
-        while (attempts < retries) {
-            try {
-                String response = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/ip?ip=" + ip).get();
-                return Objects.equals("true", response);
-            } catch (Exception e) {
-                attempts++;
-                System.err.println("尝试获取IP地址信息失败，第 " + attempts + " 次重试...");
-                try {
-                    Thread.sleep(400);
-                } catch (InterruptedException interruptedException) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
+    private static void fetchIpLocationWithRetriesAsync(String ip, int retries, Consumer<Boolean> callback) {
+        fetchIpLocationWithRetriesAsync(ip, retries, 0, callback);
+    }
+
+    private static void fetchIpLocationWithRetriesAsync(String ip, int retries, int attempt, Consumer<Boolean> callback) {
+        CompletableFuture<String> request = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/ip?ip=" + ip);
+        request.handle((response, err) -> {
+            if (err == null) {
+                callback.accept(Objects.equals("true", response));
+                return null;
             }
-        }
-        return null;
+            int nextAttempt = attempt + 1;
+            if (nextAttempt >= retries) {
+                callback.accept(null);
+                return null;
+            }
+            System.err.println("尝试获取IP地址信息失败，第 " + nextAttempt + " 次重试...");
+            RETRY_SCHEDULER.schedule(() -> fetchIpLocationWithRetriesAsync(ip, retries, nextAttempt, callback), 400, TimeUnit.MILLISECONDS);
+            return null;
+        });
     }
     private static boolean fetchIpIsWhitelisted(String ip) throws ExecutionException, InterruptedException {
         JsonObject response = (JsonObject) JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/ip/whitelisted?ip=" + ip).get());

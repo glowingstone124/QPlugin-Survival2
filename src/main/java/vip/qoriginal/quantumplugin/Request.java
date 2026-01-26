@@ -14,6 +14,16 @@ import java.util.concurrent.CompletableFuture;
 
 public class Request {
     static CoroutineJava cj = new CoroutineJava();
+    public static class Response {
+        public final int status;
+        public final String body;
+        public final Map<String, java.util.List<String>> headers;
+        public Response(int status, String body, Map<String, java.util.List<String>> headers) {
+            this.status = status;
+            this.body = body;
+            this.headers = headers;
+        }
+    }
 
     public static CompletableFuture<String> sendPostRequest(String targetUrl, String data) throws Exception {
         return sendPostRequest(targetUrl, data, Optional.empty());
@@ -111,6 +121,44 @@ public class Request {
                 }
             }
             return result.toString();
+        }, Dispatchers.getIO());
+    }
+
+    public static CompletableFuture<Response> sendGetRequestWithStatus(String targetUrl, Optional<Map<String, String>> headers) {
+        return cj.run(() -> {
+            HttpURLConnection connection = null;
+            StringBuilder result = new StringBuilder(256);
+            try {
+                URL url = new URI(targetUrl).toURL();
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setConnectTimeout(3000);
+                connection.setReadTimeout(3000);
+
+                if (headers.isPresent()) {
+                    for (Map.Entry<String, String> header : headers.get().entrySet()) {
+                        connection.setRequestProperty(header.getKey(), header.getValue());
+                    }
+                }
+
+                int responseCode = connection.getResponseCode();
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    try (BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(connection.getInputStream())
+                    )) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            result.append(line);
+                        }
+                    }
+                }
+                return new Response(responseCode, result.toString(), connection.getHeaderFields());
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
         }, Dispatchers.getIO());
     }
 }

@@ -11,14 +11,14 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class PlayerInventoryViewer implements Listener {
-    private static final Map<UUID, UUID> openInventories = new HashMap<>();
-    private static final Map<String,String> keyRing = new HashMap<>();
+    private static final Map<UUID, UUID> openInventories = new ConcurrentHashMap<>();
+    private static final Map<String,String> keyRing = new ConcurrentHashMap<>();
 
     private void openInventoryForPlayer(Player viewer, Player target) {
         Inventory targetInventory = target.getInventory();
@@ -43,12 +43,21 @@ public class PlayerInventoryViewer implements Listener {
                     int operation = activity.get("approved").getAsInt();
                     String viewer = activity.get("viewer").getAsString();
                     if (operation == 0){
-                        openInventoryForPlayer(getPlayer(viewer), Objects.requireNonNull(getPlayer(username)));
+                        Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), () -> {
+                            Player viewerPlayer = getPlayer(viewer);
+                            Player ownerPlayer = getPlayer(username);
+                            if (viewerPlayer != null && ownerPlayer != null) {
+                                openInventoryForPlayer(viewerPlayer, ownerPlayer);
+                            }
+                        });
                     }
                 } catch (Exception e) {
-                    throw new RuntimeException(e);
+                    e.printStackTrace();
                 }
             });
+        }, 0L, 20L);
+
+        Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), () -> {
             for (UUID viewerUUID : openInventories.keySet()) {
                 Player viewer = Bukkit.getPlayer(viewerUUID);
                 UUID ownerUUID = openInventories.get(viewerUUID);
@@ -61,7 +70,7 @@ public class PlayerInventoryViewer implements Listener {
                     synchronizeInventories(viewerInventory, ownerInventory);
                 }
             }
-        }, 0L, 3L);
+        }, 0L, 10L);
 
     }
     public void insertKey(String playername, String key){

@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 
 class Login : Listener {
+	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 	private val eventHandlers: Map<Class<out Event>, (Player, Cancellable) -> Unit> = mapOf(
 		PlayerMoveEvent::class.java to { player, event -> handleGuestOnlyEvent(player, event) },
@@ -83,7 +84,7 @@ class Login : Listener {
 
 	@OptIn(DelicateCoroutinesApi::class)
 	fun performLogin(player: Player, password: String) {
-		GlobalScope.launch {
+		scope.launch {
 			val loginResult = withContext(Dispatchers.IO) {
 				JsonParser.parseString(
 					Request.sendGetRequest(Config.API_ENDPOINT + "/qo/game/login?username=${player.name}&password=$password&ip=${player.address?.hostName}".trimIndent())
@@ -121,7 +122,7 @@ class Login : Listener {
 		if (!visitor) {
 			player.addScoreboardTag("guest")
 			Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
-				CoroutineScope(Dispatchers.Default).launch {
+				scope.launch {
 					val token = playerTokenMap[player] ?: return@launch
 					val resultJson = JsonParser.parseString(
 						Request.sendGetRequest(
@@ -143,10 +144,8 @@ class Login : Listener {
 			player.addScoreboardTag("visitor")
 		}
 		Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
-			CoroutineScope(Dispatchers.Default).launch {
-				if (player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor")) {
-					player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
-				}
+			if (player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor")) {
+				player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
 			}
 		}, 0, 20)
 	}

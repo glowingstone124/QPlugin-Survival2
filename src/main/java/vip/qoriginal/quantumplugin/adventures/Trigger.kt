@@ -3,8 +3,8 @@ package vip.qoriginal.quantumplugin.adventures
 import io.github.classgraph.ClassGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.Material
@@ -26,6 +26,7 @@ import kotlin.reflect.full.callSuspend
 import kotlin.reflect.jvm.kotlinFunction
 
 class Trigger : Listener {
+	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 	private val lastTriggerTime = mutableMapOf<UUID, Long>()
 	private val COOLDOWN = 10_000L
 	private val logger = LoggerProvider.getLogger("AdventuresTrigger")
@@ -35,7 +36,7 @@ class Trigger : Listener {
 	}
 
 	@EventHandler
-	fun onPlayerEnchant(event: EnchantItemEvent) = runBlocking {
+	fun onPlayerEnchant(event: EnchantItemEvent) {
 		//帕秋莉岛
 		if (event.enchanter.isInZone2D(
 				Location(WORLD_MAIN, -2401.0, -64.0, 1432.0),
@@ -43,7 +44,9 @@ class Trigger : Listener {
 			)
 		) {
 			logger.debug("triggered eventhandler")
-			call(TriggerType.PATCHOULI, event.enchanter)
+			scope.launch {
+				call(TriggerType.PATCHOULI, event.enchanter)
+			}
 		}
 	}
 
@@ -68,16 +71,18 @@ class Trigger : Listener {
 
 
 	@EventHandler
-	fun onZombieDeath(event: EntityDeathEvent) = runBlocking {
-		val killer = event.entity.killer ?: return@runBlocking
+	fun onZombieDeath(event: EntityDeathEvent) {
+		val killer = event.entity.killer ?: return
 
-		if (event.entity.type != EntityType.ZOMBIE) return@runBlocking
+		if (event.entity.type != EntityType.ZOMBIE) return
 
 		val weapon = killer.inventory.itemInMainHand
-		if (weapon.type != Material.IRON_SWORD) return@runBlocking
-		if (!killer.hasPotionEffect(PotionEffectType.INVISIBILITY)) return@runBlocking
+		if (weapon.type != Material.IRON_SWORD) return
+		if (!killer.hasPotionEffect(PotionEffectType.INVISIBILITY)) return
 		logger.debug("triggered eventhandler")
-		call(TriggerType.KOISHI, killer)
+		scope.launch {
+			call(TriggerType.KOISHI, killer)
+		}
 	}
 
 	fun scan(packageName: String) {
