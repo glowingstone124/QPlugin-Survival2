@@ -45,6 +45,21 @@ class Zones {
 				{ player ->
 					logger.debug("player left FuIsland")
 				}
+			),
+			Zone(
+				"WhiteJade",
+				Location(WORLD_MAIN, -2677.0, 320.0, 2679.0),
+				Location(WORLD_MAIN, -2432.0, 320.0, 2926.0),
+				10_000L,
+				{ player ->
+					logger.debug("player entered White Jade")
+					CoroutineScope(Dispatchers.IO).launch {
+						trigger.call(TriggerType.WHITE_JADE)
+					}
+				},
+				{ player ->
+					logger.debug("player left White Jade")
+				}
 			)
 		)
 	}

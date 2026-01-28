@@ -43,6 +43,11 @@ class CardsTrigger {
 		sendAchievementIfNotCached(player, 5, Advancements.Orin_Achievement)
 	}
 
+	@NoVisitor
+	@SubscribeTrigger(TriggerType.WHITE_JADE)
+	fun onWhiteJaveEventGet(player: Player) {
+		sendAchievementIfNotCached(player, 6, Advancements.WhiteJade_Achievement)
+	}
 
 	private fun sendAchievementIfNotCached(player: Player, advancementId: Int, achievement: Achievement) {
 		val playerCache = achievementCache.computeIfAbsent(player.name) { mutableSetOf() }
@@ -110,5 +115,9 @@ object Advancements {
 	val Orin_Achievement = Achievement(
 		"世外桃源",
 		"造访芙岛"
+	)
+	val WhiteJade_Achievement = Achievement(
+		"别再吃了～",
+		"造访白玉楼"
 	)
 }

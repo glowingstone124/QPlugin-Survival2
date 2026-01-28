@@ -170,7 +170,8 @@ enum class TriggerType {
 	PATCHOULI,
 	KOISHI,
 	REIMU_AND_MARISA,
-	ORIN
+	ORIN,
+	WHITE_JADE
 }
 
 @Target(AnnotationTarget.FUNCTION)
