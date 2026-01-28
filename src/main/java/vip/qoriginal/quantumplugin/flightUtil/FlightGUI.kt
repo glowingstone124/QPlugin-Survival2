@@ -2,14 +2,11 @@ package vip.qoriginal.quantumplugin.flightUtil
 
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextColor
 import org.bukkit.Bukkit
-import org.bukkit.Color
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.inventory.meta.Damageable
 import vip.qoriginal.quantumplugin.QuantumPlugin
-import vip.qoriginal.quantumplugin.patch.SpeedMonitor
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.sqrt
@@ -17,7 +14,9 @@ import kotlin.math.sqrt
 object FlightGUI {
 	data class SpeedState(
 		var lastX: Double,
+		var lastY: Double,
 		var lastZ: Double,
+		var lastTimeMs: Long,
 		var smoothedSpeedMs: Double = 0.0,
 		var initialized: Boolean = false
 	)
@@ -31,9 +30,50 @@ object FlightGUI {
 		speedStates.remove(player.uniqueId)
 	}
 
-	fun render(player: Player, info: Flight.FlightInfo, tps: Double) {
-		val speedKmh = SpeedMonitor.calculatePlayerSpeed(player)
+	private fun updateSpeedKmh(player: Player): Double {
+		val now = System.currentTimeMillis()
+		val location = player.location
 
+		val state = speedStates.computeIfAbsent(player.uniqueId) {
+			SpeedState(
+				lastX = location.x,
+				lastY = location.y,
+				lastZ = location.z,
+				lastTimeMs = now,
+				smoothedSpeedMs = 0.0,
+				initialized = false
+			)
+		}
+
+		val deltaMs = (now - state.lastTimeMs).coerceAtLeast(1L)
+		val dx = location.x - state.lastX
+		val dy = location.y - state.lastY
+		val dz = location.z - state.lastZ
+		val distance = sqrt(dx * dx + dy * dy + dz * dz)
+
+		val instantSpeedMs = if (distance < MIN_DISTANCE) {
+			0.0
+		} else {
+			distance / (deltaMs / 1000.0)
+		}
+
+		val smoothed = if (state.initialized) {
+			EMA_ALPHA * instantSpeedMs + (1.0 - EMA_ALPHA) * state.smoothedSpeedMs
+		} else {
+			instantSpeedMs
+		}
+
+		state.lastX = location.x
+		state.lastY = location.y
+		state.lastZ = location.z
+		state.lastTimeMs = now
+		state.smoothedSpeedMs = smoothed
+		state.initialized = true
+
+		return smoothed * 3.6
+	}
+
+	fun render(player: Player, info: Flight.FlightInfo, speedKmh: Double) {
 		val destination =
 			if (info.flightDestination.id != "NONE") info.flightDestination.id else "未指定"
 
@@ -48,12 +88,11 @@ object FlightGUI {
 		Bukkit.getScheduler().runTaskTimer(
 			QuantumPlugin.getInstance(),
 			Runnable {
-				val tps = Bukkit.getTPS()[0].coerceIn(1.0, 20.0)
-
 				for ((uuid, info) in Flight.players) {
-					if (!info.guiEnable) continue
 					val player = Bukkit.getPlayer(uuid) ?: continue
-					render(player, info, tps)
+					val speedKmh = updateSpeedKmh(player)
+					if (!info.guiEnable) continue
+					render(player, info, speedKmh)
 				}
 			},
 			20L,
