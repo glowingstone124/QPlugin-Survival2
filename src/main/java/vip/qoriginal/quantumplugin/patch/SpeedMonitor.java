@@ -26,6 +26,9 @@ public class SpeedMonitor implements Listener {
 
     @EventHandler
     public void onVehicleEnter(VehicleEnterEvent event) {
+        if (event.getVehicle() instanceof HappyGhast) {
+            return;
+        }
         Entity entity = event.getEntered();
         if (entity instanceof Player) {
             Player player = (Player) entity;
