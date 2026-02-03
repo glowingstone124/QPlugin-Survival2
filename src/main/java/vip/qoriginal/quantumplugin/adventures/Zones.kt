@@ -39,7 +39,7 @@ class Zones {
 				{ player ->
 					logger.debug("player entered FuIsland")
 					CoroutineScope(Dispatchers.IO).launch {
-						trigger.call(TriggerType.ORIN)
+						trigger.call(TriggerType.ORIN, player)
 					}
 				},
 				{ player ->
@@ -54,7 +54,7 @@ class Zones {
 				{ player ->
 					logger.debug("player entered White Jade")
 					CoroutineScope(Dispatchers.IO).launch {
-						trigger.call(TriggerType.WHITE_JADE)
+						trigger.call(TriggerType.WHITE_JADE, player)
 					}
 				},
 				{ player ->
