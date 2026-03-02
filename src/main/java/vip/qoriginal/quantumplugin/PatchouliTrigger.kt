@@ -40,6 +40,7 @@ class CardsTrigger {
 	@NoVisitor
 	@SubscribeTrigger(TriggerType.ORIN)
 	fun onOrinEventGet(player: Player) {
+		player.sendMessage("欢迎进入芙岛！")
 		sendAchievementIfNotCached(player, 5, Advancements.Orin_Achievement)
 	}
 
