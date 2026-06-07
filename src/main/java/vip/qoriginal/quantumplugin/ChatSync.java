@@ -16,6 +16,7 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.net.HttpURLConnection;
 
 import static vip.qoriginal.quantumplugin.QuantumPlugin.isShutup;
@@ -89,7 +90,7 @@ public class ChatSync implements Listener {
                 Request.Response resp = Request.sendGetRequestWithStatus(
                         Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/download",
                         Optional.of(headers)
-                ).get();
+                ).get(5, TimeUnit.SECONDS);
                 if (resp.status == HttpURLConnection.HTTP_NOT_MODIFIED) {
                     return;
                 }
@@ -114,19 +115,20 @@ public class ChatSync implements Listener {
 
                     List<JsonObject> messagesToSend = new ArrayList<>();
                     synchronized (lock) {
+                        long maxSeenTimestamp = lastTimestamp;
                         for (JsonObject msg : newMessages) {
                             long messageTime = msg.get("time").getAsLong();
 
                             if (messageTime > lastTimestamp) {
                                 messagesToSend.add(msg);
-                                lastTimestamp = messageTime;
+                                maxSeenTimestamp = Math.max(maxSeenTimestamp, messageTime);
                             }
                         }
 
                         if (!messagesToSend.isEmpty()) {
                             for (JsonObject msg : messagesToSend) {
                                 int from = msg.get("from").getAsInt();
-                                if (from == QO_CODE) return;
+                                if (from == QO_CODE) continue;
 
                                 Component msgComponent = buildMessageComponent(from, msg);
 
@@ -135,6 +137,7 @@ public class ChatSync implements Listener {
                                 }
                             }
                         }
+                        lastTimestamp = maxSeenTimestamp;
                     }
                 }
             } catch (Exception e) {
