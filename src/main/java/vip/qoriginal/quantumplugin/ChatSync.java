@@ -147,8 +147,13 @@ public class ChatSync implements Listener {
 
         private List<JsonObject> parseMessages(JsonArray messagesArray) {
             List<JsonObject> messages = new ArrayList<>();
+            if (messagesArray == null) {
+                return messages;
+            }
             for (JsonElement msgElement : messagesArray) {
-                if (msgElement.isJsonPrimitive()) {
+                if (msgElement.isJsonObject()) {
+                    messages.add(msgElement.getAsJsonObject());
+                } else if (msgElement.isJsonPrimitive()) {
                     String msgStr = msgElement.getAsString();
                     JsonObject msgObj = JsonParser.parseString(msgStr).getAsJsonObject();
                     messages.add(msgObj);
