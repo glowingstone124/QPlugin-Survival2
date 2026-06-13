@@ -1,0 +1,60 @@
+name: QuantumPlugin
+version: '1.14.5.5.1'
+main: vip.qoriginal.quantumplugin.QuantumPlugin
+api-version: 1.19
+prefix: QuantumPlugin
+authors: [ glowingstone124 ]
+description: Plugin for Quantum Original
+website: https://glowingstone.cn/
+commands:
+  suicide:
+    description: 结束自己的生命
+    usage: /<command>
+  shutup:
+    description: 管理 QQ 聊天同步开关
+    usage: /<command> <enable|disable|query>
+  myloc:
+    description: 向在线玩家分享当前位置
+    usage: /<command>
+  highlight:
+    description: 用粒子高亮一个坐标方向
+    usage: /<command> <x> <y> <z>
+  showitem:
+    description: 向在线玩家展示主手物品
+    usage: /<command>
+  querybind:
+    description: 查询玩家绑定信息
+    usage: /<command> <player>
+  viewInventory:
+    description: 请求查看玩家背包
+    usage: /<command> <player>
+  summontext:
+    description: 在准星指向位置生成文字展示
+    usage: /<command> <text>
+  login:
+    description: 访客登录
+    usage: /<command> <password>
+  damageindicator:
+    description: 管理弓箭伤害提示
+    usage: /<command> <enable|disable|query>
+  leavemessage:
+    description: 给离线玩家留言
+    usage: /leavemessage <player> <message>
+  elite:
+    description: 将主手物品升级为精英武器
+    usage: /<command> <name> <inscription>
+  gm:
+    description: 切换自己的游戏模式
+    usage: /<command> <s|sc>
+  firework:
+    description: 新年烟花
+    usage: /<command> <get|launch> [type]
+  newyeartnt:
+    description: 新年爆竹
+    usage: /<command>
+  newyeardumplings:
+    description: 新年团子
+    usage: /<command>
+  flight:
+    description: 配置飞行仪表和目的地
+    usage: /<command> <report|gui|dest> ...

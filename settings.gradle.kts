@@ -3,6 +3,9 @@ pluginManagement {
 		kotlin("jvm") version "2.2.0"
 	}
 }
+include(":common")
+include(":survival")
+include(":creative")
 include(":processor")
 
 plugins {

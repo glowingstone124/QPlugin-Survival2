@@ -1,0 +1,36 @@
+name: QuantumPlugin
+version: '1.14.5.5.1'
+main: vip.qoriginal.quantumplugin.QuantumPlugin
+api-version: 1.19
+prefix: QuantumPlugin
+authors: [ glowingstone124 ]
+description: Plugin for Quantum Original
+website: https://glowingstone.cn/
+commands:
+  shutup:
+    description: 管理 QQ 聊天同步开关
+    usage: /<command> <enable|disable|query>
+  myloc:
+    description: 向在线玩家分享当前位置
+    usage: /<command>
+  highlight:
+    description: 用粒子高亮一个坐标方向
+    usage: /<command> <x> <y> <z>
+  showitem:
+    description: 向在线玩家展示主手物品
+    usage: /<command>
+  querybind:
+    description: 查询玩家绑定信息
+    usage: /<command> <player>
+  bindauth:
+    description: 确认论坛账号绑定
+    usage: /<command>
+  bind:
+    description: 发起论坛账号绑定
+    usage: /<command> <forumAccount>
+  login:
+    description: 访客登录
+    usage: /<command> <password>
+  damageindicator:
+    description: 管理弓箭伤害提示
+    usage: /<command> <enable|disable|query>

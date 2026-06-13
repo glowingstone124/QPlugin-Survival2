@@ -1,5 +1,9 @@
 # User-specific stuff
 .idea/
+.vscode/
+.settings/
+.classpath
+.project
 
 *.iml
 *.ipr
@@ -7,6 +11,12 @@
 
 # IntelliJ
 out/
+
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
 
 # Compiled class file
 *.class

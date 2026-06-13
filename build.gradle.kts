@@ -5,73 +5,118 @@
  */
 
 plugins {
-    `java-library`
-    `maven-publish`
-	id("com.google.devtools.ksp") version "2.2.0-2.0.2"
-	kotlin("jvm") version "2.2.0"
-	id("com.github.johnrengelman.shadow") version "8.1.1"
+	base
+	`maven-publish`
+	id("com.google.devtools.ksp") version "2.2.0-2.0.2" apply false
+	kotlin("jvm") version "2.2.0" apply false
+	id("com.github.johnrengelman.shadow") version "8.1.1" apply false
 }
 
-repositories {
-    mavenLocal()
-    maven {
-        url = uri("https://repo.maven.apache.org/maven2/")
-    }
+val qpluginVersion = "1.14.5.5.1"
 
-    maven {
-        url = uri("https://repo.papermc.io/repository/maven-public/")
-    }
+allprojects {
+	group = "vip.qoriginal"
+	version = qpluginVersion
+	description = "QuantumPlugin"
 
-    maven {
-        url = uri("https://oss.sonatype.org/content/groups/public/")
-    }
-	mavenCentral()
+	repositories {
+		mavenLocal()
+		maven {
+			url = uri("https://repo.maven.apache.org/maven2/")
+		}
+		maven {
+			url = uri("https://repo.papermc.io/repository/maven-public/")
+		}
+		maven {
+			url = uri("https://oss.sonatype.org/content/groups/public/")
+		}
+		mavenCentral()
+	}
 }
 
-dependencies {
-    api(libs.org.json.json)
-    api(libs.org.jetbrains.kotlin.kotlin.stdlib)
-    api(libs.org.jetbrains.kotlin.kotlin.reflect)
-    api(libs.org.jetbrains.kotlinx.kotlinx.coroutines.core)
-	implementation(kotlin("compiler-embeddable"))
-    compileOnly(libs.io.papermc.paper.paper.api)
-	ksp(project(":processor"))
-	implementation("com.google.devtools.ksp:symbol-processing-api:2.2.0-2.0.2")
-	implementation(kotlin("stdlib-jdk8"))
-	implementation("io.github.classgraph:classgraph:4.8.181")
-}
+val javaProjects = listOf(project(":common"), project(":survival"), project(":creative"))
+val jsonDependency = libs.org.json.json
+val kotlinStdlibDependency = libs.org.jetbrains.kotlin.kotlin.stdlib
+val kotlinReflectDependency = libs.org.jetbrains.kotlin.kotlin.reflect
+val coroutinesDependency = libs.org.jetbrains.kotlinx.kotlinx.coroutines.core
+val paperApiDependency = libs.io.papermc.paper.paper.api
 
-group = "vip.qoriginal"
-version = "1.14.5.5.1"
-description = "QuantumPlugin"
+configure(javaProjects) {
+	apply(plugin = "java-library")
+	apply(plugin = "org.jetbrains.kotlin.jvm")
+	apply(plugin = "maven-publish")
 
-publishing {
-    publications.create<MavenPublication>("maven") {
-        from(components["java"])
-    }
-}
+	dependencies {
+		"api"(jsonDependency)
+		"api"(kotlinStdlibDependency)
+		"api"(kotlinReflectDependency)
+		"api"(coroutinesDependency)
+		"compileOnly"(paperApiDependency)
+		"implementation"(kotlin("stdlib-jdk8"))
+	}
 
-tasks.withType<JavaCompile>() {
-    options.encoding = "UTF-8"
-}
+	tasks.withType<JavaCompile>().configureEach {
+		options.encoding = "UTF-8"
+	}
 
-tasks.withType<Javadoc>() {
-    options.encoding = "UTF-8"
-}
-kotlin {
-	jvmToolchain(21)
-}
-tasks {
-	named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
-		archiveClassifier.set("")
-		mergeServiceFiles()
-		dependencies {
-			exclude(dependency("com.google.devtools.ksp:.*"))
-			exclude(dependency("org.jetbrains.kotlin:kotlin-compiler-embeddable.*"))
+	tasks.withType<Javadoc>().configureEach {
+		options.encoding = "UTF-8"
+	}
+
+	extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension>("kotlin") {
+		jvmToolchain(21)
+		sourceSets.named("main") {
+			kotlin.setSrcDirs(listOf("src/main/java"))
 		}
 	}
 
-	build {
-		dependsOn(shadowJar)
+	publishing {
+		publications.create<MavenPublication>("maven") {
+			from(components["java"])
+		}
 	}
+}
+
+val pluginProjects = mapOf(
+	"survival" to "QuantumPlugin",
+	"creative" to "QuantumPlugin-Creative",
+)
+
+pluginProjects.forEach { (projectName, archiveName) ->
+	project(":$projectName") {
+		apply(plugin = "com.github.johnrengelman.shadow")
+
+		dependencies {
+			"implementation"(project(":common"))
+			"implementation"(kotlin("compiler-embeddable"))
+			"implementation"("com.google.devtools.ksp:symbol-processing-api:2.2.0-2.0.2")
+		}
+
+		tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+			archiveBaseName.set(archiveName)
+			archiveClassifier.set("")
+			mergeServiceFiles()
+			dependencies {
+				exclude(dependency("com.google.devtools.ksp:.*"))
+				exclude(dependency("org.jetbrains.kotlin:kotlin-compiler-embeddable.*"))
+			}
+		}
+
+		tasks.named("build") {
+			dependsOn("shadowJar")
+		}
+	}
+}
+
+project(":survival") {
+	apply(plugin = "com.google.devtools.ksp")
+
+	dependencies {
+		"ksp"(project(":processor"))
+		"implementation"("io.github.classgraph:classgraph:4.8.181")
+	}
+}
+
+tasks.named("build") {
+	dependsOn(":survival:shadowJar", ":creative:shadowJar")
 }
