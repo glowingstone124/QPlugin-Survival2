@@ -9,6 +9,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 
+import java.text.DecimalFormat;
 import java.util.*;
 
 import org.bukkit.event.Listener;
@@ -26,6 +27,7 @@ public class ChatSync implements Listener {
     private final static int SYSTEM_CODE = 2;
     private final static int QO_CODE = 1;
     private final static int QQ_CODE = 0;
+    DecimalFormat df = new DecimalFormat("#.##");
     private static Gson gson = new Gson();
     private static final long QQ_CACHE_TTL_MS = 10 * 60 * 1000L;
     private static final Map<Long, CachedName> qqNameCache = new ConcurrentHashMap<>();
@@ -94,12 +96,18 @@ public class ChatSync implements Listener {
         }
 
         try {
+            var loc = player.getLocation();
+            var world = loc.getWorld().toString();
+            var coord = "x:" + loc.getBlockX() + " y:" + loc.getBlockY() + " z:" + loc.getBlockZ();
+            var hp = df.format(player.getHealth());
             String response = Request.sendPostRequest(
                     Config.INSTANCE.getAPI_ENDPOINT() + "/qo/asking/v1/chat/completions/minecraft",
                     buildLlmRequest(prompt),
                     Optional.of(Map.of(
                             "Authorization", "Bearer " + Config.INSTANCE.getAPI_SECRET(),
-                            "X-Minecraft-Name", player.getName()
+                            "X-Minecraft-Name", player.getName(),
+                            "X-Minecraft-Coordinate", world + "," + coord,
+                            "X-Minecraft-HP", df.toString()
                     )),
                     Config.INSTANCE.llmRequestTimeoutMillis()
             ).get(Config.INSTANCE.llmRequestTimeoutMillis() + 1000L, TimeUnit.MILLISECONDS);
