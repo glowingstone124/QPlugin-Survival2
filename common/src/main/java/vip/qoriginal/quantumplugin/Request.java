@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers;
 
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -75,27 +76,30 @@ public final class Request {
                 }
 
                 int code = connection.getResponseCode();
-                if (code != HttpURLConnection.HTTP_OK) {
-                    return "";
-                }
-
-                StringBuilder sb = new StringBuilder(256);
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8)
-                )) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        sb.append(line);
-                    }
-                }
-
-                return sb.toString();
+                return readResponseBody(connection, code);
             } finally {
                 if (connection != null) {
                     connection.disconnect();
                 }
             }
         }, Dispatchers.getIO());
+    }
+
+    private static String readResponseBody(HttpURLConnection connection, int code) throws Exception {
+        InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
+        if (stream == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(256);
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(stream, StandardCharsets.UTF_8)
+        )) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+            }
+        }
+        return sb.toString();
     }
 
 

@@ -49,16 +49,18 @@ public class ChatSync implements Listener {
         if (!isShutup(event.getPlayer())) {
             Thread.startVirtualThread(() -> {
                 try {
+
                     String playerName = event.getPlayer().getName();
                     String message = event.getMessage();
                     String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
                     MessageWrapper mw = new MessageWrapper(encodedMessage, ChatType.GAME_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), QO_CODE, System.currentTimeMillis(), playerName);
-                    System.out.println(mw.getAsString());
-                    Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", mw.getAsString());
                     String llmPrompt = extractLlmPrompt(message);
                     if (llmPrompt != null) {
                         handleLlmPrompt(event.getPlayer(), llmPrompt);
+                        return;
                     }
+                    System.out.println(mw.getAsString());
+                    Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", mw.getAsString());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -113,7 +115,6 @@ public class ChatSync implements Listener {
                     onlinePlayer.sendMessage(component);
                 }
             });
-            sendChatMsg("恋恋: " + clippedAnswer);
         } catch (Exception e) {
             e.printStackTrace();
             Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), () ->
@@ -139,11 +140,26 @@ public class ChatSync implements Listener {
         if (response == null || response.isBlank()) {
             return "LLM 没有返回内容。";
         }
-        JsonObject root = JsonParser.parseString(response).getAsJsonObject();
+        JsonElement rootElement;
+        try {
+            rootElement = JsonParser.parseString(response);
+        } catch (JsonSyntaxException e) {
+            return response.trim();
+        }
+        if (!rootElement.isJsonObject()) {
+            return rootElement.toString();
+        }
+        JsonObject root = rootElement.getAsJsonObject();
         if (root.has("error")) {
-            JsonObject error = root.getAsJsonObject("error");
-            if (error != null && error.has("message")) {
-                return error.get("message").getAsString();
+            JsonElement errorElement = root.get("error");
+            if (errorElement != null && errorElement.isJsonObject()) {
+                JsonObject error = errorElement.getAsJsonObject();
+                JsonElement message = error.get("message");
+                if (message != null && !message.isJsonNull()) {
+                    return message.getAsString();
+                }
+            } else if (errorElement != null && !errorElement.isJsonNull()) {
+                return errorElement.getAsString();
             }
             return "LLM 返回错误。";
         }
@@ -151,8 +167,19 @@ public class ChatSync implements Listener {
         if (choices == null || choices.isEmpty()) {
             return "LLM 没有返回内容。";
         }
-        JsonObject message = choices.get(0).getAsJsonObject().getAsJsonObject("message");
-        if (message == null || !message.has("content") || message.get("content").isJsonNull()) {
+        JsonElement messageElement = choices.get(0).getAsJsonObject().get("message");
+        if (messageElement == null || messageElement.isJsonNull()) {
+            return "LLM 没有返回内容。";
+        }
+        if (messageElement.isJsonPrimitive()) {
+            String answer = messageElement.getAsString().trim();
+            return answer.isBlank() ? "LLM 没有返回内容。" : answer;
+        }
+        if (!messageElement.isJsonObject()) {
+            return "LLM 没有返回内容。";
+        }
+        JsonObject message = messageElement.getAsJsonObject();
+        if (!message.has("content") || message.get("content").isJsonNull()) {
             return "LLM 没有返回内容。";
         }
         String answer = message.get("content").getAsString().trim();
