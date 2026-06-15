@@ -42,6 +42,15 @@ public final class Request {
             String data,
             Optional<Map<String, String>> headers
     ) {
+        return sendPostRequest(targetUrl, data, headers, TIMEOUT_MILLIS);
+    }
+
+    public static CompletableFuture<String> sendPostRequest(
+            String targetUrl,
+            String data,
+            Optional<Map<String, String>> headers,
+            int timeoutMillis
+    ) {
         return cj.run(() -> {
             HttpURLConnection connection = null;
             try {
@@ -50,8 +59,8 @@ public final class Request {
                 connection.setRequestMethod("POST");
                 connection.setRequestProperty("Content-Type", CONTENT_TYPE_JSON);
 
-                connection.setConnectTimeout(TIMEOUT_MILLIS);
-                connection.setReadTimeout(TIMEOUT_MILLIS);
+                connection.setConnectTimeout(timeoutMillis);
+                connection.setReadTimeout(timeoutMillis);
 
                 if (headers.isPresent()) {
                     for (Map.Entry<String, String> header : headers.get().entrySet()) {
