@@ -72,7 +72,7 @@ public final class Request {
                 connection.setDoOutput(true);
 
                 try (DataOutputStream out = new DataOutputStream(connection.getOutputStream())) {
-                    out.writeBytes(data);
+                    out.write(data.getBytes(StandardCharsets.UTF_8));
                 }
 
                 int code = connection.getResponseCode();
