@@ -16,7 +16,6 @@ import java.util.*;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -50,8 +49,7 @@ public class ChatSync implements Listener {
                 try {
                     String playerName = event.getPlayer().getName();
                     String message = PlainTextComponentSerializer.plainText().serialize(event.originalMessage());
-                    String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                    MessageWrapper mw = new MessageWrapper(encodedMessage, ChatType.GAME_CHAT.getChatType(), AuthUtils.INSTANCE.getToken(), QO_CREATIVE_CODE, System.currentTimeMillis(), playerName);
+                    MessageWrapper mw = new MessageWrapper(message, ChatType.GAME_CHAT.getChatType(), AuthUtils.INSTANCE.getToken(), QO_CREATIVE_CODE, System.currentTimeMillis(), playerName);
                     System.out.println(mw.getAsString());
                     Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", mw.getAsString());
                 } catch (Exception e) {
@@ -64,8 +62,7 @@ public class ChatSync implements Listener {
     public void sendChatMsg(String message) {
         Thread.startVirtualThread(() -> {
             try {
-                String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", new MessageWrapper(encodedMessage, ChatType.SYSTEM_CHAT.getChatType(), AuthUtils.INSTANCE.getToken(), QO_CODE, System.currentTimeMillis(), "QO").getAsString());
+                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", new MessageWrapper(message, ChatType.SYSTEM_CHAT.getChatType(), AuthUtils.INSTANCE.getToken(), QO_CODE, System.currentTimeMillis(), "QO").getAsString());
             } catch (Exception e) {
                 e.printStackTrace();
             }

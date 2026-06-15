@@ -14,7 +14,6 @@ import java.util.*;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.net.HttpURLConnection;
@@ -52,8 +51,7 @@ public class ChatSync implements Listener {
 
                     String playerName = event.getPlayer().getName();
                     String message = event.getMessage();
-                    String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                    MessageWrapper mw = new MessageWrapper(encodedMessage, ChatType.GAME_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), QO_CODE, System.currentTimeMillis(), playerName);
+                    MessageWrapper mw = new MessageWrapper(message, ChatType.GAME_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), QO_CODE, System.currentTimeMillis(), playerName);
                     String llmPrompt = extractLlmPrompt(message);
                     if (llmPrompt != null) {
                         handleLlmPrompt(event.getPlayer(), llmPrompt);
@@ -71,8 +69,7 @@ public class ChatSync implements Listener {
     public void sendChatMsg(String message) {
         Thread.startVirtualThread(() -> {
             try {
-                String encodedMessage = new String(message.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
-                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", new MessageWrapper(encodedMessage, ChatType.SYSTEM_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), QO_CODE, System.currentTimeMillis(), "QO").getAsString());
+                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", new MessageWrapper(message, ChatType.SYSTEM_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), QO_CODE, System.currentTimeMillis(), "QO").getAsString());
             } catch (Exception e) {
                 e.printStackTrace();
             }
