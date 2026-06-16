@@ -107,7 +107,7 @@ public class ChatSync implements Listener {
                             "Authorization", "Bearer " + Config.INSTANCE.getAPI_SECRET(),
                             "X-Minecraft-Name", player.getName(),
                             "X-Minecraft-Coordinate", world + "," + coord,
-                            "X-Minecraft-HP", df.format(hp).trim()
+                            "X-Minecraft-HP", hp.trim()
                     )),
                     Config.INSTANCE.llmRequestTimeoutMillis()
             ).get(Config.INSTANCE.llmRequestTimeoutMillis() + 1000L, TimeUnit.MILLISECONDS);
