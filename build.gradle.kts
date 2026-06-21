@@ -7,9 +7,10 @@
 plugins {
 	base
 	`maven-publish`
-	id("com.google.devtools.ksp") version "2.2.0-2.0.2" apply false
-	kotlin("jvm") version "2.2.0" apply false
-	id("com.github.johnrengelman.shadow") version "8.1.1" apply false
+	id("com.google.devtools.ksp") version "2.3.9" apply false
+	kotlin("jvm") version "2.3.21" apply false
+	id("com.gradleup.shadow") version "9.4.2" apply false
+	id("io.papermc.paperweight.userdev") version "2.0.0-SNAPSHOT" apply false
 }
 
 val qpluginVersion = "1.14.5.5.1"
@@ -84,13 +85,13 @@ val pluginProjects = mapOf(
 
 pluginProjects.forEach { (projectName, archiveName) ->
 	project(":$projectName") {
-		apply(plugin = "com.github.johnrengelman.shadow")
+		apply(plugin = "com.gradleup.shadow")
 
 		dependencies {
-			"implementation"(project(":common"))
-			"implementation"(kotlin("compiler-embeddable"))
-			"implementation"("com.google.devtools.ksp:symbol-processing-api:2.2.0-2.0.2")
-		}
+		"implementation"(project(":common"))
+		"implementation"(kotlin("compiler-embeddable"))
+		"implementation"("com.google.devtools.ksp:symbol-processing-api:2.3.9")
+	}
 
 		tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
 			archiveBaseName.set(archiveName)
@@ -110,10 +111,24 @@ pluginProjects.forEach { (projectName, archiveName) ->
 
 project(":survival") {
 	apply(plugin = "com.google.devtools.ksp")
+	apply(plugin = "io.papermc.paperweight.userdev")
+
+	extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension>("kotlin") {
+		jvmToolchain(25)
+	}
+
+	val survivalJavaToolchains = extensions.getByType<org.gradle.jvm.toolchain.JavaToolchainService>()
+	extensions.configure<io.papermc.paperweight.userdev.PaperweightUserExtension>("paperweight") {
+		javaLauncher.set(survivalJavaToolchains.launcherFor {
+			languageVersion.set(JavaLanguageVersion.of(25))
+		})
+		reobfArtifactConfiguration.set(io.papermc.paperweight.userdev.ReobfArtifactConfiguration.MOJANG_PRODUCTION)
+	}
 
 	dependencies {
 		"ksp"(project(":processor"))
 		"implementation"("io.github.classgraph:classgraph:4.8.181")
+		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.1.2.build.+")
 	}
 }
 

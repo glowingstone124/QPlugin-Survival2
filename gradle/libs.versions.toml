@@ -3,8 +3,8 @@
 
 [versions]
 io-papermc-paper-paper-api = "1.21.8-R0.1-SNAPSHOT"
-org-jetbrains-kotlin-kotlin-reflect = "2.0.0"
-org-jetbrains-kotlin-kotlin-stdlib = "2.0.0"
+org-jetbrains-kotlin-kotlin-reflect = "2.3.21"
+org-jetbrains-kotlin-kotlin-stdlib = "2.3.21"
 org-jetbrains-kotlinx-kotlinx-coroutines-core = "1.8.1"
 org-json-json = "20231013"
 

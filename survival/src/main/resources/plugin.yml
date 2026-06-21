@@ -58,3 +58,6 @@ commands:
   flight:
     description: 配置飞行仪表和目的地
     usage: /<command> <report|gui|dest> ...
+  fakeplayer:
+    description: 管理服务器假人
+    usage: /<command> <spawn|remove|list> ...

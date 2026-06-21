@@ -28,6 +28,8 @@ import vip.qoriginal.quantumplugin.adventures.Trigger;
 import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponCmd;
 import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponListener;
 import vip.qoriginal.quantumplugin.event.Locker;
+import vip.qoriginal.quantumplugin.fakeplayer.FakePlayerCommand;
+import vip.qoriginal.quantumplugin.fakeplayer.FakePlayerManager;
 import vip.qoriginal.quantumplugin.flightUtil.*;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
@@ -51,6 +53,7 @@ public final class QuantumPlugin extends JavaPlugin {
     ChatSync cs = new ChatSync();
     FlightAutoDetector flightAutoDetector;
     Flight flight = new Flight();
+    private final FakePlayerManager fakePlayerManager = new FakePlayerManager();
     public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
 
@@ -64,7 +67,7 @@ public final class QuantumPlugin extends JavaPlugin {
         CommandSuggester.register(this, List.of(
                 "suicide", "shutup", "myloc", "highlight", "showitem", "querybind",
                 "viewInventory", "summontext", "login", "damageindicator", "leavemessage",
-                "elite", "gm", "firework", "newyeartnt", "newyeardumplings", "flight"
+                "elite", "gm", "firework", "newyeartnt", "newyeardumplings", "flight", "fakeplayer"
         ));
         Trigger trigger = new Trigger();
         System.out.println("starting scanning triggers");
@@ -177,6 +180,7 @@ public final class QuantumPlugin extends JavaPlugin {
         Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());
         Objects.requireNonNull(this.getCommand("gm")).setExecutor(new CustomGamemodeCmd());
         Objects.requireNonNull(this.getCommand("flight")).setExecutor(new FlightCommandExecutor());
+        Objects.requireNonNull(this.getCommand("fakeplayer")).setExecutor(new FakePlayerCommand(fakePlayerManager));
         Ranking ranking = new Ranking();
     }
 
@@ -186,6 +190,7 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        fakePlayerManager.removeAll();
         LoggerProvider.INSTANCE.closeAll();
         webMsgGetterTask.cancel();
         JSONObject stopObj = new JSONObject();

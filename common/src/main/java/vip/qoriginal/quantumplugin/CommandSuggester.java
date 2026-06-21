@@ -26,6 +26,7 @@ public final class CommandSuggester implements TabCompleter {
     private static final List<String> FLIGHT_DESTINATIONS = List.of("XCA", "ZCA", "FDA", "NONE");
     private static final List<String> FIREWORK_ACTIONS = List.of("get", "launch");
     private static final List<String> FIREWORK_TYPES = List.of("1", "2", "3", "4");
+    private static final List<String> FAKE_PLAYER_ACTIONS = List.of("spawn", "remove", "list");
 
     public static void register(JavaPlugin plugin, Collection<String> commandNames) {
         CommandSuggester suggester = new CommandSuggester();
@@ -59,6 +60,7 @@ public final class CommandSuggester implements TabCompleter {
             case "elite" -> completeElite(args);
             case "firework" -> completeFirework(args);
             case "flight" -> completeFlight(args);
+            case "fakeplayer" -> args.length == 1 ? FAKE_PLAYER_ACTIONS : List.of();
             default -> List.of();
         };
         return copyPartialMatches(args, suggestions);
