@@ -26,7 +26,7 @@ public final class CommandSuggester implements TabCompleter {
     private static final List<String> FLIGHT_DESTINATIONS = List.of("XCA", "ZCA", "FDA", "NONE");
     private static final List<String> FIREWORK_ACTIONS = List.of("get", "launch");
     private static final List<String> FIREWORK_TYPES = List.of("1", "2", "3", "4");
-    private static final List<String> FAKE_PLAYER_ACTIONS = List.of("spawn", "remove", "list");
+    private static final List<String> FAKE_PLAYER_ACTIONS = List.of("spawn", "remove", "list", "inventory");
 
     public static void register(JavaPlugin plugin, Collection<String> commandNames) {
         CommandSuggester suggester = new CommandSuggester();

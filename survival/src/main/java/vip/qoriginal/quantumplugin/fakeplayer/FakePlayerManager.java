@@ -1,6 +1,11 @@
 package vip.qoriginal.quantumplugin.fakeplayer;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.Property;
+import com.mojang.authlib.properties.PropertyMap;
+import com.destroystokyo.paper.profile.PlayerProfile;
+import com.destroystokyo.paper.profile.ProfileProperty;
+import com.google.common.collect.HashMultimap;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.server.MinecraftServer;
@@ -13,6 +18,10 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.CraftWorld;
+import org.bukkit.craftbukkit.entity.CraftPlayer;
+import org.bukkit.Server;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.PlayerInventory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -29,7 +38,7 @@ public final class FakePlayerManager {
     public FakePlayerManager() {
     }
 
-    public ServerPlayer spawn(String requestedName, Location location) {
+    public ServerPlayer spawn(String requestedName, Location location, PropertyMap skinProperties) {
         String name = normalizeName(requestedName);
         String key = key(name);
         if (players.containsKey(key) || Bukkit.getPlayerExact(name) != null) {
@@ -41,7 +50,7 @@ public final class FakePlayerManager {
 
         MinecraftServer server = server();
         ServerLevel level = craftWorld.getHandle();
-        GameProfile profile = new GameProfile(fakeUuid(name), name);
+        GameProfile profile = new GameProfile(fakeUuid(name), name, skinProperties);
         ServerPlayer player = new ServerPlayer(server, level, profile, ClientInformation.createDefault());
         player.connection = new FakePlayerConnection(server, player, profile);
         player.snapTo(location.getX(), location.getY(), location.getZ(), location.getYaw(), location.getPitch());
@@ -54,6 +63,14 @@ public final class FakePlayerManager {
 
         server.getPlayerList().broadcastAll(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player)));
         return player;
+    }
+
+    public PlayerInventory inventory(String requestedName) {
+        ServerPlayer player = find(requestedName);
+        if (player == null) {
+            return null;
+        }
+        return player.getBukkitEntity().getInventory();
     }
 
     public boolean remove(String requestedName) {
@@ -87,6 +104,10 @@ public final class FakePlayerManager {
         }
     }
 
+    private ServerPlayer find(String requestedName) {
+        return players.get(key(normalizeName(requestedName)));
+    }
+
     private String normalizeName(String name) {
         if (name == null) {
             throw new IllegalArgumentException("缺少假人名");
@@ -104,6 +125,32 @@ public final class FakePlayerManager {
 
     private UUID fakeUuid(String name) {
         return UUID.nameUUIDFromBytes(("QuantumPlugin:fake-player:" + name.toLowerCase(Locale.ROOT)).getBytes(StandardCharsets.UTF_8));
+    }
+
+    public PropertyMap skinProperties(String skinName) {
+        Player onlinePlayer = Bukkit.getPlayerExact(skinName);
+        if (onlinePlayer != null) {
+            return copySkinProperties(onlinePlayer);
+        }
+
+        PlayerProfile profile = ((Server) Bukkit.getServer()).createProfile(skinName);
+        profile.complete(true, true);
+        return copySkinProperties(profile);
+    }
+
+    private PropertyMap copySkinProperties(Player skinSource) {
+        if (!(skinSource instanceof CraftPlayer craftPlayer)) {
+            return new PropertyMap(HashMultimap.create());
+        }
+        return new PropertyMap(HashMultimap.create(craftPlayer.getHandle().getGameProfile().properties()));
+    }
+
+    private PropertyMap copySkinProperties(PlayerProfile profile) {
+        HashMultimap<String, Property> properties = HashMultimap.create();
+        for (ProfileProperty property : profile.getProperties()) {
+            properties.put(property.getName(), new Property(property.getName(), property.getValue(), property.getSignature()));
+        }
+        return new PropertyMap(properties);
     }
 
     private MinecraftServer server() {

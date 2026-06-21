@@ -180,7 +180,7 @@ public final class QuantumPlugin extends JavaPlugin {
         Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());
         Objects.requireNonNull(this.getCommand("gm")).setExecutor(new CustomGamemodeCmd());
         Objects.requireNonNull(this.getCommand("flight")).setExecutor(new FlightCommandExecutor());
-        Objects.requireNonNull(this.getCommand("fakeplayer")).setExecutor(new FakePlayerCommand(fakePlayerManager));
+        Objects.requireNonNull(this.getCommand("fakeplayer")).setExecutor(new FakePlayerCommand(this, fakePlayerManager));
         Ranking ranking = new Ranking();
     }
 

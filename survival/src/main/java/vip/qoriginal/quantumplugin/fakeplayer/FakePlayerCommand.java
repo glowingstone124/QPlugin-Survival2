@@ -6,14 +6,17 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
 public final class FakePlayerCommand implements CommandExecutor {
+    private final Plugin plugin;
     private final FakePlayerManager manager;
 
-    public FakePlayerCommand(FakePlayerManager manager) {
+    public FakePlayerCommand(Plugin plugin, FakePlayerManager manager) {
+        this.plugin = plugin;
         this.manager = manager;
     }
 
@@ -34,8 +37,9 @@ public final class FakePlayerCommand implements CommandExecutor {
                 case "spawn" -> spawn(sender, args);
                 case "remove" -> remove(sender, args);
                 case "list" -> list(sender);
+                case "inventory", "inv" -> inventory(sender, args);
                 default -> {
-                    sender.sendMessage("用法: /fakeplayer <spawn|remove|list> ...");
+                    sender.sendMessage("用法: /fakeplayer <spawn|remove|list|inventory> ...");
                     yield true;
                 }
             };
@@ -50,13 +54,30 @@ public final class FakePlayerCommand implements CommandExecutor {
             sender.sendMessage("Only players can use this command!");
             return true;
         }
-        if (args.length != 2) {
-            sender.sendMessage("用法: /fakeplayer spawn <name>");
+        if (args.length != 2 && args.length != 3) {
+            sender.sendMessage("用法: /fakeplayer spawn <name> [skinPlayer]");
             return true;
         }
         Location location = player.getLocation();
-        ServerPlayer fakePlayer = manager.spawn(args[1], location);
-        sender.sendMessage("已生成假人: " + fakePlayer.getGameProfile().name());
+        String fakePlayerName = args[1];
+        String skinName = args.length == 3 ? args[2] : fakePlayerName;
+        sender.sendMessage("正在获取皮肤: " + skinName);
+
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                com.mojang.authlib.properties.PropertyMap skinProperties = manager.skinProperties(skinName);
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    try {
+                        ServerPlayer fakePlayer = manager.spawn(fakePlayerName, location, skinProperties);
+                        sender.sendMessage("已生成假人: " + fakePlayer.getGameProfile().name() + "，皮肤来源: " + skinName);
+                    } catch (IllegalArgumentException ex) {
+                        sender.sendMessage(ex.getMessage());
+                    }
+                });
+            } catch (Exception ex) {
+                plugin.getServer().getScheduler().runTask(plugin, () -> sender.sendMessage("获取皮肤失败: " + skinName));
+            }
+        });
         return true;
     }
 
@@ -80,6 +101,24 @@ public final class FakePlayerCommand implements CommandExecutor {
         } else {
             sender.sendMessage("假人: " + String.join(", ", names));
         }
+        return true;
+    }
+
+    private boolean inventory(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("Only players can use this command!");
+            return true;
+        }
+        if (args.length != 2) {
+            sender.sendMessage("用法: /fakeplayer inventory <name>");
+            return true;
+        }
+        org.bukkit.inventory.PlayerInventory inventory = manager.inventory(args[1]);
+        if (inventory == null) {
+            sender.sendMessage("找不到假人: " + args[1]);
+            return true;
+        }
+        player.openInventory(inventory);
         return true;
     }
 }
