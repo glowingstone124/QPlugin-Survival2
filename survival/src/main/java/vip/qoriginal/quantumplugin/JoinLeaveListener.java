@@ -90,7 +90,10 @@ public class JoinLeaveListener implements Listener {
             }
             sessionStartTimes.put(player, System.currentTimeMillis());
 
-            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + Objects.requireNonNull(player.getAddress()).getHostName(), "");
+            java.net.InetSocketAddress address = player.getAddress();
+            if (address != null) {
+                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + address.getHostName(), "");
+            }
         } else if (relationship.get("affiliated").getAsBoolean()) {
             player.sendMessage(Component.text("欢迎回到Quantum Original，输入/login 你的密码来登录")
                     .appendNewline()

@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import kotlinx.coroutines.Dispatchers;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
+import vip.qoriginal.quantumplugin.fakeplayer.FakePlayerManager;
 
 import java.util.*;
 
@@ -42,13 +43,16 @@ public class StatusUpload {
     private void actualLogic() {
         StatusSample status = new StatusSample();
         status.timestamp = System.currentTimeMillis();
-        status.onlinecount = Bukkit.getOnlinePlayers().size();
         totalUser = Bukkit.getOfflinePlayers().length;
         for (Player p : Bukkit.getOnlinePlayers()) {
+            if (FakePlayerManager.isFakePlayer(p)) {
+                continue;
+            }
             if (p.getScoreboardTags().contains("visitor_login")) {
                 System.out.println(p.name() + " skipped");
                 continue;
             }
+            status.onlinecount++;
             BriefPlayerInfo info = new BriefPlayerInfo();
             info.ping = p.getPing();
             info.world = p.getWorld().getName();

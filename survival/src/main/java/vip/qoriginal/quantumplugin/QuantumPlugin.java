@@ -149,10 +149,13 @@ public final class QuantumPlugin extends JavaPlugin {
                 for (Player player : getServer().getOnlinePlayers()) {
                     if (player.getScoreboardTags().contains("visitor_online")) continue;
 
+                    java.net.InetSocketAddress address = player.getAddress();
+                    if (address == null) continue;
+
+                    String url = (Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName()
+                            + "&ip=" + address.getHostName()).trim();
                     Bukkit.getScheduler().runTaskAsynchronously(QuantumPlugin.this, () -> {
                         try {
-                            String url = (Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName()
-                                    + "&ip=" + Objects.requireNonNull(player.getAddress()).getHostName()).trim();
                             Request.sendPostRequest(url, "");
                         } catch (Exception e) {
                             e.printStackTrace();
