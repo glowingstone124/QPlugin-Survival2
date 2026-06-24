@@ -9,6 +9,7 @@ import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
 import org.bukkit.block.Furnace;
 import org.bukkit.block.Sign;
+import org.bukkit.block.sign.Side;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -48,7 +49,7 @@ public class StoneFarm implements Listener {
         if(b.getChunk().isLoaded()) {
             if (b.getType() == Material.DARK_OAK_WALL_SIGN) {
                 Sign sign = (Sign) b.getState();
-                sign.line(3, Component.text(result[0]+" bl / h"));
+                sign.getSide(Side.FRONT).line(3, Component.text(result[0]+" bl / h"));
                 sign.update();
             }
         }
@@ -56,7 +57,7 @@ public class StoneFarm implements Listener {
         if(b.getChunk().isLoaded()) {
             if (b.getType() == Material.DARK_OAK_WALL_SIGN) {
                 Sign sign = (Sign) b.getState();
-                sign.line(3, Component.text(result[1]+" bl / h"));
+                sign.getSide(Side.FRONT).line(3, Component.text(result[1]+" bl / h"));
                 sign.update();
             }
         }
@@ -85,7 +86,7 @@ public class StoneFarm implements Listener {
         if(b.getChunk().isLoaded()) {
             if (b.getType() == Material.BIRCH_WALL_SIGN) {
                 Sign sign = (Sign) b.getState();
-                sign.line(index, text);
+                sign.getSide(Side.FRONT).line(index, text);
                 sign.update();
             }
         }

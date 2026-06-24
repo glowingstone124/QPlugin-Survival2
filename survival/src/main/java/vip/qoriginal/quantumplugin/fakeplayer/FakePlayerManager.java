@@ -10,6 +10,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
+import net.minecraft.network.DisconnectionDetails;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
@@ -98,7 +99,7 @@ public final class FakePlayerManager {
         broadcastLeave(player);
         unregisterPlayer(server.getPlayerList(), player);
         level.removePlayerImmediately(player, Entity.RemovalReason.DISCARDED);
-        player.connection.disconnect(net.minecraft.network.chat.Component.literal("Fake player removed"));
+        player.connection.disconnect(new DisconnectionDetails(net.minecraft.network.chat.Component.literal("Fake player removed")));
         server.getPlayerList().broadcastAll(new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID())));
         return true;
     }

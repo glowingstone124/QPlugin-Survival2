@@ -3,7 +3,6 @@ package vip.qoriginal.quantumplugin.fakeplayer;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.network.Connection;
 import net.minecraft.network.DisconnectionDetails;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.MinecraftServer;
@@ -29,11 +28,6 @@ final class FakePlayerConnection extends ServerGamePacketListenerImpl {
     @Override
     public boolean isAcceptingMessages() {
         return !disconnected;
-    }
-
-    @Override
-    public void disconnect(Component component) {
-        disconnected = true;
     }
 
     @Override

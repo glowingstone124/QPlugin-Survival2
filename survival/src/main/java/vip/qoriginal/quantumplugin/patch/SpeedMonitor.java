@@ -1,7 +1,8 @@
 package vip.qoriginal.quantumplugin.patch;
 
-import org.bukkit.ChatColor;
-import org.bukkit.Color;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -12,6 +13,7 @@ import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.entity.*;
+import java.time.Duration;
 import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,13 +34,13 @@ public class SpeedMonitor implements Listener {
         Entity entity = event.getEntered();
         if (entity instanceof Player) {
             Player player = (Player) entity;
-            String coloredActionbar;
+            Component actionBar;
             if (event.getVehicle() instanceof Boat) {
-                coloredActionbar = ChatColor.GREEN + "QO交通委提醒您，行船不规范，亲人两行泪。 欢迎您，高级驾驶员 " + player.getDisplayName();
+                actionBar = Component.text("QO交通委提醒您，行船不规范，亲人两行泪。 欢迎您，高级驾驶员 " + player.getName(), NamedTextColor.GREEN);
             } else if (event.getVehicle() instanceof Minecart) {
-                coloredActionbar = ChatColor.GREEN + "感谢您选择QO铁路，QO高速铁路现已全面普及108km/h高速 ";
+                actionBar = Component.text("感谢您选择QO铁路，QO高速铁路现已全面普及108km/h高速 ", NamedTextColor.GREEN);
             } else {
-                coloredActionbar = "";     
+                actionBar = Component.empty();
             }
             new BukkitRunnable() {
                 @Override
@@ -47,9 +49,13 @@ public class SpeedMonitor implements Listener {
                         double speed = calculatePlayerSpeed(player);
                         DecimalFormat decimalFormat = new DecimalFormat("#.#");
                         String formattedSpeed = decimalFormat.format(speed);
-                        player.sendActionBar(coloredActionbar);
+                        player.sendActionBar(actionBar);
                         String template = "Speed: " + formattedSpeed + "KM/H";
-                        player.sendTitle("", template, 0, 20, 0);
+                        player.showTitle(Title.title(
+                                Component.empty(),
+                                Component.text(template),
+                                Title.Times.times(Duration.ZERO, Duration.ofSeconds(1), Duration.ZERO)
+                        ));
                     } else {
                         cancel();
                     }
@@ -75,7 +81,7 @@ public class SpeedMonitor implements Listener {
         if (entity instanceof Player) {
             Player player = (Player) entity;
             previousLocations.remove(player);
-            player.resetTitle();
+            player.clearTitle();
         }
     }
 }

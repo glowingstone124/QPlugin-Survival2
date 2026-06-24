@@ -3,6 +3,7 @@ package vip.qoriginal.quantumplugin;
 import kotlinx.coroutines.Dispatchers;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Arrow;
 import org.bukkit.entity.Entity;
@@ -23,10 +24,14 @@ import static vip.qoriginal.quantumplugin.Ranking.destroyMap;
 
 public class PlayerEventListener implements Listener {
     ChatSync cs = new ChatSync();
+    private static final PlainTextComponentSerializer PLAIN_TEXT = PlainTextComponentSerializer.plainText();
+
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         Player player = event.getEntity();
-        cs.sendChatMsg("玩家" + player.getName() + "死了，" + event.getDeathMessage());
+        Component deathMessage = event.deathMessage();
+        String message = deathMessage == null ? "" : PLAIN_TEXT.serialize(deathMessage);
+        cs.sendChatMsg("玩家" + player.getName() + "死了，" + message);
     }
     @EventHandler
     public void onPlayerExpChange(PlayerExpChangeEvent event) {

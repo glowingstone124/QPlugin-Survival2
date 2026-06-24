@@ -59,7 +59,7 @@ class EliteWeaponData {
 
 	fun checkIfWeaponHasEliteData(item: ItemStack): Boolean {
 		val meta = item.itemMeta
-		meta?.persistentDataContainer?.get(
+			meta.persistentDataContainer.get(
 			NamespacedKey("qplugin", "uuid"),
 			PersistentDataType.STRING
 		)?.let {
@@ -70,13 +70,7 @@ class EliteWeaponData {
 
 	fun getWeaponUuid(item: ItemStack): String? {
 		val meta = item.itemMeta ?: return null
-		meta?.persistentDataContainer?.get(
-			NamespacedKey("qplugin", "uuid"),
-			PersistentDataType.STRING
-		)?.let {
-			return meta.persistentDataContainer.get(NamespacedKey("qplugin", "uuid"), PersistentDataType.STRING)
-		}
-		return null
+		return meta.persistentDataContainer.get(NamespacedKey("qplugin", "uuid"), PersistentDataType.STRING)
 	}
 
 	fun cacheWeaponsForSpecUser(username: String) {

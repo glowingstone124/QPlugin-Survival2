@@ -39,7 +39,6 @@ import vip.qoriginal.quantumplugin.metro.LoadChunk;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class QuantumPlugin extends JavaPlugin {
 
@@ -60,7 +59,7 @@ public final class QuantumPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         System.out.println(System.getenv("DEBUG"));
-        DEBUG_FLAG = System.getenv("DEBUG").equals("true");
+        DEBUG_FLAG = "true".equalsIgnoreCase(System.getenv("DEBUG"));
         WORLD_MAIN = Bukkit.getWorld("world");
         instance = this;
         PluginContext.setPlugin(this);
@@ -147,6 +146,7 @@ public final class QuantumPlugin extends JavaPlugin {
             @Override
             public void run() {
                 for (Player player : getServer().getOnlinePlayers()) {
+                    if (FakePlayerManager.isFakePlayer(player)) continue;
                     if (player.getScoreboardTags().contains("visitor_online")) continue;
 
                     java.net.InetSocketAddress address = player.getAddress();
@@ -195,7 +195,9 @@ public final class QuantumPlugin extends JavaPlugin {
     public void onDisable() {
         fakePlayerManager.removeAll();
         LoggerProvider.INSTANCE.closeAll();
-        webMsgGetterTask.cancel();
+        if (webMsgGetterTask != null) {
+            webMsgGetterTask.cancel();
+        }
         JSONObject stopObj = new JSONObject();
         stopObj.put("timestamp", System.currentTimeMillis());
         stopObj.put("stat", 1);
@@ -215,7 +217,7 @@ public final class QuantumPlugin extends JavaPlugin {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (command.getName().equalsIgnoreCase("suicide")) {
             if (!(sender instanceof Player s)) {
-                sender.sendMessage("Only players can use this command!");
+                CommandMessages.playerOnly(sender);
                 return true;
             }
             if (s.getInventory().getItemInOffHand().getType() == Material.TOTEM_OF_UNDYING || s.getInventory().getItemInMainHand().getType() == Material.TOTEM_OF_UNDYING) {
@@ -235,7 +237,7 @@ public final class QuantumPlugin extends JavaPlugin {
             return true;
         } else if (command.getName().equalsIgnoreCase("myloc")) {
             if (!(sender instanceof Player s)) {
-                sender.sendMessage("Only players can use this command!");
+                CommandMessages.playerOnly(sender);
                 return true;
             }
             String world_name = s.getWorld().getName();
@@ -255,7 +257,7 @@ public final class QuantumPlugin extends JavaPlugin {
             return true;
         } else if (command.getName().equalsIgnoreCase("highlight") && args.length == 3) {
             if (!(sender instanceof Player s)) {
-                sender.sendMessage("Only players can use this command!");
+                CommandMessages.playerOnly(sender);
                 return true;
             }
             Location l = new Location(s.getWorld(), Float.parseFloat(args[0]), Float.parseFloat(args[1]), Float.parseFloat(args[2]));
@@ -273,7 +275,7 @@ public final class QuantumPlugin extends JavaPlugin {
             return true;
         } else if (command.getName().equalsIgnoreCase("shutup") && args.length == 1) {
             if (!(sender instanceof Player)) {
-                sender.sendMessage("Only players can use this command!");
+                CommandMessages.playerOnly(sender);
                 return true;
             }
             Player s = (Player) sender;
@@ -281,15 +283,15 @@ public final class QuantumPlugin extends JavaPlugin {
                 s.sendMessage(Component.text("当前向QQ同步消息的状态为：").append(isShutup(s) ? Component.text("关闭").color(TextColor.color(255, 0, 0)) : Component.text("开启").color(TextColor.color(0, 255, 0))));
             else if (args[0].contentEquals("enable")) {
                 s.removeScoreboardTag("muteqq");
-                s.sendMessage("已经启用QQ同步");
+                CommandMessages.success(s, "已经启用 QQ 同步。");
             } else if (args[0].contentEquals("disable")) {
                 s.addScoreboardTag("muteqq");
-                s.sendMessage("已经禁用QQ同步");
+                CommandMessages.success(s, "已经禁用 QQ 同步。");
             }
             return true;
         } else if (command.getName().equalsIgnoreCase("showitem")) {
             if (!(sender instanceof Player)) {
-                sender.sendMessage("Only players can use this command!");
+                CommandMessages.playerOnly(sender);
                 return true;
             }
             Player s = (Player) sender;
@@ -302,7 +304,7 @@ public final class QuantumPlugin extends JavaPlugin {
             }
             return true;
         } else if (command.getName().equalsIgnoreCase("querybind") && args.length == 1) {
-            Player s = (Player) sender;
+            CommandSender s = sender;
             String name = args[0];
             String result = null;
             try {
@@ -327,7 +329,7 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         } else if (command.getName().equalsIgnoreCase("viewInventory") && args.length == 1) {
             if (!(sender instanceof Player)) {
-                sender.sendMessage("Only players can use this command!");
+                CommandMessages.playerOnly(sender);
                 return true;
             }
             try {
@@ -364,40 +366,43 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("login")) {
             if (args.length != 1) {
-                sender.sendMessage("请正确输入密码。");
+                CommandMessages.warning(sender, "用法: /login <password>");
                 return true;
             }
             login.performLogin(s, args[0]);
             return true;
         } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("damageindicator")) {
             if (args.length != 1) {
-                sender.sendMessage("[query] 查询开启状态 [enable]开启 [disable]关闭");
+                CommandMessages.warning(sender, "用法: /damageindicator <query|enable|disable>");
                 return true;
             }
             switch (args[0]) {
                 case "query":
                     if (isIndicatorEnabled(s)) {
-                        sender.sendMessage("当前状态：开启");
+                        CommandMessages.info(sender, "伤害提示当前状态: 开启");
                     } else {
-                        sender.sendMessage("当前状态：关闭");
+                        CommandMessages.info(sender, "伤害提示当前状态: 关闭");
                     }
                     break;
                 case "enable":
                     if (!isIndicatorEnabled(s)) {
                         s.addScoreboardTag("di");
                     }
-                    sender.sendMessage("成功");
+                    CommandMessages.success(sender, "伤害提示已开启。");
                     break;
                 case "disable":
                     if (isIndicatorEnabled(s)) {
                         s.removeScoreboardTag("di");
                     }
-                    sender.sendMessage("成功");
+                    CommandMessages.success(sender, "伤害提示已关闭。");
+                    break;
+                default:
+                    CommandMessages.warning(sender, "用法: /damageindicator <query|enable|disable>");
                     break;
             }
         } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("leavemessage")) {
             if (args.length != 2) {
-                sender.sendMessage("用法：/leavemessage <player> <message>");
+                CommandMessages.warning(sender, "用法: /leavemessage <player> <message>");
                 return true;
             }
             return leaveMessageComponent.handlePlayerMessageUpload(s, args[0], args[1]);
@@ -406,17 +411,11 @@ public final class QuantumPlugin extends JavaPlugin {
     }
 
     public static boolean isShutup(Player player) {
-        boolean istagged = false;
-        for (String s : player.getScoreboardTags()) if (s.contentEquals("muteqq")) istagged = true;
-        return istagged;
+        return player.getScoreboardTags().contains("muteqq");
     }
 
     public static boolean isIndicatorEnabled(Player player) {
-        AtomicBoolean istagged = new AtomicBoolean(false);
-        player.getScoreboardTags().forEach(tag -> {
-            if (tag.contentEquals("di")) istagged.set(true);
-        });
-        return istagged.get();
+        return player.getScoreboardTags().contains("di");
     }
 
 }

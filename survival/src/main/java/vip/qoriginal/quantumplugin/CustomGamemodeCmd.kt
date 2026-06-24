@@ -12,7 +12,7 @@ class CustomGamemodeCmd : CommandExecutor {
 			p0.sendMessage("This command can only be executed by the player!")
 			return true
 		}
-		val sender = p0 as Player
+		val sender = p0
 		if (p3.isEmpty()) {
 			p0.sendMessage("用法: /gm <s/sc>")
 			return true

@@ -101,14 +101,14 @@ object FlightGUI {
 	}
 
 	fun getDurability(player: Player): Int? {
-		val item = player.inventory.chestplate ?: return null
+		val item = player.inventory.chestplate
 		if (item.type != Material.ELYTRA) return null
 		val meta = item.itemMeta as? Damageable ?: return null
 		return item.type.maxDurability - meta.damage
 	}
 
 
-	inline fun constructComponents(
+	fun constructComponents(
 		speed: Double,
 		destination: String,
 		durability: Int?

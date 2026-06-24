@@ -30,7 +30,7 @@ class Firework : CommandExecutor {
 			p0.sendMessage("只有玩家可以使用该指令！")
 			return false
 		}
-		if (p3!!.size != 1 && p3.size != 2) {
+			if (p3.size != 1 && p3.size != 2) {
 			p0.sendMessage("请指定操作为 get or launch")
 			return true
 		}

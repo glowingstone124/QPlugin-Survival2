@@ -5,7 +5,6 @@ import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
-import org.bukkit.block.data.type.TNT
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -37,11 +36,11 @@ class FriendlyTnt : CommandExecutor, Listener {
 			sender.sendMessage("Only players can use this command")
 			return false
 		}
-		if (!(args!!.size == 1 && args[0] == "give")) {
+		if (!(args.size == 1 && args[0] == "give")) {
 			sender.sendMessage("/newyeartnt give")
 			return false
 		}
-		val player = sender as Player
+		val player = sender
 		val tnt = ItemStack(Material.TNT).add(7)
 		val meta = tnt.itemMeta
 		if (meta != null) {
@@ -91,9 +90,8 @@ class FriendlyTnt : CommandExecutor, Listener {
 
 				entity.getNearbyEntities(8.0, 5.0, 8.0).forEach { nearbyEntity ->
 					if (nearbyEntity is Player) {
-						val player = nearbyEntity as Player
-						val direction = player.location.toVector().subtract(entity.location.toVector()).normalize()
-						player.velocity = direction.multiply(3)
+						val direction = nearbyEntity.location.toVector().subtract(entity.location.toVector()).normalize()
+						nearbyEntity.velocity = direction.multiply(3)
 					}
 				}
 			}

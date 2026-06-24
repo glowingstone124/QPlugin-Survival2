@@ -11,6 +11,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
 import org.bukkit.block.Sign;
+import org.bukkit.block.sign.Side;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.event.EventHandler;
@@ -94,7 +95,7 @@ public class MSPTCalculator implements Listener {
                 Sign sign = (Sign) b.getState();
                 Calendar calendar = Calendar.getInstance();
                 String time = f(calendar.get(Calendar.HOUR_OF_DAY))+":"+f(calendar.get(Calendar.MINUTE))+":"+f(calendar.get(Calendar.SECOND));
-                sign.line(1,Component.text(time).decorate(TextDecoration.BOLD).append(Component.text(" UTC+8")));
+                sign.getSide(Side.FRONT).line(1,Component.text(time).decorate(TextDecoration.BOLD).append(Component.text(" UTC+8")));
                 sign.update();
             }
         }
@@ -108,7 +109,7 @@ public class MSPTCalculator implements Listener {
                 int amount = 0;
                 for(ItemStack itemStack:i.getContents()) if(itemStack!=null && itemStack.getType() == Material.BONE_MEAL) amount += itemStack.getAmount();
                 for(ItemStack itemStack:i2.getContents()) if(itemStack!=null && itemStack.getType() == Material.BONE_MEAL) amount += itemStack.getAmount();
-                sign.line(1,Component.text(amount+" / 3456"));
+                sign.getSide(Side.FRONT).line(1,Component.text(amount+" / 3456"));
                 sign.update();
             }
         }

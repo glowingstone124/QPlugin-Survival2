@@ -2,9 +2,11 @@ package vip.qoriginal.quantumplugin;
 
 import com.google.gson.*;
 import kotlin.Pair;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.TextColor;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -31,6 +33,7 @@ public class ChatSync implements Listener {
     private static Gson gson = new Gson();
     private static final long QQ_CACHE_TTL_MS = 10 * 60 * 1000L;
     private static final Map<Long, CachedName> qqNameCache = new ConcurrentHashMap<>();
+    private static final PlainTextComponentSerializer PLAIN_TEXT = PlainTextComponentSerializer.plainText();
 
     private static class CachedName {
         final String name;
@@ -46,13 +49,13 @@ public class ChatSync implements Listener {
     }
 
     @EventHandler
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
+    public void onPlayerChat(AsyncChatEvent event) {
         if (!isShutup(event.getPlayer())) {
             Thread.startVirtualThread(() -> {
                 try {
 
                     String playerName = event.getPlayer().getName();
-                    String message = event.getMessage();
+                    String message = PLAIN_TEXT.serialize(event.message());
                     MessageWrapper mw = new MessageWrapper(message, ChatType.GAME_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), QO_CODE, System.currentTimeMillis(), playerName);
                     String llmPrompt = extractLlmPrompt(message);
                     if (llmPrompt != null) {

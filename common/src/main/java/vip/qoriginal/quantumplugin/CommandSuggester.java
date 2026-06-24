@@ -26,7 +26,8 @@ public final class CommandSuggester implements TabCompleter {
     private static final List<String> FLIGHT_DESTINATIONS = List.of("XCA", "ZCA", "FDA", "NONE");
     private static final List<String> FIREWORK_ACTIONS = List.of("get", "launch");
     private static final List<String> FIREWORK_TYPES = List.of("1", "2", "3", "4");
-    private static final List<String> FAKE_PLAYER_ACTIONS = List.of("spawn", "remove", "list", "inventory");
+    private static final String FAKE_PLAYER_TAG = "quantum_fake_player";
+    private static final List<String> FAKE_PLAYER_ACTIONS = List.of("spawn", "remove", "list", "inventory", "inv");
 
     public static void register(JavaPlugin plugin, Collection<String> commandNames) {
         CommandSuggester suggester = new CommandSuggester();
@@ -60,7 +61,7 @@ public final class CommandSuggester implements TabCompleter {
             case "elite" -> completeElite(args);
             case "firework" -> completeFirework(args);
             case "flight" -> completeFlight(args);
-            case "fakeplayer" -> args.length == 1 ? FAKE_PLAYER_ACTIONS : List.of();
+            case "fakeplayer" -> completeFakePlayer(args);
             default -> List.of();
         };
         return copyPartialMatches(args, suggestions);
@@ -123,6 +124,28 @@ public final class CommandSuggester implements TabCompleter {
             return FLIGHT_DESTINATIONS;
         }
         return List.of();
+    }
+
+    private List<String> completeFakePlayer(String[] args) {
+        if (args.length == 1) {
+            return FAKE_PLAYER_ACTIONS;
+        }
+        if (args.length == 3 && "spawn".equalsIgnoreCase(args[0])) {
+            return onlinePlayerNames();
+        }
+        if (args.length == 2 && ("remove".equalsIgnoreCase(args[0])
+                || "inventory".equalsIgnoreCase(args[0])
+                || "inv".equalsIgnoreCase(args[0]))) {
+            return onlinePlayerNames().stream()
+                    .filter(this::isFakePlayer)
+                    .toList();
+        }
+        return List.of();
+    }
+
+    private boolean isFakePlayer(String name) {
+        Player player = Bukkit.getPlayerExact(name);
+        return player != null && player.getScoreboardTags().contains(FAKE_PLAYER_TAG);
     }
 
     private List<String> onlinePlayerNames() {

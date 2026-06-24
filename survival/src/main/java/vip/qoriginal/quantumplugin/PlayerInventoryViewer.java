@@ -2,6 +2,7 @@ package vip.qoriginal.quantumplugin;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -12,7 +13,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,7 +22,7 @@ public class PlayerInventoryViewer implements Listener {
 
     private void openInventoryForPlayer(Player viewer, Player target) {
         Inventory targetInventory = target.getInventory();
-        Inventory gui = Bukkit.createInventory(viewer, targetInventory.getSize(), target.getName() + "的背包");
+        Inventory gui = Bukkit.createInventory(viewer, targetInventory.getSize(), Component.text(target.getName() + "的背包"));
         for (int i = 0; i < targetInventory.getSize(); i++) {
             ItemStack item = targetInventory.getItem(i);
             if (item != null) {
@@ -90,7 +90,6 @@ public class PlayerInventoryViewer implements Listener {
             if (targetPlayer != null) {
                 Inventory targetInventory = targetPlayer.getInventory();
                 synchronizeInventories(clickedInventory, targetInventory);
-                targetPlayer.updateInventory();
             }
         } else if (openInventories.containsValue(player.getUniqueId())) {
             UUID viewerUUID = getKeyByValue(openInventories, player.getUniqueId());
@@ -100,7 +99,6 @@ public class PlayerInventoryViewer implements Listener {
             if (viewerPlayer != null) {
                 Inventory viewerInventory = viewerPlayer.getOpenInventory().getTopInventory();
                 synchronizeInventories(clickedInventory, viewerInventory);
-                viewerPlayer.updateInventory();
             }
         }
     }
@@ -114,7 +112,6 @@ public class PlayerInventoryViewer implements Listener {
             if (targetPlayer != null) {
                 Inventory targetInventory = targetPlayer.getInventory();
                 synchronizeInventories(event.getInventory(), targetInventory);
-                targetPlayer.updateInventory();
             }
         }
     }
