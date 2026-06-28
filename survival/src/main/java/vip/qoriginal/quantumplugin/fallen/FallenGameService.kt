@@ -26,7 +26,6 @@ import java.io.IOException
 import java.util.EnumMap
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.sqrt
 
 class FallenGameService(private val plugin: JavaPlugin) {
 	private val keyIdKey = NamespacedKey(plugin, "fallen_key_id")
@@ -54,7 +53,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val stationProtectionUntil = ConcurrentHashMap<UUID, Long>()
 	private val damageScoreWindows = ConcurrentHashMap<String, DamageScoreWindow>()
 	private val recentAttackers = ConcurrentHashMap<UUID, MutableMap<UUID, Long>>()
-	private val flightStates = ConcurrentHashMap<UUID, FlightScoreState>()
 	private val preciseRevealCooldowns = ConcurrentHashMap<String, Long>()
 	private val dangerSince = EnumMap<FallenTeam, Long>(FallenTeam::class.java)
 	private val eliminatedTeams = HashSet<FallenTeam>()
@@ -542,7 +540,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		processRefreshKeys()
 		processRefreshKeyExpiry()
 		processPlacedKeyScore()
-		processFlightScore()
 		processCompasses()
 		processStations()
 		processEliminations()
@@ -864,35 +861,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
-	private fun processFlightScore() {
-		if (!phase.allowsKeyCapture()) return
-		val now = System.currentTimeMillis()
-		for (player in Bukkit.getOnlinePlayers()) {
-			val team = teamOf(player) ?: continue
-			if (team in eliminatedTeams || !player.isGliding || player.gameMode == GameMode.SPECTATOR) continue
-			val location = player.location
-			val state = flightStates.computeIfAbsent(player.uniqueId) {
-				FlightScoreState(location.x, location.y, location.z, now, now)
-			}
-			val deltaSeconds = ((now - state.lastSampleAtMillis).coerceAtLeast(1L)) / 1000.0
-			val dx = location.x - state.lastX
-			val dy = location.y - state.lastY
-			val dz = location.z - state.lastZ
-			val speed = sqrt(dx * dx + dy * dy + dz * dz) / deltaSeconds
-			state.lastX = location.x
-			state.lastY = location.y
-			state.lastZ = location.z
-			state.lastSampleAtMillis = now
-			if (speed <= FLIGHT_SCORE_MIN_SPEED || now - state.lastScoreAtMillis < FLIGHT_SCORE_INTERVAL_MILLIS) continue
-			val baseCenter = regions[team]?.firstNotNullOfOrNull { it.center() }
-			if (baseCenter != null && baseCenter.world == location.world && baseCenter.distance(location) <= 100.0) continue
-			state.lastScoreAtMillis = now
-			addScore(team, 10)
-			save()
-		}
-		flightStates.keys.removeIf { Bukkit.getPlayer(it) == null }
-	}
-
 	private fun processCompasses() {
 		if (!phase.allowsKeyCapture()) return
 		val now = System.currentTimeMillis()
@@ -1007,7 +975,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private fun renderStationOutline(station: FallenStation) {
 		val center = station.center() ?: return
 		val world = center.world ?: return
-		val dust = Particle.DustOptions(Color.fromRGB(64, 160, 255), 1.1f)
+		val dust = stationDust(station)
 		val minX = station.x - 2 + 0.5
 		val maxX = station.x + 2 + 0.5
 		val minY = station.y + 0.1
@@ -1045,11 +1013,15 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun teamDust(team: FallenTeam): Particle.DustOptions {
 		val color = when (team) {
-			FallenTeam.A -> Color.fromRGB(255, 72, 72)
+			FallenTeam.A -> Color.fromRGB(150, 64, 48)
 			FallenTeam.B -> Color.fromRGB(72, 144, 255)
 			FallenTeam.C -> Color.fromRGB(72, 220, 120)
 		}
 		return Particle.DustOptions(color, 1.15f)
+	}
+
+	private fun stationDust(station: FallenStation): Particle.DustOptions {
+		return teamDust(station.team)
 	}
 
 	private fun stationDenyReason(player: Player, station: FallenStation, now: Long): String? {
@@ -1356,8 +1328,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val DAMAGE_SCORE_WINDOW_MILLIS = 30 * 1000L
 		private const val DAMAGE_SCORE_CAP_PER_WINDOW = 35
 		private const val ASSIST_WINDOW_MILLIS = 30 * 1000L
-		private const val FLIGHT_SCORE_INTERVAL_MILLIS = 30 * 1000L
-		private const val FLIGHT_SCORE_MIN_SPEED = 25.0
 		private const val COMPASS_COST = 600
 		private const val MAX_COMPASSES_PER_TEAM = 3
 		private const val COMPASS_DURATION_MILLIS = 20 * 60 * 1000L
@@ -1377,11 +1347,4 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private data class DamageScoreWindow(val startedAtMillis: Long, var score: Int)
 
-	private data class FlightScoreState(
-		var lastX: Double,
-		var lastY: Double,
-		var lastZ: Double,
-		var lastSampleAtMillis: Long,
-		var lastScoreAtMillis: Long
-	)
 }

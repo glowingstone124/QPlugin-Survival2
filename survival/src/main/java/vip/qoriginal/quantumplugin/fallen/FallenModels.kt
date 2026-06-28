@@ -9,7 +9,7 @@ import java.util.Locale
 import java.util.UUID
 
 enum class FallenTeam(val displayName: String, val color: NamedTextColor) {
-	A("A 阵营", NamedTextColor.RED),
+	A("A 阵营", NamedTextColor.DARK_RED),
 	B("B 阵营", NamedTextColor.BLUE),
 	C("C 阵营", NamedTextColor.GREEN);
 

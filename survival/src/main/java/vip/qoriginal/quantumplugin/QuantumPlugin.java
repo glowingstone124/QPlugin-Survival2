@@ -23,17 +23,12 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
-import org.json.JSONObject;
-import vip.qoriginal.quantumplugin.adventures.Trigger;
 import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponCmd;
 import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponListener;
 import vip.qoriginal.quantumplugin.event.Locker;
-import vip.qoriginal.quantumplugin.fakeplayer.FakePlayerCommand;
-import vip.qoriginal.quantumplugin.fakeplayer.FakePlayerManager;
 import vip.qoriginal.quantumplugin.fallen.FallenCommand;
 import vip.qoriginal.quantumplugin.fallen.FallenGameService;
 import vip.qoriginal.quantumplugin.fallen.FallenListener;
-import vip.qoriginal.quantumplugin.flightUtil.*;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
@@ -53,9 +48,6 @@ public final class QuantumPlugin extends JavaPlugin {
     LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
     ChatSync cs = new ChatSync();
-    FlightAutoDetector flightAutoDetector;
-    Flight flight = new Flight();
-    private final FakePlayerManager fakePlayerManager = new FakePlayerManager();
     private final FallenGameService fallenGameService = new FallenGameService(this);
     public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
@@ -70,12 +62,8 @@ public final class QuantumPlugin extends JavaPlugin {
         CommandSuggester.register(this, List.of(
                 "suicide", "shutup", "myloc", "highlight", "showitem", "querybind",
                 "viewInventory", "summontext", "login", "damageindicator", "leavemessage",
-                "elite", "gm", "firework", "newyeartnt", "newyeardumplings", "flight", "fakeplayer", "fallen"
+                "elite", "firework", "newyeartnt", "newyeardumplings", "fallen"
         ));
-        Trigger trigger = new Trigger();
-        System.out.println("starting scanning triggers");
-        trigger.scan("vip.qoriginal.quantumplugin");
-        System.out.println("end scanning triggers");
         System.out.println("1.14.5.5.1 Started.");
         if (DEBUG_FLAG) {
             System.out.println("QPlugin is running in debug mode. More logs will be written. Set DEBUG=false to disable this feature.");
@@ -86,18 +74,6 @@ public final class QuantumPlugin extends JavaPlugin {
             throw new RuntimeException(e);
         }
         int delay = 0;
-        JSONObject stopObj = new JSONObject();
-        stopObj.put("timestamp", System.currentTimeMillis());
-        stopObj.put("stat", 0);
-        try {
-            Request.sendPostRequest(
-                    Config.INSTANCE.getAPI_ENDPOINT() + "/qo/alive/upload",
-                    stopObj.toString(),
-                    Optional.of(Map.of("Authorization", Config.INSTANCE.getAPI_SECRET()))
-            );
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
         piv.init();
         Listener[] needReg = {
                 new Login(),
@@ -115,9 +91,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 new CustomItemStack(),
                 new FriendlyTnt(),
                 new Locker(),
-                new Trigger(),
                 new EliteWeaponListener(),
-                new FlightListener(),
                 new FallenListener(fallenGameService),
         };
 
@@ -127,11 +101,9 @@ public final class QuantumPlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(new Speed(), this);
             getServer().getPluginManager().registerEvents(new LoadChunk(this), this);
         }
-        StatusUpload su = new StatusUpload();
         new BukkitRunnable() {
             @Override
             public void run() {
-                su.run();
                 SegmentMap.refresh();
             }
         }.runTaskTimer(this, 0L, 10L);
@@ -147,33 +119,6 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         }.runTaskTimerAsynchronously(this, 0L, 30L);
 
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                for (Player player : getServer().getOnlinePlayers()) {
-                    if (FakePlayerManager.isFakePlayer(player)) continue;
-                    if (player.getScoreboardTags().contains("visitor_online")) continue;
-
-                    java.net.InetSocketAddress address = player.getAddress();
-                    if (address == null) continue;
-
-                    String url = (Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName()
-                            + "&ip=" + address.getHostName()).trim();
-                    Bukkit.getScheduler().runTaskAsynchronously(QuantumPlugin.this, () -> {
-                        try {
-                            Request.sendPostRequest(url, "");
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    });
-                }
-            }
-        }.runTaskTimer(this, 0L, 20*20L); // 每20秒
-
-        flightAutoDetector = new FlightAutoDetector(this, flight);
-        flightAutoDetector.start();
-        FlightGUI.INSTANCE.startTicking();
-        FlightReportScheduler.INSTANCE.start();
         Block b = Objects.requireNonNull(Bukkit.getWorld("world")).getBlockAt(-1782, 68, 720);
         if (b.getChunk().load()) {
             if (b.getType() == Material.LEVER) {
@@ -186,9 +131,6 @@ public final class QuantumPlugin extends JavaPlugin {
         Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
         Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
         Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());
-        Objects.requireNonNull(this.getCommand("gm")).setExecutor(new CustomGamemodeCmd());
-        Objects.requireNonNull(this.getCommand("flight")).setExecutor(new FlightCommandExecutor());
-        Objects.requireNonNull(this.getCommand("fakeplayer")).setExecutor(new FakePlayerCommand(this, fakePlayerManager));
         Objects.requireNonNull(this.getCommand("fallen")).setExecutor(new FallenCommand(fallenGameService));
         fallenGameService.start();
         Ranking ranking = new Ranking();
@@ -200,23 +142,10 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        fakePlayerManager.removeAll();
         fallenGameService.stop();
         LoggerProvider.INSTANCE.closeAll();
         if (webMsgGetterTask != null) {
             webMsgGetterTask.cancel();
-        }
-        JSONObject stopObj = new JSONObject();
-        stopObj.put("timestamp", System.currentTimeMillis());
-        stopObj.put("stat", 1);
-        try {
-            Request.sendPostRequest(
-                    Config.INSTANCE.getAPI_ENDPOINT() + "/qo/alive/upload",
-                    stopObj.toString(),
-                    Optional.of(Map.of("Authorization", Config.INSTANCE.getAPI_SECRET()))
-            );
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
         System.out.println("Ended.");
     }

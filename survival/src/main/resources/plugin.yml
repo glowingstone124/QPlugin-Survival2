@@ -43,9 +43,6 @@ commands:
   elite:
     description: 将主手物品升级为精英武器
     usage: /<command> <name> <inscription>
-  gm:
-    description: 切换自己的游戏模式
-    usage: /<command> <s|sc>
   firework:
     description: 新年烟花
     usage: /<command> <get|launch> [type]
@@ -55,12 +52,6 @@ commands:
   newyeardumplings:
     description: 新年团子
     usage: /<command>
-  flight:
-    description: 配置飞行仪表和目的地
-    usage: /<command> <report|gui|dest> ...
-  fakeplayer:
-    description: 管理服务器假人
-    usage: /<command> <spawn|remove|list|inventory> ...
   fallen:
     description: 管理《陷落》活动
     usage: /<command> <status|phase|team|key|score> ...
