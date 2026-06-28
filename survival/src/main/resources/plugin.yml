@@ -61,3 +61,6 @@ commands:
   fakeplayer:
     description: 管理服务器假人
     usage: /<command> <spawn|remove|list|inventory> ...
+  fallen:
+    description: 管理《陷落》活动
+    usage: /<command> <status|phase|team|key|score> ...

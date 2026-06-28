@@ -30,6 +30,9 @@ import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponListener;
 import vip.qoriginal.quantumplugin.event.Locker;
 import vip.qoriginal.quantumplugin.fakeplayer.FakePlayerCommand;
 import vip.qoriginal.quantumplugin.fakeplayer.FakePlayerManager;
+import vip.qoriginal.quantumplugin.fallen.FallenCommand;
+import vip.qoriginal.quantumplugin.fallen.FallenGameService;
+import vip.qoriginal.quantumplugin.fallen.FallenListener;
 import vip.qoriginal.quantumplugin.flightUtil.*;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
@@ -53,6 +56,7 @@ public final class QuantumPlugin extends JavaPlugin {
     FlightAutoDetector flightAutoDetector;
     Flight flight = new Flight();
     private final FakePlayerManager fakePlayerManager = new FakePlayerManager();
+    private final FallenGameService fallenGameService = new FallenGameService(this);
     public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
 
@@ -66,7 +70,7 @@ public final class QuantumPlugin extends JavaPlugin {
         CommandSuggester.register(this, List.of(
                 "suicide", "shutup", "myloc", "highlight", "showitem", "querybind",
                 "viewInventory", "summontext", "login", "damageindicator", "leavemessage",
-                "elite", "gm", "firework", "newyeartnt", "newyeardumplings", "flight", "fakeplayer"
+                "elite", "gm", "firework", "newyeartnt", "newyeardumplings", "flight", "fakeplayer", "fallen"
         ));
         Trigger trigger = new Trigger();
         System.out.println("starting scanning triggers");
@@ -114,6 +118,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 new Trigger(),
                 new EliteWeaponListener(),
                 new FlightListener(),
+                new FallenListener(fallenGameService),
         };
 
         Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
@@ -184,6 +189,8 @@ public final class QuantumPlugin extends JavaPlugin {
         Objects.requireNonNull(this.getCommand("gm")).setExecutor(new CustomGamemodeCmd());
         Objects.requireNonNull(this.getCommand("flight")).setExecutor(new FlightCommandExecutor());
         Objects.requireNonNull(this.getCommand("fakeplayer")).setExecutor(new FakePlayerCommand(this, fakePlayerManager));
+        Objects.requireNonNull(this.getCommand("fallen")).setExecutor(new FallenCommand(fallenGameService));
+        fallenGameService.start();
         Ranking ranking = new Ranking();
     }
 
@@ -194,6 +201,7 @@ public final class QuantumPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         fakePlayerManager.removeAll();
+        fallenGameService.stop();
         LoggerProvider.INSTANCE.closeAll();
         if (webMsgGetterTask != null) {
             webMsgGetterTask.cancel();

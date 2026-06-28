@@ -28,6 +28,10 @@ public final class CommandSuggester implements TabCompleter {
     private static final List<String> FIREWORK_TYPES = List.of("1", "2", "3", "4");
     private static final String FAKE_PLAYER_TAG = "quantum_fake_player";
     private static final List<String> FAKE_PLAYER_ACTIONS = List.of("spawn", "remove", "list", "inventory", "inv");
+    private static final List<String> FALLEN_ACTIONS = List.of("help", "status", "time", "start", "end", "phase", "team", "region", "key", "score", "buy");
+    private static final List<String> FALLEN_PHASES = List.of("idle", "deployment", "active", "overtime", "ended");
+    private static final List<String> FALLEN_TEAMS = List.of("A", "B", "C");
+    private static final List<String> FALLEN_BUY_OPTIONS = List.of("compass", "scan", "supply", "advanced", "resistance", "speed", "nightvision");
 
     public static void register(JavaPlugin plugin, Collection<String> commandNames) {
         CommandSuggester suggester = new CommandSuggester();
@@ -62,6 +66,7 @@ public final class CommandSuggester implements TabCompleter {
             case "firework" -> completeFirework(args);
             case "flight" -> completeFlight(args);
             case "fakeplayer" -> completeFakePlayer(args);
+            case "fallen" -> completeFallen(args);
             default -> List.of();
         };
         return copyPartialMatches(args, suggestions);
@@ -146,6 +151,45 @@ public final class CommandSuggester implements TabCompleter {
     private boolean isFakePlayer(String name) {
         Player player = Bukkit.getPlayerExact(name);
         return player != null && player.getScoreboardTags().contains(FAKE_PLAYER_TAG);
+    }
+
+    private List<String> completeFallen(String[] args) {
+        if (args.length == 1) {
+            return FALLEN_ACTIONS;
+        }
+        if (args.length == 2) {
+            return switch (args[0].toLowerCase(Locale.ROOT)) {
+                case "phase" -> FALLEN_PHASES;
+                case "team" -> List.of("set", "clear", "get");
+                case "region" -> List.of("set", "add", "clear", "list");
+                case "key" -> List.of("give", "list");
+                case "score" -> List.of("add", "set");
+                case "buy" -> FALLEN_BUY_OPTIONS;
+                default -> List.of();
+            };
+        }
+        if (args.length == 3 && ("team".equalsIgnoreCase(args[0]) || "key".equalsIgnoreCase(args[0]))) {
+            if ("give".equalsIgnoreCase(args[1])) {
+                return FALLEN_TEAMS;
+            }
+            return onlinePlayerNames();
+        }
+        if (args.length == 3 && "region".equalsIgnoreCase(args[0])) {
+            return "list".equalsIgnoreCase(args[1]) ? List.of() : FALLEN_TEAMS;
+        }
+        if (args.length == 3 && "score".equalsIgnoreCase(args[0])) {
+            return FALLEN_TEAMS;
+        }
+        if (args.length == 3 && "buy".equalsIgnoreCase(args[0]) && "compass".equalsIgnoreCase(args[1])) {
+            return FALLEN_TEAMS;
+        }
+        if (args.length == 4 && "team".equalsIgnoreCase(args[0]) && "set".equalsIgnoreCase(args[1])) {
+            return FALLEN_TEAMS;
+        }
+        if (args.length == 4 && "key".equalsIgnoreCase(args[0]) && "give".equalsIgnoreCase(args[1])) {
+            return onlinePlayerNames();
+        }
+        return List.of();
     }
 
     private List<String> onlinePlayerNames() {
