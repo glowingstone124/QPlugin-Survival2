@@ -8,6 +8,13 @@ import kotlin.random.Random
 import java.util.Locale
 import java.util.UUID
 
+const val FALLEN_KEY_WIDTH = 5
+const val FALLEN_KEY_HEIGHT = 7
+const val FALLEN_KEY_DEPTH = 5
+const val FALLEN_STATION_WIDTH = 6
+const val FALLEN_STATION_HEIGHT = 3
+const val FALLEN_STATION_DEPTH = 6
+
 enum class FallenTeam(val displayName: String, val color: NamedTextColor) {
 	A("A 阵营", NamedTextColor.DARK_RED),
 	B("B 阵营", NamedTextColor.BLUE),
@@ -142,23 +149,19 @@ data class FallenStation(
 ) {
 	fun center(): Location? {
 		val world = Bukkit.getWorld(worldName ?: return null) ?: return null
-		return Location(world, x + 0.5, y + 0.5, z + 0.5)
+		return Location(world, x + FALLEN_STATION_WIDTH / 2.0, y + FALLEN_STATION_HEIGHT / 2.0, z + FALLEN_STATION_DEPTH / 2.0)
 	}
 
 	fun contains(location: Location): Boolean {
 		val world = location.world ?: return false
 		return worldName == world.name
-			&& location.blockX in (x - 2)..(x + 2)
-			&& location.blockY in y..(y + 2)
-			&& location.blockZ in (z - 2)..(z + 2)
+			&& location.blockX in x until (x + FALLEN_STATION_WIDTH)
+			&& location.blockY in y until (y + FALLEN_STATION_HEIGHT)
+			&& location.blockZ in z until (z + FALLEN_STATION_DEPTH)
 	}
 
 	fun containsCore(location: Location): Boolean {
-		val world = location.world ?: return false
-		return worldName == world.name
-			&& location.blockX in (x - 1)..(x + 1)
-			&& location.blockY in y..(y + 2)
-			&& location.blockZ in (z - 1)..(z + 1)
+		return contains(location)
 	}
 }
 
@@ -195,15 +198,15 @@ data class FallenKey(
 
 	fun center(): Location? {
 		val world = Bukkit.getWorld(worldName ?: return null) ?: return null
-		return Location(world, x + 1.0, y + 1.5, z + 1.0)
+		return Location(world, x + FALLEN_KEY_WIDTH / 2.0, y + FALLEN_KEY_HEIGHT / 2.0, z + FALLEN_KEY_DEPTH / 2.0)
 	}
 
 	fun contains(location: Location): Boolean {
 		val world = location.world ?: return false
 		if (worldName != world.name) return false
-		return location.blockX in x..(x + 1)
-			&& location.blockY in y..(y + 2)
-			&& location.blockZ in z..(z + 1)
+		return location.blockX in x until (x + FALLEN_KEY_WIDTH)
+			&& location.blockY in y until (y + FALLEN_KEY_HEIGHT)
+			&& location.blockZ in z until (z + FALLEN_KEY_DEPTH)
 	}
 
 	fun shortId(): String = id.toString().substring(0, 8)

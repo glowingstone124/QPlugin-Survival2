@@ -43,15 +43,9 @@ commands:
   elite:
     description: 将主手物品升级为精英武器
     usage: /<command> <name> <inscription>
-  firework:
-    description: 新年烟花
-    usage: /<command> <get|launch> [type]
-  newyeartnt:
-    description: 新年爆竹
-    usage: /<command>
-  newyeardumplings:
-    description: 新年团子
-    usage: /<command>
   fallen:
     description: 管理《陷落》活动
     usage: /<command> <status|phase|team|key|score> ...
+  shop:
+    description: 购买《陷落》积分商城物品
+    usage: /<command> <id> [amount]

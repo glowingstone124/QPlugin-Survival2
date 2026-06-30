@@ -29,6 +29,7 @@ import vip.qoriginal.quantumplugin.event.Locker;
 import vip.qoriginal.quantumplugin.fallen.FallenCommand;
 import vip.qoriginal.quantumplugin.fallen.FallenGameService;
 import vip.qoriginal.quantumplugin.fallen.FallenListener;
+import vip.qoriginal.quantumplugin.fallen.FallenShopCommand;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
@@ -62,41 +63,49 @@ public final class QuantumPlugin extends JavaPlugin {
         CommandSuggester.register(this, List.of(
                 "suicide", "shutup", "myloc", "highlight", "showitem", "querybind",
                 "viewInventory", "summontext", "login", "damageindicator", "leavemessage",
-                "elite", "firework", "newyeartnt", "newyeardumplings", "fallen"
+                "elite", "fallen", "shop"
         ));
         System.out.println("1.14.5.5.1 Started.");
         if (DEBUG_FLAG) {
             System.out.println("QPlugin is running in debug mode. More logs will be written. Set DEBUG=false to disable this feature.");
         }
-        try {
-            JoinLeaveListener.init();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        boolean qoApiEnabled = !"true".equalsIgnoreCase(System.getenv("DISABLE_QO_API"));
+        if (qoApiEnabled) {
+            try {
+                JoinLeaveListener.init();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            getLogger().info("QO API integrations are disabled by DISABLE_QO_API=true.");
         }
         int delay = 0;
         piv.init();
-        Listener[] needReg = {
-                new Login(),
-                new JoinLeaveListener(),
+        List<Listener> needReg = new ArrayList<>(List.of(
                 new ChatCommandListener(),
                 new MSPTCalculator(),
                 new Knowledge(),
-                cs,
                 /*new Chat(),*/
-                new SpeedMonitor(this),
                 new NamePrefix(),
-                new PlayerEventListener(),
                 new PlayerInventoryViewer(),
-                new BuffSnowball(),
                 new CustomItemStack(),
-                new FriendlyTnt(),
                 new Locker(),
-                new EliteWeaponListener(),
-                new FallenListener(fallenGameService),
-        };
+                new FallenListener(fallenGameService)
+        ));
+        if (qoApiEnabled) {
+            needReg.addAll(List.of(
+                    new Login(),
+                    new JoinLeaveListener(),
+                    cs,
+                    new PlayerEventListener(),
+                    new EliteWeaponListener()
+            ));
+        }
 
-        Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
-        webMsgGetterTask = getServer().getScheduler().runTaskTimerAsynchronously(this, cs.createWebMsgGetter(), 0L, 40L);
+        needReg.forEach(e -> getServer().getPluginManager().registerEvents(e, this));
+        if (qoApiEnabled) {
+            webMsgGetterTask = getServer().getScheduler().runTaskTimerAsynchronously(this, cs.createWebMsgGetter(), 0L, 40L);
+        }
         if (enableMetro) {
             getServer().getPluginManager().registerEvents(new Speed(), this);
             getServer().getPluginManager().registerEvents(new LoadChunk(this), this);
@@ -128,12 +137,12 @@ public final class QuantumPlugin extends JavaPlugin {
         }
         SegmentMap.init();
         Objects.requireNonNull(this.getCommand("elite")).setExecutor(new EliteWeaponCmd());
-        Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
-        Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
-        Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());
         Objects.requireNonNull(this.getCommand("fallen")).setExecutor(new FallenCommand(fallenGameService));
+        Objects.requireNonNull(this.getCommand("shop")).setExecutor(new FallenShopCommand(fallenGameService));
         fallenGameService.start();
-        Ranking ranking = new Ranking();
+        if (qoApiEnabled) {
+            Ranking ranking = new Ranking();
+        }
     }
 
     public static QuantumPlugin getInstance() {

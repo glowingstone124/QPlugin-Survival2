@@ -59,7 +59,6 @@ object Config {
 		get() = (configData["API_SECRET"] ?: "") as String
 	val API_PERM_KEY: String
 		get() = (configData["API_PERM_KEY"] ?: "") as String
-
 	fun llmMentionAliases(): List<String> {
 		val raw = configData["LLM_MENTION_ALIASES"] ?: return listOf("@恋恋")
 		return when (raw) {

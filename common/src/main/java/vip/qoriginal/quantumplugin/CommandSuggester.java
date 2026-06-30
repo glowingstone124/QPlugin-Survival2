@@ -19,12 +19,11 @@ import java.util.Locale;
 
 public final class CommandSuggester implements TabCompleter {
     private static final List<String> TOGGLE_OPTIONS = List.of("query", "enable", "disable");
-    private static final List<String> FIREWORK_ACTIONS = List.of("get", "launch");
-    private static final List<String> FIREWORK_TYPES = List.of("1", "2", "3", "4");
-    private static final List<String> FALLEN_ACTIONS = List.of("help", "status", "time", "start", "end", "phase", "team", "region", "key", "score", "buy");
+    private static final List<String> FALLEN_ACTIONS = List.of("help", "status", "time", "start", "end", "phase", "team", "region", "key", "score", "buy", "beacon", "admin");
     private static final List<String> FALLEN_PHASES = List.of("idle", "deployment", "active", "overtime", "ended");
     private static final List<String> FALLEN_TEAMS = List.of("A", "B", "C");
-    private static final List<String> FALLEN_BUY_OPTIONS = List.of("compass", "scan", "supply", "advanced", "resistance", "speed", "nightvision");
+    private static final List<String> FALLEN_BUY_OPTIONS = List.of("compass", "scan", "jammer", "tracking", "supply", "advanced", "resistance", "speed", "nightvision", "blast", "respawn", "keyalert", "beacon");
+    private static final List<String> SHOP_IDS = List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15");
 
     public static void register(JavaPlugin plugin, Collection<String> commandNames) {
         CommandSuggester suggester = new CommandSuggester();
@@ -53,10 +52,10 @@ public final class CommandSuggester implements TabCompleter {
             case "querybind", "viewinventory" -> args.length == 1 ? onlinePlayerNames() : List.of();
             case "leavemessage" -> completeLeaveMessage(args);
             case "bind" -> args.length == 1 ? List.of("forumAccount") : List.of();
-            case "bindauth", "myloc", "showitem", "suicide", "login", "summontext", "newyeartnt", "newyeardumplings" -> List.of();
+            case "bindauth", "myloc", "showitem", "suicide", "login", "summontext" -> List.of();
             case "elite" -> completeElite(args);
-            case "firework" -> completeFirework(args);
             case "fallen" -> completeFallen(args);
+            case "shop" -> completeShop(args);
             default -> List.of();
         };
         return copyPartialMatches(args, suggestions);
@@ -92,16 +91,6 @@ public final class CommandSuggester implements TabCompleter {
         };
     }
 
-    private List<String> completeFirework(String[] args) {
-        if (args.length == 1) {
-            return FIREWORK_ACTIONS;
-        }
-        if (args.length == 2 && "get".equalsIgnoreCase(args[0])) {
-            return FIREWORK_TYPES;
-        }
-        return List.of();
-    }
-
     private List<String> completeFallen(String[] args) {
         if (args.length == 1) {
             return FALLEN_ACTIONS;
@@ -110,10 +99,11 @@ public final class CommandSuggester implements TabCompleter {
             return switch (args[0].toLowerCase(Locale.ROOT)) {
                 case "phase" -> FALLEN_PHASES;
                 case "team" -> List.of("set", "clear", "get");
-                case "region" -> List.of("set", "add", "clear", "list");
+                case "region" -> List.of("list");
                 case "key" -> List.of("give", "list");
                 case "score" -> List.of("add", "set");
                 case "buy" -> FALLEN_BUY_OPTIONS;
+                case "admin" -> List.of("eliminate", "voidkey");
                 default -> List.of();
             };
         }
@@ -123,13 +113,13 @@ public final class CommandSuggester implements TabCompleter {
             }
             return onlinePlayerNames();
         }
-        if (args.length == 3 && "region".equalsIgnoreCase(args[0])) {
-            return "list".equalsIgnoreCase(args[1]) ? List.of() : FALLEN_TEAMS;
-        }
         if (args.length == 3 && "score".equalsIgnoreCase(args[0])) {
             return FALLEN_TEAMS;
         }
         if (args.length == 3 && "buy".equalsIgnoreCase(args[0]) && "compass".equalsIgnoreCase(args[1])) {
+            return FALLEN_TEAMS;
+        }
+        if (args.length == 3 && "admin".equalsIgnoreCase(args[0]) && "eliminate".equalsIgnoreCase(args[1])) {
             return FALLEN_TEAMS;
         }
         if (args.length == 4 && "team".equalsIgnoreCase(args[0]) && "set".equalsIgnoreCase(args[1])) {
@@ -139,6 +129,14 @@ public final class CommandSuggester implements TabCompleter {
             return onlinePlayerNames();
         }
         return List.of();
+    }
+
+    private List<String> completeShop(String[] args) {
+        return switch (args.length) {
+            case 1 -> SHOP_IDS;
+            case 2 -> List.of("1", "2", "3", "4", "5", "8", "16");
+            default -> List.of();
+        };
     }
 
     private List<String> onlinePlayerNames() {

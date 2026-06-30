@@ -30,6 +30,8 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				"key" -> key(sender, args)
 				"score" -> score(sender, args)
 				"buy" -> buy(sender, args)
+				"beacon" -> beacon(sender)
+				"admin" -> admin(sender, args)
 				else -> {
 					CommandMessages.warning(sender, "未知操作: ${args[0]}")
 					help(sender, label)
@@ -54,15 +56,19 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				.appendNewline()
 				.append(line("$root team set <player> <A|B|C>", "分配阵营"))
 				.appendNewline()
-				.append(line("$root region <set|add> <A|B|C> <world> <x1> <y1> <z1> <x2> <y2> <z2>", "配置阵营矩形区域"))
+				.append(line("$root region list", "查看写死的阵营矩形区域"))
 				.appendNewline()
 				.append(line("$root key give <A|B|C> [player]", "发放物品密钥"))
 				.appendNewline()
 				.append(line("$root key list", "查看密钥"))
 				.appendNewline()
-				.append(line("$root buy <compass|scan|supply|advanced|resistance|speed|nightvision> ...", "购买积分物品"))
+				.append(line("$root buy <compass|scan|jammer|tracking|supply|advanced|resistance|speed|nightvision|blast|respawn|keyalert|beacon> ...", "购买积分物品"))
+				.appendNewline()
+				.append(line("$root beacon", "使用阵营临时传送信标"))
 				.appendNewline()
 				.append(line("$root score [add|set] <A|B|C> <amount>", "查看或调整积分"))
+				.appendNewline()
+				.append(line("$root admin <eliminate|voidkey> ...", "管理员裁定工具"))
 		)
 	}
 
@@ -136,29 +142,8 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 	}
 
 	private fun region(sender: CommandSender, args: Array<out String>) {
-		require(args.size >= 2) { "用法: /fallen region <set|add|clear|list> ..." }
+		require(args.size >= 2) { "用法: /fallen region list" }
 		when (args[1].lowercase()) {
-			"set", "add" -> {
-				requireAdmin(sender)
-				require(args.size == 10) { "用法: /fallen region <set|add> <A|B|C> <world> <x1> <y1> <z1> <x2> <y2> <z2>" }
-				val team = FallenTeam.parse(args[2])
-				val nums = args.drop(4).map { it.toIntOrNull() ?: throw IllegalArgumentException("坐标必须是整数。") }
-				val region = FallenRegion.of(args[3], nums[0], nums[1], nums[2], nums[3], nums[4], nums[5])
-				if (args[1].equals("set", ignoreCase = true)) {
-					service.setRegion(team, region)
-					CommandMessages.success(sender, "已设置 ${team.displayName} 区域。")
-				} else {
-					service.addRegion(team, region)
-					CommandMessages.success(sender, "已追加 ${team.displayName} 区域。")
-				}
-			}
-			"clear" -> {
-				requireAdmin(sender)
-				require(args.size == 3) { "用法: /fallen region clear <A|B|C>" }
-				val team = FallenTeam.parse(args[2])
-				service.clearRegion(team)
-				CommandMessages.success(sender, "已清除 ${team.displayName} 区域。")
-			}
 			"list" -> {
 				var component = CommandMessages.title("阵营区域")
 				for (team in FallenTeam.entries) {
@@ -169,7 +154,7 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				}
 				sender.sendMessage(component)
 			}
-			else -> throw IllegalArgumentException("用法: /fallen region <set|clear|list> ...")
+			else -> throw IllegalArgumentException("区域已改为代码内写死，只能使用 /fallen region list")
 		}
 	}
 
@@ -226,15 +211,44 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 
 	private fun buy(sender: CommandSender, args: Array<out String>) {
 		val player = sender as? Player ?: throw IllegalArgumentException("只有玩家可以购买物品。")
-		require(args.size >= 2) { "用法: /fallen buy <compass|scan|supply|advanced|resistance|speed|nightvision> ..." }
+		require(args.size >= 2) { "用法: /fallen buy <compass|scan|jammer|tracking|supply|advanced|resistance|speed|nightvision|blast|respawn|keyalert|beacon> ..." }
 		when (args[1].lowercase()) {
 			"compass" -> {
 				require(args.size == 3) { "用法: /fallen buy compass <A|B|C>" }
 				service.buyCompass(player, FallenTeam.parse(args[2]))
 			}
 			"scan" -> service.buyShortScan(player)
-			"supply", "advanced", "resistance", "speed", "nightvision" -> service.buyShopItem(player, args[1])
+			"jammer", "tracking", "supply", "advanced", "resistance", "speed", "nightvision", "blast", "respawn", "keyalert", "beacon" -> service.buyShopItem(player, args[1])
 			else -> throw IllegalArgumentException("未知购买项: ${args[1]}")
+		}
+	}
+
+	private fun beacon(sender: CommandSender) {
+		val player = sender as? Player ?: throw IllegalArgumentException("只有玩家可以使用传送信标。")
+		service.teleportToBeacon(player)
+	}
+
+	private fun admin(sender: CommandSender, args: Array<out String>) {
+		requireAdmin(sender)
+		require(args.size >= 2) { "用法: /fallen admin <eliminate|voidkey> ..." }
+		when (args[1].lowercase()) {
+			"eliminate" -> {
+				require(args.size >= 3) { "用法: /fallen admin eliminate <A|B|C> [reason]" }
+				val team = FallenTeam.parse(args[2])
+				val reason = args.drop(3).joinToString(" ").ifBlank { "管理员裁定出局" }
+				if (service.forceEliminate(team, reason)) {
+					CommandMessages.success(sender, "${team.displayName} 已出局。")
+				} else {
+					CommandMessages.warning(sender, "${team.displayName} 已经出局。")
+				}
+			}
+			"voidkey" -> {
+				require(args.size >= 3) { "用法: /fallen admin voidkey <keyPrefix> [reason]" }
+				val reason = args.drop(3).joinToString(" ").ifBlank { "管理员裁定作废" }
+				val key = service.voidKey(args[2], reason)
+				CommandMessages.success(sender, "密钥 ${key.shortId()} 已作废。")
+			}
+			else -> throw IllegalArgumentException("用法: /fallen admin <eliminate|voidkey> ...")
 		}
 	}
 
