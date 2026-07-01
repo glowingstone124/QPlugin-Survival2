@@ -10,6 +10,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
@@ -121,22 +122,14 @@ public class PlayerEventListener implements Listener {
         return totalExp;
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         String player = event.getPlayer().getName();
-        if (!destroyMap.containsKey(player)) {
-            destroyMap.put(player, 1L);
-        } else {
-            destroyMap.put(player, destroyMap.get(player) + 1);
-        }
+        destroyMap.merge(player, 1L, Long::sum);
     }
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockPlace(BlockPlaceEvent event) {
         String player = event.getPlayer().getName();
-        if (!placeMap.containsKey(player)) {
-            placeMap.put(player, 1L);
-        } else {
-            placeMap.put(player, placeMap.get(player) + 1);
-        }
+        placeMap.merge(player, 1L, Long::sum);
     }
 }
