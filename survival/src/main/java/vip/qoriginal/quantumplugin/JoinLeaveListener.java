@@ -62,6 +62,12 @@ public class JoinLeaveListener implements Listener {
                     Component.text("[403 Forbidden]验证失败，原因：您的账户已经被冻结！")
                             .append(Component.text("您的游戏名：" + playerName).decorate(TextDecoration.BOLD))
                             .append(Component.text(" 请私聊群主：1294915648了解更多")));
+        } else if (relationship.has("score") && relationship.get("score").getAsInt() < 6) {
+            logger.log("Player " + playerName + " was not qualified : "+relationship.get("score").getAsInt()+" < 6.");
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
+                    Component.text("[403 Forbidden]验证失败，原因：暂未通过文化水平核验。")
+                            .append(Component.text("您的游戏名：" + playerName).decorate(TextDecoration.BOLD))
+                            .append(Component.text(" 请私聊群主：1294915648提交初中（含在读）及以上文化水平证明")));
         }
     }
 
