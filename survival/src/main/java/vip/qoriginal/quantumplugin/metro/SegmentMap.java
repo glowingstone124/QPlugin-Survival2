@@ -17,27 +17,34 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SegmentMap {
     public static final Logger logger = LoggerProvider.INSTANCE.getLogger("SegmentMap");
     public static final int cache_expiration = 60000;
+    public static ConcurrentHashMap<String, String> minecart_status = new ConcurrentHashMap<>();
 
     public static void enter(String id, Minecart minecart) {
+        String code = id + "E";
+        if(minecart_status.get(minecart.getUniqueId().toString()).contentEquals(code)) return;
         JsonObject line = getLineInfo(id);
         if (line != null && line.has("stations")) {
             try {
-                JsonObject station = line.getAsJsonArray("stations").get(Integer.parseInt(id, 16) | 15).getAsJsonObject();
+                JsonObject station = line.getAsJsonArray("stations").get(Integer.parseInt(id, 16) | 255).getAsJsonObject();
                 if(minecart.getPassengers().getFirst() instanceof Player) {
-                    ((Player) minecart.getPassengers().getFirst()).sendMessage(station.get("name").getAsString()+"到了");
+                    minecart.getPassengers().getFirst().sendMessage(station.get("name").getAsString()+"到了");
                 }
+                minecart_status.put(minecart.getUniqueId().toString(), code);
             } catch (Exception _) {}
         }
     }
 
     public static void leave(String id, Minecart minecart) {
+        String code = id + "L";
+        if(minecart_status.get(minecart.getUniqueId().toString()).contentEquals(code)) return;
         JsonObject line = getLineInfo(id);
         if (line != null && line.has("stations")) {
             try {
-                JsonObject station = line.getAsJsonArray("stations").get(Integer.parseInt(id, 16) | 15 + 1).getAsJsonObject();
+                JsonObject station = line.getAsJsonArray("stations").get(Integer.parseInt(id, 16) | 255 + 1).getAsJsonObject();
                 if(minecart.getPassengers().getFirst() instanceof Player) {
-                    ((Player) minecart.getPassengers().getFirst()).sendMessage("下一站："+station.get("name").getAsString());
+                    minecart.getPassengers().getFirst().sendMessage("下一站："+station.get("name").getAsString());
                 }
+                minecart_status.put(minecart.getUniqueId().toString(), code);
             } catch (Exception _) {}
         }
     }
@@ -67,7 +74,7 @@ public class SegmentMap {
                 }
                 JsonObject relationship = null;
                 try {
-                    relationship = JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/transportation/line/detail?id=" + (id >> 4)).get()).getAsJsonObject();
+                    relationship = JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/transportation/line/detail?id=" + (id >> 8)).get()).getAsJsonObject();
                     JsonArray stations = relationship.getAsJsonArray("stations");
                     if (stations == null || stations.isEmpty()) return null;
                     for (JsonElement station_element : stations) {
