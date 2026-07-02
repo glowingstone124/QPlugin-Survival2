@@ -14,6 +14,7 @@ import vip.qoriginal.quantumplugin.Logger;
 import vip.qoriginal.quantumplugin.LoggerProvider;
 import vip.qoriginal.quantumplugin.Request;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -51,11 +52,50 @@ public class SegmentMap {
     }
 
     public static TextComponent getInterchangeMessage(JsonObject station, JsonObject line) {
-        if (station.getAsJsonArray("transfer_lines").isEmpty()) return Component.empty();
+        TextComponent result = Component.empty();
+        if (station.getAsJsonArray("transfer_lines").isEmpty()) return result;
         String type = line.get("line").getAsJsonObject().get("type").getAsString();
         String dim = line.get("line").getAsJsonObject().get("dimension").getAsString();
-        //TODO finish it
-        return Component.empty();
+        TextComponent in_system = null, intersystem = null, inter_dimension = null;
+        for(JsonElement elem: station.getAsJsonArray("transfer_lines")) {
+            if(!elem.getAsJsonObject().get("dimension").getAsString().contentEquals(dim) && !elem.getAsJsonObject().get("type").getAsString().contentEquals("WALK")) {
+                if(inter_dimension == null) {
+                    inter_dimension = Component.text("可跨维度乘坐")
+                            .append(Component.text(elem.getAsJsonObject().get("name").getAsString()).color(TextColor.color(Integer.parseInt(elem.getAsJsonObject().get("color").getAsString().substring(1),16))));
+                } else {
+                    inter_dimension = inter_dimension.append(Component.text("、")).append(Component.text(elem.getAsJsonObject().get("name").getAsString()).color(TextColor.color(Integer.parseInt(elem.getAsJsonObject().get("color").getAsString().substring(1),16))));
+                }
+            } else if (!elem.getAsJsonObject().get("type").getAsString().contentEquals(type) && !elem.getAsJsonObject().get("type").getAsString().contentEquals("WALK")) {
+                if(intersystem == null) {
+                    intersystem = Component.text("可转乘")
+                            .append(Component.text(elem.getAsJsonObject().get("name").getAsString()).color(TextColor.color(Integer.parseInt(elem.getAsJsonObject().get("color").getAsString().substring(1),16))));
+                } else {
+                    intersystem = intersystem.append(Component.text("、")).append(Component.text(elem.getAsJsonObject().get("name").getAsString()).color(TextColor.color(Integer.parseInt(elem.getAsJsonObject().get("color").getAsString().substring(1),16))));
+                }
+            } else if (!elem.getAsJsonObject().get("type").getAsString().contentEquals("WALK")) {
+                if(in_system == null) {
+                    in_system = Component.text("可换乘")
+                            .append(Component.text(elem.getAsJsonObject().get("name").getAsString()).color(TextColor.color(Integer.parseInt(elem.getAsJsonObject().get("color").getAsString().substring(1),16))));
+                } else {
+                    in_system = in_system.append(Component.text("、")).append(Component.text(elem.getAsJsonObject().get("name").getAsString()).color(TextColor.color(Integer.parseInt(elem.getAsJsonObject().get("color").getAsString().substring(1),16))));
+                }
+            }
+        }
+        boolean need_new_line = false;
+        if (in_system != null) {
+            need_new_line = true;
+            result = result.append(in_system).append(Component.text("。"));
+        }
+        if (intersystem != null) {
+            if(need_new_line) result = result.appendNewline();
+            need_new_line = true;
+            result = result.append(intersystem).append(Component.text("。"));
+        }
+        if (inter_dimension != null) {
+            if(need_new_line) result = result.appendNewline();
+            result = result.append(inter_dimension).append(Component.text("。"));
+        }
+        return result;
     }
 
     public static void leave(String id, Minecart minecart) {
@@ -67,11 +107,13 @@ public class SegmentMap {
             try {
                 JsonObject station = line.getAsJsonArray("stations").get((Integer.parseInt(id, 16) & 255) + 1).getAsJsonObject();
                 if(!minecart.getPassengers().isEmpty() && minecart.getPassengers().getFirst() instanceof Player) {
-                    minecart.getPassengers().getFirst().sendMessage(Component.text("欢迎您乘坐轨道交通")
-                            .append(Component.text(line.get("name").getAsString().split("-")[0]+"。").color(TextColor.color(Integer.parseInt(line.get("color").getAsString().substring(1),16))))
+                    minecart.getPassengers().getFirst().sendMessage(Component.text("欢迎您乘坐")
+                            .append(Component.text("轨道交通"+line.get("line").getAsJsonObject().get("name").getAsString().split("-")[0]).color(TextColor.color(Integer.parseInt(line.get("line").getAsJsonObject().get("color").getAsString().substring(1),16))))
+                            .append(Component.text("！"))
                             .appendNewline().append(Component.text("本线终点站："))
-                            .append(Component.text(line.getAsJsonArray("stations").get(line.getAsJsonArray("stations").size() - 1).getAsString()))
-                            .append(Component.text("，下一站："+station.getAsJsonArray("name").getAsString()))
+                            .append(Component.text(line.getAsJsonArray("stations").get(line.getAsJsonArray("stations").size() - 1).getAsJsonObject().get("name").getAsString()))
+                            .append(Component.text("，下一站："+station.get("name").getAsString()+"。"))
+                            .append(getInterchangeMessage(station, line))
                     );
                 }
                 minecart_status.put(uuid, code);
@@ -126,6 +168,8 @@ public class SegmentMap {
                                 JsonObject object = new JsonObject();
                                 object.addProperty("name", line_name);
                                 object.add("color", content.getAsJsonObject().get("color"));
+                                object.add("type", content.getAsJsonObject().get("type"));
+                                object.add("dimension", content.getAsJsonObject().get("dimension"));
                                 transfers_new.add(object);
                             }
                         }
