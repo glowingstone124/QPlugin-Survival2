@@ -58,29 +58,29 @@ public class LoadChunk implements Listener {
             }
 
             if (blockBelow.getType() == Material.WHITE_TERRACOTTA || blockBelow.getType() == Material.BLACK_TERRACOTTA) {
-                String p = "";
+                StringBuilder p = new StringBuilder();
                 for(int i=0;i<4;i++) {
                     switch (minecart.getLocation().subtract(0, 2+i, 0).getBlock().getType()) {
-                        case WHITE_WOOL -> p = p + 0;
-                        case LIGHT_GRAY_WOOL -> p = p + 1;
-                        case GRAY_WOOL -> p = p + 2;
-                        case BLACK_WOOL -> p = p + 3;
-                        case BROWN_WOOL -> p = p + 4;
-                        case RED_WOOL -> p = p + 5;
-                        case ORANGE_WOOL -> p = p + 6;
-                        case YELLOW_WOOL -> p = p + 7;
-                        case LIME_WOOL -> p = p + 8;
-                        case GREEN_WOOL -> p = p + 9;
-                        case CYAN_WOOL -> p = p + "a";
-                        case LIGHT_BLUE_WOOL -> p = p + "b";
-                        case BLUE_WOOL -> p = p + "c";
-                        case PURPLE_WOOL -> p = p + "d";
-                        case MAGENTA_WOOL -> p = p + "e";
-                        case PINK_WOOL -> p = p + "f";
+                        case LIGHT_GRAY_WOOL -> p.append(1);
+                        case GRAY_WOOL -> p.append(2);
+                        case BLACK_WOOL -> p.append(3);
+                        case BROWN_WOOL -> p.append(4);
+                        case RED_WOOL -> p.append(5);
+                        case ORANGE_WOOL -> p.append(6);
+                        case YELLOW_WOOL -> p.append(7);
+                        case LIME_WOOL -> p.append(8);
+                        case GREEN_WOOL -> p.append(9);
+                        case CYAN_WOOL -> p.append("a");
+                        case LIGHT_BLUE_WOOL -> p.append("b");
+                        case BLUE_WOOL -> p.append("c");
+                        case PURPLE_WOOL -> p.append("d");
+                        case MAGENTA_WOOL -> p.append("e");
+                        case PINK_WOOL -> p.append("f");
+                        default -> p.append(0);
                     }
                 }
-                if(blockBelow.getType() == Material.WHITE_TERRACOTTA) SegmentMap.enter(p,minecart);
-                if(blockBelow.getType() == Material.BLACK_TERRACOTTA) SegmentMap.leave(p,minecart);
+                if(blockBelow.getType() == Material.WHITE_TERRACOTTA) SegmentMap.enter(p.toString(),minecart);
+                if(blockBelow.getType() == Material.BLACK_TERRACOTTA) SegmentMap.leave(p.toString(),minecart);
             }
         }
     }

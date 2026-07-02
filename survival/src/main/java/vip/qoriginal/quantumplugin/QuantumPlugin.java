@@ -127,7 +127,6 @@ public final class QuantumPlugin extends JavaPlugin {
             @Override
             public void run() {
                 su.run();
-                SegmentMap.refresh();
             }
         }.runTaskTimer(this, 0L, 10L);
         new BukkitRunnable() {
@@ -176,7 +175,6 @@ public final class QuantumPlugin extends JavaPlugin {
                 if (data.getAsString().contains("powered=true")) StoneFarm.console_state = 10;
             }
         }
-        SegmentMap.init();
         Objects.requireNonNull(this.getCommand("elite")).setExecutor(new EliteWeaponCmd());
         Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
         Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
