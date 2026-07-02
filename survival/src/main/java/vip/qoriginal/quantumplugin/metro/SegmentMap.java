@@ -52,8 +52,8 @@ public class SegmentMap {
 
     public static TextComponent getInterchangeMessage(JsonObject station, JsonObject line) {
         if (station.getAsJsonArray("transfer_lines").isEmpty()) return Component.empty();
-        String type = line.get("type").getAsString();
-        String dim = line.get("dimension").getAsString();
+        String type = line.get("line").getAsJsonObject().get("type").getAsString();
+        String dim = line.get("line").getAsJsonObject().get("dimension").getAsString();
         //TODO finish it
         return Component.empty();
     }
