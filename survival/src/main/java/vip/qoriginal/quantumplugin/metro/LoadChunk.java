@@ -43,20 +43,6 @@ public class LoadChunk implements Listener {
                 minecart.setMaxSpeed(0.89D);
             }
 
-            int chunkX = minecart.getLocation().getBlockX() >> 4;
-            int chunkZ = minecart.getLocation().getBlockZ() >> 4;
-
-            if (minecart.getPersistentDataContainer().has(new NamespacedKey(plugin, "load"), PersistentDataType.BYTE)) {
-                for (int x = chunkX - radius; x <= chunkX + radius; x++) {
-                    for (int z = chunkZ - radius; z <= chunkZ + radius; z++) {
-                        Chunk chunk = minecart.getWorld().getChunkAt(x, z);
-                        if (!chunk.isLoaded()) {
-                            chunk.load();
-                        }
-                    }
-                }
-            }
-
             if (blockBelow.getType() == Material.WHITE_TERRACOTTA || blockBelow.getType() == Material.BLACK_TERRACOTTA) {
                 StringBuilder p = new StringBuilder();
                 for(int i=0;i<4;i++) {
@@ -81,6 +67,20 @@ public class LoadChunk implements Listener {
                 }
                 if(blockBelow.getType() == Material.WHITE_TERRACOTTA) SegmentMap.enter(p.toString(),minecart);
                 if(blockBelow.getType() == Material.BLACK_TERRACOTTA) SegmentMap.leave(p.toString(),minecart);
+            }
+
+            int chunkX = minecart.getLocation().getBlockX() >> 4;
+            int chunkZ = minecart.getLocation().getBlockZ() >> 4;
+
+            if (minecart.getPersistentDataContainer().has(new NamespacedKey(plugin, "load"), PersistentDataType.BYTE)) {
+                for (int x = chunkX - radius; x <= chunkX + radius; x++) {
+                    for (int z = chunkZ - radius; z <= chunkZ + radius; z++) {
+                        Chunk chunk = minecart.getWorld().getChunkAt(x, z);
+                        if (!chunk.isLoaded()) {
+                            chunk.load();
+                        }
+                    }
+                }
             }
         }
     }

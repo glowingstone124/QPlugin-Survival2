@@ -4,6 +4,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
 import vip.qoriginal.quantumplugin.Config;
@@ -11,6 +14,7 @@ import vip.qoriginal.quantumplugin.Logger;
 import vip.qoriginal.quantumplugin.LoggerProvider;
 import vip.qoriginal.quantumplugin.Request;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -28,11 +32,30 @@ public class SegmentMap {
             try {
                 JsonObject station = line.getAsJsonArray("stations").get(Integer.parseInt(id, 16) & 255).getAsJsonObject();
                 if(!minecart.getPassengers().isEmpty() && minecart.getPassengers().getFirst() instanceof Player) {
-                    minecart.getPassengers().getFirst().sendMessage(station.get("name").getAsString()+"到了");
+                    minecart.getPassengers().getFirst().sendMessage(
+                            Component.text(station.get("name").getAsString())
+                                    .append(Component.text("到了，请在停稳后从侧方下车。"))
+                                    .append(getInterchangeMessage(station, line))
+                    );
                 }
                 minecart_status.put(uuid, code);
-            } catch (Exception _) {}
+            } catch (Exception e) {
+                logger.log("Error processing minecart enter: " + id);
+                java.io.StringWriter sw = new java.io.StringWriter();
+                java.io.PrintWriter pw = new java.io.PrintWriter(sw);
+                e.printStackTrace(pw);
+                String exceptionAsString = sw.toString();
+                logger.debug(exceptionAsString);
+            }
         }
+    }
+
+    public static TextComponent getInterchangeMessage(JsonObject station, JsonObject line) {
+        if (station.getAsJsonArray("transfer_lines").isEmpty()) return Component.empty();
+        String type = line.get("type").getAsString();
+        String dim = line.get("dimension").getAsString();
+        //TODO finish it
+        return Component.empty();
     }
 
     public static void leave(String id, Minecart minecart) {
@@ -44,10 +67,22 @@ public class SegmentMap {
             try {
                 JsonObject station = line.getAsJsonArray("stations").get((Integer.parseInt(id, 16) & 255) + 1).getAsJsonObject();
                 if(!minecart.getPassengers().isEmpty() && minecart.getPassengers().getFirst() instanceof Player) {
-                    minecart.getPassengers().getFirst().sendMessage("下一站："+station.get("name").getAsString());
+                    minecart.getPassengers().getFirst().sendMessage(Component.text("欢迎您乘坐轨道交通")
+                            .append(Component.text(line.get("name").getAsString().split("-")[0]+"。").color(TextColor.color(Integer.parseInt(line.get("color").getAsString().substring(1),16))))
+                            .appendNewline().append(Component.text("本线终点站："))
+                            .append(Component.text(line.getAsJsonArray("stations").get(line.getAsJsonArray("stations").size() - 1).getAsString()))
+                            .append(Component.text("，下一站："+station.getAsJsonArray("name").getAsString()))
+                    );
                 }
                 minecart_status.put(uuid, code);
-            } catch (Exception _) {}
+            } catch (Exception e) {
+                logger.log("Error processing minecart leave: " + id);
+                java.io.StringWriter sw = new java.io.StringWriter();
+                java.io.PrintWriter pw = new java.io.PrintWriter(sw);
+                e.printStackTrace(pw);
+                String exceptionAsString = sw.toString();
+                logger.debug(exceptionAsString);
+            }
         }
     }
 
