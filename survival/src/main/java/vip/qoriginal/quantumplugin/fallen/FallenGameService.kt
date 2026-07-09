@@ -91,18 +91,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val scoreboardLines = HashSet<String>()
 	private val areaBossBars = ConcurrentHashMap<UUID, BossBar>()
 
-	// Regions are fixed for the event. Fill these with FallenRegion.of(OVERWORLD_NAME, ...)
-	// after the final rectangular boundaries are decided.
+	// Regions are fixed for the event. Boundaries are inclusive block coordinates.
 	private val fixedRegions: Map<FallenTeam, List<FallenRegion>> = mapOf(
 		FallenTeam.A to listOf(
-			FallenRegion.of(OVERWORLD_NAME, -96, -64, -48, -17, 320, 48),
-			FallenRegion.of(OVERWORLD_NAME, -96, -64, 80, -17, 320, 176)
+			FallenRegion.of(OVERWORLD_NAME, -224, -64, -192, 543, 320, 607),
+			FallenRegion.of(OVERWORLD_NAME, -12704, -64, 176, -11473, 320, 1199)
 		),
 		FallenTeam.B to listOf(
-			FallenRegion.of(OVERWORLD_NAME, 17, -64, -48, 96, 320, 48)
+			FallenRegion.of(OVERWORLD_NAME, -2672, -64, 448, -1377, 320, 1631)
 		),
 		FallenTeam.C to listOf(
-			FallenRegion.of(OVERWORLD_NAME, -40, -64, -176, 40, 320, -80)
+			FallenRegion.of(OVERWORLD_NAME, -4944, -64, 1296, -3793, 320, 2271)
 		)
 	)
 
