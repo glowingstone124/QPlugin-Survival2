@@ -18,6 +18,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.concurrent.ExecutionException;
 
+@Deprecated(
+        since = "2026/07/10",
+        forRemoval = true
+)
 public class IPUtils {
     private static final ScheduledExecutorService RETRY_SCHEDULER = Executors.newSingleThreadScheduledExecutor();
     public static void locIsCn(PlayerJoinEvent event, Plugin plugin) {

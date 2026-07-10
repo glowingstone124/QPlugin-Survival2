@@ -30,61 +30,12 @@ public class JoinLeaveListener implements Listener {
     }
 
     @EventHandler
-    public void onPlayerPreLogin(AsyncPlayerPreLoginEvent event) throws Exception {
-        String playerName = event.getName();
-
-        if (Arrays.asList(blocklist).contains(playerName)) {
-            logger.log("Player " + playerName + " was blocked and wanted to join in");
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                    Component.text("[403 Forbidden]")
-                            .append(Component.text("this server doesn't allows ServerSeeker.").decorate(TextDecoration.BOLD)));
-            return;
-        }
-
-        JsonObject relationship = null;
-        try {
-            relationship = JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + playerName).get()).getAsJsonObject();
-        } catch (Exception e) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[500 Internal Server Error]内部验证出现错误。请等待之后再试。。。"));
-        }
-        if (relationship == null) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, Component.text("[500 Internal Server Error]内部验证出现错误。请等待之后再试。。。"));
-            return;
-        }
-        logger.log("Player " + playerName + " didn't register but wanted to join in");
-        if (relationship.has("code") && relationship.get("code").getAsInt() == 1) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                    Component.text("[401 Unauthorized]您还没有注册QO账号，请前往app.qoriginal.vip注册您的账号并加入群946085440来验。")
-                            .append(Component.text("你的游戏名：" + playerName).decorate(TextDecoration.BOLD)));
-        } else if (relationship.has("frozen") && relationship.get("frozen").getAsBoolean()) {
-            logger.log("Player " + playerName + " was frozen.");
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                    Component.text("[403 Forbidden]验证失败，原因：您的账户已经被冻结！")
-                            .append(Component.text("您的游戏名：" + playerName).decorate(TextDecoration.BOLD))
-                            .append(Component.text(" 请私聊群主：1294915648了解更多")));
-        } else if (relationship.has("score") && relationship.get("score").getAsInt() < 6) {
-            logger.log("Player " + playerName + " was not qualified : "+relationship.get("score").getAsInt()+" < 6.");
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                    Component.text("[403 Forbidden]验证失败，原因：暂未通过文化水平核验。")
-                            .append(Component.text("您的游戏名：" + playerName).decorate(TextDecoration.BOLD))
-                            .append(Component.text(" 请私聊群主：1294915648提交初中（含在读）及以上文化水平证明")));
-        }
-    }
-
-    @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) throws Exception {
         QuantumPlugin quantumPlugin = QuantumPlugin.getInstance();
         Player player = event.getPlayer();
         player.removeScoreboardTag("guest");
         player.removeScoreboardTag("visitor");
         player.removeScoreboardTag("visitor_login");
-        Thread.startVirtualThread(() -> {
-            try {
-                IPUtils.locIsCn(event, quantumPlugin);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
         JsonObject relationship = JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + player.getName()).get()).getAsJsonObject();
         if (relationship.has("code")) {
             if (relationship.get("code").getAsInt() == 0) {

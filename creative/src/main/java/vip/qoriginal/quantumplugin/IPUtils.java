@@ -14,6 +14,10 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
 public class IPUtils {
+    @Deprecated(
+            since = "2026/07/10",
+            forRemoval = true
+    )
     public static void locIsCn(PlayerJoinEvent event, Plugin plugin) {
         Logger logger = new Logger();
         Player player = event.getPlayer();
