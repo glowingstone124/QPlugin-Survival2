@@ -9,6 +9,7 @@ import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
+import org.bukkit.event.entity.EntityExhaustionEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.ItemDespawnEvent
 import org.bukkit.event.entity.PlayerDeathEvent
@@ -122,6 +123,12 @@ class FallenListener(private val service: FallenGameService) : Listener {
 		service.cancelRespawnProtection(attacker)
 		val target = event.entity as? Player ?: return
 		service.recordDamage(attacker, target, event.finalDamage)
+	}
+
+	@EventHandler(ignoreCancelled = true)
+	fun onEntityExhaustion(event: EntityExhaustionEvent) {
+		val player = event.entity as? Player ?: return
+		event.exhaustion = service.reduceTeamExhaustion(player, event.exhaustion)
 	}
 
 	@EventHandler(ignoreCancelled = true)

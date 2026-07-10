@@ -15,6 +15,8 @@ import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.Particle
+import org.bukkit.attribute.Attribute
+import org.bukkit.attribute.AttributeModifier
 import org.bukkit.boss.BarColor
 import org.bukkit.boss.BarStyle
 import org.bukkit.boss.BossBar
@@ -25,6 +27,7 @@ import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
+import org.bukkit.scheduler.BukkitRunnable
 import org.bukkit.scheduler.BukkitTask
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
@@ -37,8 +40,11 @@ import java.time.ZoneId
 import java.util.EnumMap
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 class FallenGameService(private val plugin: JavaPlugin) {
 	private val keyIdKey = NamespacedKey(plugin, "fallen_key_id")
@@ -49,6 +55,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val compassNextRefreshAtKey = NamespacedKey(plugin, "fallen_compass_next_refresh_at")
 	private val forbiddenCustomTntKey = NamespacedKey(plugin, "custom_tnt")
 	private val forbiddenBuffSnowballKey = NamespacedKey(plugin, "buff_snowball")
+	private val territorySpeedBonusKey = NamespacedKey(plugin, "fallen_territory_speed_bonus")
+	private val miningSpeedBonusKey = NamespacedKey(plugin, "fallen_mining_speed_bonus")
 	private val dataFile = File(plugin.dataFolder, "fallen.yml")
 	private val playerTeams = ConcurrentHashMap<UUID, FallenTeam>()
 	private val scores = EnumMap<FallenTeam, Int>(FallenTeam::class.java)
@@ -116,6 +124,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private var lastRefreshKeyAt = 0L
 	private var startedAtMillis = 0L
 	private var endedAtMillis = 0L
+	private var visualFrame = 0
 
 	var phase: FallenPhase = FallenPhase.IDLE
 		private set
@@ -136,6 +145,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun stop() {
+		clearTeamBonuses()
 		tickTask?.cancel()
 		tickTask = null
 		visualTask?.cancel()
@@ -589,6 +599,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 		key.ownerTeam = team
 		key.placeAt(min)
+		key.center()?.let { renderKeyPlacementBurst(it, teamDust(team)) }
 		item.amount -= 1
 		recentCaptureUntil.remove(player.uniqueId)
 		if (key.originalTeam != team) {
@@ -820,6 +831,75 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
+	fun reduceTeamExhaustion(player: Player, exhaustion: Float): Float {
+		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return exhaustion
+		val team = teamOf(player) ?: return exhaustion
+		if (team != FallenTeam.B || team in eliminatedTeams) return exhaustion
+		return exhaustion * MAIN_CITY_EXHAUSTION_MULTIPLIER
+	}
+
+	private fun processTeamBonuses() {
+		for (player in Bukkit.getOnlinePlayers()) {
+			applyTerritorySpeedBonus(player)
+			applyMiningSpeedBonus(player)
+		}
+	}
+
+	private fun clearTeamBonuses() {
+		for (player in Bukkit.getOnlinePlayers()) {
+			setAttributeModifier(player, Attribute.MOVEMENT_SPEED, territorySpeedBonusKey, TERRITORY_MOVEMENT_SPEED_BONUS, false)
+			setAttributeModifier(player, Attribute.BLOCK_BREAK_SPEED, miningSpeedBonusKey, MINING_SPEED_BONUS, false)
+		}
+	}
+
+	private fun applyTerritorySpeedBonus(player: Player) {
+		val shouldApply = phase != FallenPhase.IDLE
+			&& phase != FallenPhase.ENDED
+			&& teamOf(player) == FallenTeam.A
+			&& FallenTeam.A !in eliminatedTeams
+			&& player.gameMode != GameMode.SPECTATOR
+			&& isInTeamRegion(FallenTeam.A, player.location)
+		setAttributeModifier(
+			player,
+			Attribute.MOVEMENT_SPEED,
+			territorySpeedBonusKey,
+			TERRITORY_MOVEMENT_SPEED_BONUS,
+			shouldApply
+		)
+	}
+
+	private fun applyMiningSpeedBonus(player: Player) {
+		val target = player.getTargetBlockExact(6)
+		val shouldApply = phase != FallenPhase.IDLE
+			&& phase != FallenPhase.ENDED
+			&& teamOf(player) == FallenTeam.C
+			&& FallenTeam.C !in eliminatedTeams
+			&& player.gameMode != GameMode.SPECTATOR
+			&& target != null
+			&& isMiningBonusMaterial(target.type)
+		setAttributeModifier(
+			player,
+			Attribute.BLOCK_BREAK_SPEED,
+			miningSpeedBonusKey,
+			MINING_SPEED_BONUS,
+			shouldApply
+		)
+	}
+
+	private fun setAttributeModifier(
+		player: Player,
+		attribute: Attribute,
+		key: NamespacedKey,
+		amount: Double,
+		enabled: Boolean
+	) {
+		val instance = player.getAttribute(attribute) ?: return
+		instance.getModifier(key)?.let(instance::removeModifier)
+		if (enabled) {
+			instance.addTransientModifier(AttributeModifier(key, amount, AttributeModifier.Operation.ADD_SCALAR))
+		}
+	}
+
 	fun handleStationCoreBreak(player: Player, location: Location): Boolean {
 		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return false
 		val team = teamOf(player) ?: return false
@@ -939,14 +1019,18 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		processActiveTracks()
 		processKeyAlerts()
 		processStations()
+		processTeamBonuses()
 		processEliminations()
 		updateAreaBossBars()
 		updateScoreboard()
 	}
 
 	private fun renderVisuals() {
-		renderPlacedKeys()
-		renderStations()
+		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return
+		visualFrame++
+		renderPlacedKeys(visualFrame)
+		renderStations(visualFrame)
+		renderTrackingDust(visualFrame)
 	}
 
 	private fun updateScoreboard() {
@@ -1215,16 +1299,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (changed) save()
 	}
 
-	private fun renderPlacedKeys() {
+	private fun renderPlacedKeys(frame: Int) {
 		keys.values.asSequence()
 			.filter { it.state == FallenKeyState.PLACED }
 			.forEach { key ->
 				val center = key.center() ?: return@forEach
 				val world = center.world ?: return@forEach
+				if (!hasNearbyViewer(center, KEY_VISUAL_RADIUS)) return@forEach
 				val dust = teamDust(key.ownerTeam)
 				renderKeyOutline(world, key, dust)
-				renderFloatingKeyShape(world, center, dust)
-				world.spawnParticle(Particle.ELECTRIC_SPARK, center, 14, 1.5, 2.2, 1.5, 0.0)
+				renderFloatingKeyShape(world, center, frame, dust)
+				renderKeyPulse(world, center, frame, dust)
 			}
 	}
 
@@ -1236,22 +1321,22 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val minZ = key.z.toDouble()
 		val maxZ = key.z + FALLEN_KEY_DEPTH.toDouble()
 
-		for (step in 0..(FALLEN_KEY_WIDTH * 2)) {
-			val xx = key.x + step / 2.0
+		for (step in 0..FALLEN_KEY_WIDTH) {
+			val xx = key.x + step.toDouble()
 			spawnDust(world, xx, minY, minZ, dust)
 			spawnDust(world, xx, minY, maxZ, dust)
 			spawnDust(world, xx, maxY, minZ, dust)
 			spawnDust(world, xx, maxY, maxZ, dust)
 		}
-		for (step in 0..(FALLEN_KEY_DEPTH * 2)) {
-			val zz = key.z + step / 2.0
+		for (step in 0..FALLEN_KEY_DEPTH) {
+			val zz = key.z + step.toDouble()
 			spawnDust(world, minX, minY, zz, dust)
 			spawnDust(world, maxX, minY, zz, dust)
 			spawnDust(world, minX, maxY, zz, dust)
 			spawnDust(world, maxX, maxY, zz, dust)
 		}
-		for (step in 0..(FALLEN_KEY_HEIGHT * 2)) {
-			val yy = key.y + step / 2.0
+		for (step in 0..FALLEN_KEY_HEIGHT) {
+			val yy = key.y + step.toDouble()
 			spawnDust(world, minX, yy, minZ, dust)
 			spawnDust(world, maxX, yy, minZ, dust)
 			spawnDust(world, minX, yy, maxZ, dust)
@@ -1259,20 +1344,72 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
-	private fun renderFloatingKeyShape(world: org.bukkit.World, center: Location, dust: Particle.DustOptions) {
-		val pixels = listOf(
-			-4 to 1, -4 to 2, -3 to 3, -2 to 3, -1 to 2, -1 to 1, -2 to 0, -3 to 0,
-			-1 to 1, 0 to 1, 1 to 1, 2 to 1, 3 to 1, 4 to 1, 5 to 1,
-			3 to 0, 4 to 0, 5 to -1,
-			2 to 0, 2 to -1,
-			4 to 0, 4 to -1
-		)
-		for (zOffset in listOf(-0.10, 0.10)) {
-			for ((x, y) in pixels) {
-				spawnDust(world, center.x + x * 0.28, center.y + y * 0.28, center.z + zOffset, dust)
+	private fun renderFloatingKeyShape(world: org.bukkit.World, center: Location, frame: Int, dust: Particle.DustOptions) {
+		val bob = sin(frame * 0.45) * 0.08
+		val zOffset = if (frame % 2 == 0) -0.12 else 0.12
+		for ((x, y) in KEY_SHAPE_PIXELS) {
+			spawnDust(world, center.x + x * 0.28, center.y + y * 0.28 + bob, center.z + zOffset, dust)
+		}
+		world.spawnParticle(Particle.END_ROD, center.x, center.y + bob, center.z, 3, 0.65, 0.35, 0.12, 0.0)
+	}
+
+	private fun renderKeyPulse(world: org.bukkit.World, center: Location, frame: Int, dust: Particle.DustOptions) {
+		val radius = 0.95 + (frame % 8) * 0.08
+		val y = center.y - 2.65 + (frame % 8) * 0.09
+		for (step in 0 until 12) {
+			val angle = (step / 12.0) * PI * 2.0 + frame * 0.12
+			spawnDust(world, center.x + cos(angle) * radius, y, center.z + sin(angle) * radius, dust)
+		}
+		if (frame % 3 == 0) {
+			world.spawnParticle(Particle.ELECTRIC_SPARK, center, 6, 1.0, 1.6, 1.0, 0.0)
+		}
+	}
+
+	private fun renderKeyPlacementBurst(center: Location, dust: Particle.DustOptions) {
+		val world = center.world ?: return
+		val origin = center.clone().apply {
+			y -= FALLEN_KEY_HEIGHT / 2.0 - 0.25
+		}
+		object : BukkitRunnable() {
+			private var frame = 0
+
+			override fun run() {
+				if (frame >= KEY_PLACEMENT_BURST_COUNT * KEY_PLACEMENT_BURST_FRAMES) {
+					cancel()
+					return
+				}
+				val burstFrame = frame % KEY_PLACEMENT_BURST_FRAMES
+				val radius = 0.35 + burstFrame * 0.38
+				val y = origin.y + burstFrame * 0.035
+				for (step in 0 until KEY_PLACEMENT_BURST_POINTS) {
+					val angle = (step / KEY_PLACEMENT_BURST_POINTS.toDouble()) * PI * 2.0
+					spawnDust(world, origin.x + cos(angle) * radius, y, origin.z + sin(angle) * radius, dust)
+				}
+				frame++
+			}
+		}.runTaskTimer(plugin, 0L, 1L)
+	}
+
+	private fun renderTrackingDust(frame: Int) {
+		val dust = Particle.DustOptions(Color.fromRGB(190, 85, 255), 1.25f)
+		for ((trackerId, track) in activeTracks) {
+			val tracker = Bukkit.getPlayer(trackerId)
+			val target = Bukkit.getPlayer(track.targetId)
+			if (tracker == null || target == null || tracker.world != target.world || target.isDead) continue
+			if (!hasNearbyViewer(tracker.location, TRACKING_VISUAL_RADIUS)) continue
+			val start = tracker.location.clone().add(0.0, 1.0, 0.0)
+			val direction = target.location.toVector().subtract(start.toVector())
+			val distance = direction.length()
+			if (distance < 1.0) continue
+			val unit = direction.normalize()
+			val maxDistance = distance.coerceAtMost(18.0)
+			for (step in 1..12) {
+				val progress = (step + (frame % 4) * 0.25) / 12.0
+				val point = start.clone().add(unit.clone().multiply(maxDistance * progress))
+				val swirl = (step + frame) * 0.7
+				spawnDust(tracker.world, point.x + cos(swirl) * 0.12, point.y + sin(swirl) * 0.12, point.z, dust)
 			}
 		}
-		world.spawnParticle(Particle.END_ROD, center, 8, 0.75, 0.45, 0.15, 0.0)
 	}
 
 	private fun processCaptures() {
@@ -1606,20 +1743,22 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		stationRepairProgress.keys.removeIf { it !in seenRepair }
 	}
 
-	private fun renderStations() {
+	private fun renderStations(frame: Int) {
 		val now = System.currentTimeMillis()
 		for (station in fixedStations) {
-			renderStation(station, now)
+			renderStation(station, now, frame)
 		}
 	}
 
-	private fun renderStation(station: FallenStation, now: Long) {
+	private fun renderStation(station: FallenStation, now: Long, frame: Int) {
 		val center = station.center() ?: return
 		val world = center.world ?: return
+		if (!hasNearbyViewer(center, STATION_VISUAL_RADIUS)) return
 		val particle = if (isStationDisrupted(station, now)) Particle.ANGRY_VILLAGER else Particle.HAPPY_VILLAGER
-		world.spawnParticle(particle, center, 8, 1.8, 1.0, 1.8, 0.0)
+		world.spawnParticle(particle, center, 5, 1.4, 0.9, 1.4, 0.0)
 		renderStationOutline(station)
-		renderStationFeather(world, center)
+		renderStationFeather(world, center, frame)
+		renderStationCoreRing(world, center, frame, stationDust(station))
 	}
 
 	private fun renderStationOutline(station: FallenStation) {
@@ -1632,22 +1771,22 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val maxY = station.y + FALLEN_STATION_HEIGHT.toDouble()
 		val minZ = station.z.toDouble()
 		val maxZ = station.z + FALLEN_STATION_DEPTH.toDouble()
-		for (step in 0..(FALLEN_STATION_WIDTH * 2)) {
-			val xx = station.x + step / 2.0
+		for (step in 0..FALLEN_STATION_WIDTH) {
+			val xx = station.x + step.toDouble()
 			spawnBlueDust(world, xx, minY, minZ, dust)
 			spawnBlueDust(world, xx, minY, maxZ, dust)
 			spawnBlueDust(world, xx, maxY, minZ, dust)
 			spawnBlueDust(world, xx, maxY, maxZ, dust)
 		}
-		for (step in 0..(FALLEN_STATION_DEPTH * 2)) {
-			val zz = station.z + step / 2.0
+		for (step in 0..FALLEN_STATION_DEPTH) {
+			val zz = station.z + step.toDouble()
 			spawnBlueDust(world, minX, minY, zz, dust)
 			spawnBlueDust(world, maxX, minY, zz, dust)
 			spawnBlueDust(world, minX, maxY, zz, dust)
 			spawnBlueDust(world, maxX, maxY, zz, dust)
 		}
-		for (step in 0..(FALLEN_STATION_HEIGHT * 2)) {
-			val yy = station.y + step / 2.0 + 0.1
+		for (step in 0..FALLEN_STATION_HEIGHT) {
+			val yy = station.y + step.toDouble() + 0.1
 			spawnBlueDust(world, minX, yy, minZ, dust)
 			spawnBlueDust(world, maxX, yy, minZ, dust)
 			spawnBlueDust(world, minX, yy, maxZ, dust)
@@ -1655,18 +1794,28 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
-	private fun renderStationFeather(world: org.bukkit.World, center: Location) {
+	private fun renderStationFeather(world: org.bukkit.World, center: Location, frame: Int) {
 		val dust = Particle.DustOptions(Color.fromRGB(155, 215, 255), 1.35f)
-		val points = listOf(
-			0 to 4, 0 to 3, 0 to 2, 0 to 1, 0 to 0, 0 to -1, 0 to -2, 0 to -3,
-			1 to 3, 2 to 3, 1 to 2, 2 to 2, 3 to 2, 1 to 1, 2 to 1,
-			-1 to 2, -2 to 2, -1 to 1, -2 to 1, -3 to 1, -1 to 0, -2 to 0,
-			1 to -1, 2 to -1, -1 to -2, -2 to -2
-		)
-		for (zOffset in listOf(-0.08, 0.08)) {
-			for ((x, y) in points) {
-				spawnDust(world, center.x + x * 0.22, center.y + y * 0.22, center.z + zOffset, dust)
-			}
+		val bob = sin(frame * 0.35) * 0.06
+		val zOffset = if (frame % 2 == 0) -0.10 else 0.10
+		for ((x, y) in STATION_FEATHER_PIXELS) {
+			spawnDust(world, center.x + x * 0.22, center.y + y * 0.22 + bob, center.z + zOffset, dust)
+		}
+	}
+
+	private fun renderStationCoreRing(world: org.bukkit.World, center: Location, frame: Int, dust: Particle.DustOptions) {
+		val y = center.y - 1.1
+		for (step in 0 until 16) {
+			val angle = (step / 16.0) * PI * 2.0 - frame * 0.10
+			spawnDust(world, center.x + cos(angle) * 1.35, y, center.z + sin(angle) * 1.35, dust)
+		}
+	}
+
+	private fun hasNearbyViewer(location: Location, radius: Double): Boolean {
+		val world = location.world ?: return false
+		val radiusSquared = radius * radius
+		return world.players.any { player ->
+			player.gameMode != GameMode.SPECTATOR && player.location.distanceSquared(location) <= radiusSquared
 		}
 	}
 
@@ -1769,6 +1918,20 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (feet.type == Material.LAVA || head.type == Material.LAVA || below.type == Material.LAVA) return false
 		if (below.isEmpty || below.isLiquid) return false
 		return true
+	}
+
+	private fun isMiningBonusMaterial(material: Material): Boolean {
+		val name = material.name
+		return name.endsWith("_LOG")
+			|| name.endsWith("_WOOD")
+			|| name.endsWith("_STEM")
+			|| name.endsWith("_HYPHAE")
+			|| name.endsWith("_PLANKS")
+			|| name.endsWith("_DIRT")
+			|| name.endsWith("_NYLIUM")
+			|| name.endsWith("_STONE")
+			|| name.endsWith("_COBBLESTONE")
+			|| material in MINING_BONUS_MATERIALS
 	}
 
 	private fun isNearOwnRegionCenter(team: FallenTeam, location: Location, radius: Double): Boolean {
@@ -2254,6 +2417,19 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	companion object {
+		private val KEY_SHAPE_PIXELS = listOf(
+			-4 to 1, -4 to 2, -3 to 3, -2 to 3, -1 to 2, -1 to 1, -2 to 0, -3 to 0,
+			-1 to 1, 0 to 1, 1 to 1, 2 to 1, 3 to 1, 4 to 1, 5 to 1,
+			3 to 0, 4 to 0, 5 to -1,
+			2 to 0, 2 to -1,
+			4 to 0, 4 to -1
+		)
+		private val STATION_FEATHER_PIXELS = listOf(
+			0 to 4, 0 to 3, 0 to 2, 0 to 1, 0 to 0, 0 to -1, 0 to -2, 0 to -3,
+			1 to 3, 2 to 3, 1 to 2, 2 to 2, 3 to 2, 1 to 1, 2 to 1,
+			-1 to 2, -2 to 2, -1 to 1, -2 to 1, -3 to 1, -1 to 0, -2 to 0,
+			1 to -1, 2 to -1, -1 to -2, -2 to -2
+		)
 		private val EVENT_START_MILLIS: Long = LocalDateTime.of(2026, 8, 1, 14, 0)
 			.atZone(ZoneId.of("Asia/Shanghai"))
 			.toInstant()
@@ -2306,7 +2482,65 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val STATION_DENY_COOLDOWN_MILLIS = 5 * 1000L
 		private const val COMBAT_TAG_MILLIS = 10 * 1000L
 		private const val RECENT_CAPTURE_TELEPORT_BLOCK_MILLIS = 10 * 60 * 1000L
+		private const val KEY_VISUAL_RADIUS = 80.0
+		private const val STATION_VISUAL_RADIUS = 80.0
+		private const val TRACKING_VISUAL_RADIUS = 96.0
+		private const val KEY_PLACEMENT_BURST_COUNT = 3
+		private const val KEY_PLACEMENT_BURST_FRAMES = 6
+		private const val KEY_PLACEMENT_BURST_POINTS = 24
+		private const val MAIN_CITY_EXHAUSTION_MULTIPLIER = 0.65f
+		private const val MINING_SPEED_BONUS = 0.10
+		private const val TERRITORY_MOVEMENT_SPEED_BONUS = 0.05
 		private const val PROGRESS_BAR_SEGMENTS = 20
+		private val MINING_BONUS_MATERIALS = setOf(
+			Material.GRASS_BLOCK,
+			Material.DIRT,
+			Material.COARSE_DIRT,
+			Material.ROOTED_DIRT,
+			Material.PODZOL,
+			Material.MYCELIUM,
+			Material.MUD,
+			Material.PACKED_MUD,
+			Material.CLAY,
+			Material.GRAVEL,
+			Material.SAND,
+			Material.RED_SAND,
+			Material.STONE,
+			Material.COBBLESTONE,
+			Material.MOSSY_COBBLESTONE,
+			Material.SMOOTH_STONE,
+			Material.STONE_BRICKS,
+			Material.MOSSY_STONE_BRICKS,
+			Material.CRACKED_STONE_BRICKS,
+			Material.CHISELED_STONE_BRICKS,
+			Material.GRANITE,
+			Material.POLISHED_GRANITE,
+			Material.DIORITE,
+			Material.POLISHED_DIORITE,
+			Material.ANDESITE,
+			Material.POLISHED_ANDESITE,
+			Material.DEEPSLATE,
+			Material.COBBLED_DEEPSLATE,
+			Material.POLISHED_DEEPSLATE,
+			Material.DEEPSLATE_BRICKS,
+			Material.CRACKED_DEEPSLATE_BRICKS,
+			Material.DEEPSLATE_TILES,
+			Material.CRACKED_DEEPSLATE_TILES,
+			Material.CHISELED_DEEPSLATE,
+			Material.TUFF,
+			Material.POLISHED_TUFF,
+			Material.TUFF_BRICKS,
+			Material.CHISELED_TUFF,
+			Material.CHISELED_TUFF_BRICKS,
+			Material.CALCITE,
+			Material.DRIPSTONE_BLOCK,
+			Material.NETHERRACK,
+			Material.BLACKSTONE,
+			Material.POLISHED_BLACKSTONE,
+			Material.BASALT,
+			Material.SMOOTH_BASALT,
+			Material.END_STONE
+		)
 	}
 
 	private data class PreciseReveal(
