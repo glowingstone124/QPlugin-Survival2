@@ -31,7 +31,6 @@ public class JoinLeaveListener implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) throws Exception {
-        QuantumPlugin quantumPlugin = QuantumPlugin.getInstance();
         Player player = event.getPlayer();
         player.removeScoreboardTag("guest");
         player.removeScoreboardTag("visitor");

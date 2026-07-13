@@ -17,10 +17,12 @@ import org.bukkit.metadata.MetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.event.Locker;
 import vip.qoriginal.quantumplugin.patch.*;
+import vip.qoriginal.quantumplugin.servux.ServuxEntityDataBridge;
 
 import java.io.IOException;
 import java.util.*;
@@ -28,27 +30,28 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class QuantumPlugin extends JavaPlugin {
 
-    private WebMsgGetter webMsgGetterTask;
+    private BukkitTask webMsgGetterTask;
     private static QuantumPlugin instance;
     Login login = new Login();
+    private ServuxEntityDataBridge servuxEntityDataBridge;
 
     @Override
     public void onEnable() {
+        ChatSync.configure(4, false);
         instance = this;
         PluginContext.setPlugin(this);
+        servuxEntityDataBridge = new ServuxEntityDataBridge(this);
+        PlayerEventListener.setMessageSink(message -> new ChatSync().sendChatMsg(message));
         CommandSuggester.register(this, List.of(
                 "shutup", "myloc", "highlight", "showitem", "querybind",
                 "bindauth", "bind", "login", "damageindicator"
         ));
-        webMsgGetterTask = new WebMsgGetter();
         System.out.println("Quantum Plugin for Creative Server 1.14.5.5.1 Started. Please do not use this in main server.");
         try {
             JoinLeaveListener.init();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        int delay = 0;
-        int period = 20;
         JSONObject stopObj = new JSONObject();
         stopObj.put("timestamp", System.currentTimeMillis());
         stopObj.put("stat", 0);
@@ -61,13 +64,15 @@ public final class QuantumPlugin extends JavaPlugin {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        getServer().getScheduler().scheduleSyncRepeatingTask(this, webMsgGetterTask, delay, period);
+        ChatSync chatSync = new ChatSync();
+        webMsgGetterTask = getServer().getScheduler().runTaskTimerAsynchronously(
+                this, chatSync.createWebMsgGetter(), 0L, 40L);
         Listener[] needReg = {
                 new Login(),
                 new JoinLeaveListener(),
                 new ChatCommandListener(),
                 new MSPTCalculator(),
-                new ChatSync(),
+                chatSync,
                 /*new Chat(),*/
                 new SpeedMonitor(this),
                 new NamePrefix(),
@@ -76,8 +81,6 @@ public final class QuantumPlugin extends JavaPlugin {
                 new Locker()
         };
         Arrays.stream(needReg).forEach(e -> getServer().getPluginManager().registerEvents(e, this));
-        ChatSync cs = new ChatSync();
-        cs.init();
         StatusUpload su = new StatusUpload();
         new BukkitRunnable() {
             @Override
@@ -106,7 +109,11 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        webMsgGetterTask.cancel();
+        if (servuxEntityDataBridge != null) {
+            servuxEntityDataBridge.close();
+        }
+        if (webMsgGetterTask != null) webMsgGetterTask.cancel();
+        LoggerProvider.INSTANCE.closeAll();
         JSONObject stopObj = new JSONObject();
         stopObj.put("timestamp", System.currentTimeMillis());
         stopObj.put("stat", 1);

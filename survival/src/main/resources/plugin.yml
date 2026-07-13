@@ -1,7 +1,7 @@
 name: QuantumPlugin
 version: '1.14.5.5.1'
 main: vip.qoriginal.quantumplugin.QuantumPlugin
-api-version: 1.19
+api-version: '26.1.2'
 prefix: QuantumPlugin
 authors: [ glowingstone124 ]
 description: Plugin for Quantum Original

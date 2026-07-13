@@ -21,8 +21,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.net.HttpURLConnection;
 
-import static vip.qoriginal.quantumplugin.QuantumPlugin.isShutup;
-
 public class ChatSync implements Listener {
     private final static int QO_CREATIVE_CODE = 4;
     private final static int WEB_CODE = 3;
@@ -34,6 +32,24 @@ public class ChatSync implements Listener {
     private static final long QQ_CACHE_TTL_MS = 10 * 60 * 1000L;
     private static final Map<Long, CachedName> qqNameCache = new ConcurrentHashMap<>();
     private static final PlainTextComponentSerializer PLAIN_TEXT = PlainTextComponentSerializer.plainText();
+    private static volatile int defaultSourceCode = QO_CODE;
+    private static volatile boolean defaultLlmEnabled = true;
+    private final int sourceCode;
+    private final boolean llmEnabled;
+
+    public ChatSync() {
+        this(defaultSourceCode, defaultLlmEnabled);
+    }
+
+    public static void configure(int sourceCode, boolean llmEnabled) {
+        defaultSourceCode = sourceCode;
+        defaultLlmEnabled = llmEnabled;
+    }
+
+    public ChatSync(int sourceCode, boolean llmEnabled) {
+        this.sourceCode = sourceCode;
+        this.llmEnabled = llmEnabled;
+    }
 
     private static class CachedName {
         final String name;
@@ -50,14 +66,14 @@ public class ChatSync implements Listener {
 
     @EventHandler
     public void onPlayerChat(AsyncChatEvent event) {
-        if (!isShutup(event.getPlayer())) {
+        if (!event.getPlayer().getScoreboardTags().contains("muteqq")) {
             Thread.startVirtualThread(() -> {
                 try {
 
                     String playerName = event.getPlayer().getName();
                     String message = PLAIN_TEXT.serialize(event.message());
-                    MessageWrapper mw = new MessageWrapper(message, ChatType.GAME_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), QO_CODE, System.currentTimeMillis(), playerName);
-                    String llmPrompt = extractLlmPrompt(message);
+                    MessageWrapper mw = new MessageWrapper(message, ChatType.GAME_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), sourceCode, System.currentTimeMillis(), playerName);
+                    String llmPrompt = llmEnabled ? extractLlmPrompt(message) : null;
                     if (llmPrompt != null) {
                         handleLlmPrompt(event.getPlayer(), llmPrompt);
                         return;
@@ -74,7 +90,7 @@ public class ChatSync implements Listener {
     public void sendChatMsg(String message) {
         Thread.startVirtualThread(() -> {
             try {
-                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", new MessageWrapper(message, ChatType.SYSTEM_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), QO_CODE, System.currentTimeMillis(), "QO").getAsString());
+                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", new MessageWrapper(message, ChatType.SYSTEM_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), sourceCode, System.currentTimeMillis(), "QO").getAsString());
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -92,7 +108,7 @@ public class ChatSync implements Listener {
 
     private void handleLlmPrompt(Player player, String prompt) {
         if (prompt.isBlank()) {
-            Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), () ->
+            Bukkit.getScheduler().runTask(PluginContext.getPlugin(), () ->
                     player.sendMessage(Component.text("用法：@恋恋 <content>").color(TextColor.color(180, 180, 180)))
             );
             return;
@@ -116,7 +132,7 @@ public class ChatSync implements Listener {
             ).get(Config.INSTANCE.llmRequestTimeoutMillis() + 1000L, TimeUnit.MILLISECONDS);
             String answer = extractLlmAnswer(response);
             String clippedAnswer = answer.length() > 1800 ? answer.substring(0, 1800) : answer;
-            Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), () -> {
+            Bukkit.getScheduler().runTask(PluginContext.getPlugin(), () -> {
                 Component component = Component.text("<恋恋> " + clippedAnswer)
                         .color(TextColor.color(113, 159, 165));
                 for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
@@ -125,7 +141,7 @@ public class ChatSync implements Listener {
             });
         } catch (Exception e) {
             e.printStackTrace();
-            Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), () ->
+            Bukkit.getScheduler().runTask(PluginContext.getPlugin(), () ->
                     player.sendMessage(Component.text("LLM请求失败：" + (e.getMessage() == null ? "未知错误" : e.getMessage()))
                             .color(TextColor.color(220, 80, 80)))
             );
@@ -249,7 +265,7 @@ public class ChatSync implements Listener {
                         if (!messagesToSend.isEmpty()) {
                             for (JsonObject msg : messagesToSend) {
                                 int from = msg.get("from").getAsInt();
-                                if (from == QO_CODE) continue;
+                                if (from == sourceCode) continue;
 
                                 Component msgComponent = buildMessageComponent(from, msg);
 
@@ -318,6 +334,10 @@ public class ChatSync implements Listener {
                     content = "[QO_Creative]<" + msg.get("sender").getAsString() + ">" + message;
                     return Component.text(content)
                             .color(TextColor.color(33, 95, 105));
+                }
+                case QO_CODE -> {
+                    content = "[QO]<" + msg.get("sender").getAsString() + ">" + message;
+                    return Component.text(content).color(TextColor.color(33, 95, 105));
                 }
                 default -> {
                     return Component.text("<unknown source>" + message);

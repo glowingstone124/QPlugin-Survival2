@@ -33,6 +33,7 @@ import vip.qoriginal.quantumplugin.fakeplayer.FakePlayerManager;
 import vip.qoriginal.quantumplugin.flightUtil.*;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
+import vip.qoriginal.quantumplugin.servux.ServuxEntityDataBridge;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
 import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
@@ -53,6 +54,7 @@ public final class QuantumPlugin extends JavaPlugin {
     FlightAutoDetector flightAutoDetector;
     Flight flight = new Flight();
     private final FakePlayerManager fakePlayerManager = new FakePlayerManager();
+    private ServuxEntityDataBridge servuxEntityDataBridge;
     public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
 
@@ -63,6 +65,14 @@ public final class QuantumPlugin extends JavaPlugin {
         WORLD_MAIN = Bukkit.getWorld("world");
         instance = this;
         PluginContext.setPlugin(this);
+        servuxEntityDataBridge = new ServuxEntityDataBridge(this);
+        StatusUpload.setPlayerFilter(player ->
+                !FakePlayerManager.isFakePlayer(player)
+                        && !player.getScoreboardTags().contains("visitor_login"));
+        PlayerEventListener.setMessageSink(cs::sendChatMsg);
+        Login.setLoginSuccessHook(name -> new vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponData()
+                .cacheWeaponsForSpecUser(name));
+        MSPTCalculator.setTickHook(new SurvivalTickWork());
         CommandSuggester.register(this, List.of(
                 "suicide", "shutup", "myloc", "highlight", "showitem", "querybind",
                 "viewInventory", "summontext", "login", "damageindicator", "leavemessage",
@@ -106,6 +116,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 new SpeedMonitor(this),
                 new NamePrefix(),
                 new PlayerEventListener(),
+                new SurvivalPlayerEventListener(),
                 new PlayerInventoryViewer(),
                 new BuffSnowball(),
                 new CustomItemStack(),
@@ -191,6 +202,9 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (servuxEntityDataBridge != null) {
+            servuxEntityDataBridge.close();
+        }
         fakePlayerManager.removeAll();
         LoggerProvider.INSTANCE.closeAll();
         if (webMsgGetterTask != null) {

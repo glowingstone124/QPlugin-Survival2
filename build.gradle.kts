@@ -65,7 +65,7 @@ configure(javaProjects) {
 	}
 
 	extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension>("kotlin") {
-		jvmToolchain(21)
+		jvmToolchain(25)
 		sourceSets.named("main") {
 			kotlin.setSrcDirs(listOf("src/main/java"))
 		}
@@ -122,12 +122,26 @@ project(":survival") {
 		javaLauncher.set(survivalJavaToolchains.launcherFor {
 			languageVersion.set(JavaLanguageVersion.of(25))
 		})
-		reobfArtifactConfiguration.set(io.papermc.paperweight.userdev.ReobfArtifactConfiguration.MOJANG_PRODUCTION)
 	}
 
 	dependencies {
 		"ksp"(project(":processor"))
 		"implementation"("io.github.classgraph:classgraph:4.8.181")
+		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.1.2.build.+")
+	}
+}
+
+project(":common") {
+	apply(plugin = "io.papermc.paperweight.userdev")
+
+	val commonJavaToolchains = extensions.getByType<org.gradle.jvm.toolchain.JavaToolchainService>()
+	extensions.configure<io.papermc.paperweight.userdev.PaperweightUserExtension>("paperweight") {
+		javaLauncher.set(commonJavaToolchains.launcherFor {
+			languageVersion.set(JavaLanguageVersion.of(25))
+		})
+	}
+
+	dependencies {
 		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.1.2.build.+")
 	}
 }

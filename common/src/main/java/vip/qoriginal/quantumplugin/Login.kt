@@ -20,6 +20,7 @@ import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerMoveEvent
+import org.bukkit.scheduler.BukkitRunnable
 import vip.qoriginal.quantumplugin.patch.Utils
 import java.lang.Runnable
 import java.util.Optional
@@ -27,6 +28,17 @@ import java.util.concurrent.ConcurrentHashMap
 
 
 class Login : Listener {
+	companion object {
+		@Volatile private var loginSuccessHook: (String) -> Unit = {}
+		val playerLoginMap = ConcurrentHashMap<Player, Int>()
+		val playerTokenMap = ConcurrentHashMap<Player, String>()
+		val visitorPlayedMap = ConcurrentHashMap<Player, Long>()
+
+		@JvmStatic
+		fun setLoginSuccessHook(hook: java.util.function.Consumer<String>?) {
+			loginSuccessHook = if (hook == null) ({}) else ({ hook.accept(it) })
+		}
+	}
 	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 	private val eventHandlers: Map<Class<out Event>, (Player, Cancellable) -> Unit> = mapOf(
@@ -38,12 +50,7 @@ class Login : Listener {
 		PlayerDropItemEvent::class.java to { player, event -> handleGuestOnlyEvent(player, event) }
 	)
 
-	companion object {
-		val playerLoginMap = ConcurrentHashMap<Player, Int>()
-		val playerTokenMap = ConcurrentHashMap<Player, String>()
-		val visitorPlayedMap = ConcurrentHashMap<Player, Long>()
-	}
-	val logger = Logger()
+	val logger = LoggerProvider.getLogger("LoginImpl")
 	val gson = Gson()
 
 	suspend fun abstractLoginLogic(player: Player) {
@@ -73,7 +80,8 @@ class Login : Listener {
 							}?.asJsonObject?.get("players")?.asJsonArray?.joinToString { it.asString } ?: "无"
 						}"))
 		)
-		logger.log("${player.name} logged in.", "LoginImpl")
+		logger.log("${player.name} logged in.")
+		loginSuccessHook(player.name)
 		ChatSync().sendChatMsg("玩家${player.name}加入了服务器");
 	}
 
@@ -101,7 +109,7 @@ class Login : Listener {
 					player.addScoreboardTag("visitor_login")
 				}
 			} else {
-				logger.log("${player.name} kicked due to wrong password.", "LoginImpl")
+				logger.log("${player.name} kicked due to wrong password.")
 				player.sendMessage(Component.text("登录失败，原因：密码不正确").color(NamedTextColor.RED))
 				playerLoginMap[player] = (playerLoginMap[player] ?: 0) + 1
 				if (playerLoginMap[player]!! >= 3) {
@@ -116,7 +124,7 @@ class Login : Listener {
 	fun handleJoin(player: Player, visitor: Boolean) {
 		if (!visitor) {
 			player.addScoreboardTag("guest")
-			Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
+			Bukkit.getScheduler().runTask(PluginContext.getPlugin(), Runnable {
 				scope.launch {
 					val token = playerTokenMap[player] ?: return@launch
 					val resultJson = JsonParser.parseString(
@@ -138,7 +146,7 @@ class Login : Listener {
 		} else {
 			player.addScoreboardTag("visitor")
 		}
-		Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
+		Bukkit.getScheduler().runTaskTimer(PluginContext.getPlugin(), Runnable {
 			if (player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor")) {
 				player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
 			}
