@@ -27,11 +27,12 @@ class Logger @JvmOverloads constructor(private val source: String = "QuantumPlug
 	private val channel = Channel<String>(Channel.UNLIMITED)
 	private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 	private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+	private val writerJob: Job
 
 	init {
 		file.parentFile?.mkdirs()
 		if (!file.exists()) file.createNewFile()
-		scope.launch {
+		writerJob = scope.launch {
 			BufferedWriter(OutputStreamWriter(FileOutputStream(file, true), Charsets.UTF_8)).use { writer ->
 				var pending = 0
 				for (message in channel) {
@@ -70,6 +71,7 @@ class Logger @JvmOverloads constructor(private val source: String = "QuantumPlug
 
 	suspend fun close() {
 		channel.close()
-		scope.coroutineContext[Job]?.join()
+		writerJob.join()
+		scope.cancel()
 	}
 }
