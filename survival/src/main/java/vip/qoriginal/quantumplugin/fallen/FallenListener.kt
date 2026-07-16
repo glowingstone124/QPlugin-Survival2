@@ -135,7 +135,9 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	fun onBlockPlace(event: BlockPlaceEvent) {
 		if (service.rejectForbiddenEventItem(event.player, event.itemInHand)) {
 			event.isCancelled = true
+			return
 		}
+		service.recordBlockPlace(event.block.location, event.block.type)
 	}
 
 	@EventHandler(ignoreCancelled = true)
@@ -144,7 +146,7 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			event.isCancelled = true
 			return
 		}
-		service.recordBlockBreak(event.player, event.block.type)
+		service.recordBlockBreak(event.player, event.block.location, event.block.type)
 	}
 
 	@EventHandler(ignoreCancelled = true)

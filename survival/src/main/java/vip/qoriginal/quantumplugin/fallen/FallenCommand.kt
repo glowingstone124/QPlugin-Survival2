@@ -167,7 +167,7 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				val team = FallenTeam.parse(args[2])
 				val target = if (args.size == 4) Bukkit.getPlayerExact(args[3]) else sender as? Player
 				require(target != null) { "需要指定在线玩家。"}
-				target.inventory.addItem(service.createKeyItem(team))
+				service.createAndGiveKey(target, team)
 				CommandMessages.success(sender, "已向 ${target.name} 发放 ${team.displayName} 密钥。")
 			}
 			"list" -> {

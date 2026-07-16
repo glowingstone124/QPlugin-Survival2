@@ -92,6 +92,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val jammedRevealNoticeUntil = ConcurrentHashMap<String, Long>()
 	private val teamBeacons = ConcurrentHashMap<FallenTeam, TeamBeacon>()
 	private val elytraSamples = ConcurrentHashMap<UUID, ElytraSample>()
+	private val placedScoringBlocks = ConcurrentHashMap.newKeySet<String>()
 	private val allowedGameModeChanges = ConcurrentHashMap<UUID, Long>()
 	private val dangerSince = EnumMap<FallenTeam, Long>(FallenTeam::class.java)
 	private val eliminatedTeams = HashSet<FallenTeam>()
@@ -282,6 +283,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		return itemFor(key)
 	}
 
+	fun createAndGiveKey(player: Player, owner: FallenTeam, original: FallenTeam = owner, type: FallenKeyType = FallenKeyType.INITIAL) {
+		val item = createKeyItem(owner, original, type)
+		val key = keys[keyId(item)] ?: return
+		giveKeyOrDrop(player, key)
+		save()
+	}
+
 	private fun ensureInitialKeys() {
 		for (team in FallenTeam.entries) {
 			val existing = keys.values.count {
@@ -305,9 +313,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			return
 		}
 		val target = online.random()
-		key.holder = target.uniqueId
-		target.inventory.addItem(itemFor(key))
-		target.sendMessage(Component.text("你收到了 ${team.displayName} 密钥 ${key.shortId()}。", team.color))
+		if (giveKeyOrDrop(target, key)) {
+			target.sendMessage(Component.text("你收到了 ${team.displayName} 密钥 ${key.shortId()}。", team.color))
+		}
 	}
 
 	fun itemFor(key: FallenKey): ItemStack {
@@ -647,6 +655,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			CommandMessages.warning(player, "刷新密钥不能用于自毁得分，请带回己方区域放置。")
 			return true
 		}
+		if (key.originalTeam == team) {
+			CommandMessages.warning(player, "不能启动己方原始密钥的自毁。")
+			return true
+		}
 		val now = System.currentTimeMillis()
 		val confirmUntil = dropConfirmUntil[player.uniqueId] ?: 0L
 		if (confirmUntil < now) {
@@ -731,8 +743,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			if (key.ownerTeam != team || key.state != FallenKeyState.ITEM || key.holder != null) continue
 			if (key.worldName != null) continue
 			if (key.type != FallenKeyType.REFRESH && key.type != FallenKeyType.INITIAL) continue
-			key.holder = player.uniqueId
-			player.inventory.addItem(itemFor(key))
+			giveKeyOrDrop(player, key)
 			claimed++
 		}
 		if (claimed > 0) {
@@ -813,7 +824,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		save()
 	}
 
-	fun recordBlockBreak(player: Player, material: Material) {
+	fun recordBlockPlace(location: Location, material: Material) {
+		if (!isScoringOre(material)) return
+		placedScoringBlocks.add(blockKey(location))
+		save()
+	}
+
+	fun recordBlockBreak(player: Player, location: Location, material: Material) {
+		if (placedScoringBlocks.remove(blockKey(location))) {
+			save()
+			return
+		}
 		if (!phase.allowsKeyCapture()) return
 		val team = teamOf(player) ?: return
 		if (team in eliminatedTeams) return
@@ -1441,9 +1462,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		key.ownerTeam = capturingTeam
 		key.state = FallenKeyState.ITEM
 		key.type = FallenKeyType.STOLEN
-		key.holder = player.uniqueId
+		key.holder = null
 		key.selfDestructAtMillis = 0L
-		player.inventory.addItem(itemFor(key))
+		giveKeyOrDrop(player, key)
 		addScore(capturingTeam, 150)
 		addScore(oldOwner, -100)
 		captureProgress.clear()
@@ -1487,7 +1508,11 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			keys[key.id] = key
 			deliverTeamKey(team, key)
 			if (key.holder == null) {
-				broadcast(Component.text("${team.displayName} 获得刷新密钥，等待成员上线领取。", team.color))
+				if (key.worldName == null) {
+					broadcast(Component.text("${team.displayName} 获得刷新密钥，等待成员上线领取。", team.color))
+				} else {
+					broadcast(Component.text("${team.displayName} 的刷新密钥因成员背包已满掉落在地。", team.color))
+				}
 				continue
 			}
 			key.holder?.let(Bukkit::getPlayer)?.sendMessage(Component.text("这是阵营刷新密钥，请在 2 小时内放置。", NamedTextColor.GOLD))
@@ -1934,6 +1959,21 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			|| material in MINING_BONUS_MATERIALS
 	}
 
+	private fun isScoringOre(material: Material): Boolean {
+		return material == Material.DIAMOND_ORE
+			|| material == Material.DEEPSLATE_DIAMOND_ORE
+			|| material == Material.EMERALD_ORE
+			|| material == Material.DEEPSLATE_EMERALD_ORE
+			|| material == Material.REDSTONE_ORE
+			|| material == Material.DEEPSLATE_REDSTONE_ORE
+			|| material == Material.DEEPSLATE_COAL_ORE
+			|| material == Material.ANCIENT_DEBRIS
+	}
+
+	private fun blockKey(location: Location): String {
+		return "${location.world?.name}:${location.blockX}:${location.blockY}:${location.blockZ}"
+	}
+
 	private fun isNearOwnRegionCenter(team: FallenTeam, location: Location, radius: Double): Boolean {
 		return regionsOf(team).any { region ->
 			region.center()?.let { center -> center.world == location.world && center.distance(location) <= radius } == true
@@ -2227,6 +2267,21 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
+	private fun giveKeyOrDrop(player: Player, key: FallenKey): Boolean {
+		val leftovers = player.inventory.addItem(itemFor(key))
+		if (leftovers.isEmpty()) {
+			key.holder = player.uniqueId
+			key.worldName = null
+			return true
+		}
+		for (leftover in leftovers.values) {
+			player.world.dropItemNaturally(player.location, leftover)
+		}
+		markKeyDropped(key.id, player.location)
+		CommandMessages.warning(player, "背包已满，密钥 ${key.shortId()} 已掉落在你脚下。")
+		return false
+	}
+
 	private fun firstBlockingKeyRegionBlock(min: Location): org.bukkit.block.Block? {
 		val world = min.world ?: return null
 		if (min.y < world.minHeight) return null
@@ -2335,6 +2390,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				deathCounts[UUID.fromString(uuid)] = section.getInt(uuid)
 			}
 		}
+		placedScoringBlocks.addAll(config.getStringList("placed-scoring-blocks"))
 		config.getStringList("eliminated").mapTo(eliminatedTeams) { FallenTeam.parse(it) }
 		config.getConfigurationSection("danger-since")?.let { section ->
 			for (teamName in section.getKeys(false)) {
@@ -2389,6 +2445,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		for ((team, until) in teamRespawnBoostUntil) config["team-respawn-boost-until.${team.name}"] = until
 		for ((playerId, team) in playerTeams) config["players.$playerId"] = team.name
 		for ((playerId, deaths) in deathCounts) config["deaths.$playerId"] = deaths
+		config["placed-scoring-blocks"] = placedScoringBlocks.toList()
 		config["eliminated"] = eliminatedTeams.map { it.name }
 		config["announced"] = announcedMilestones.toList()
 		for ((team, since) in dangerSince) config["danger-since.${team.name}"] = since
@@ -2467,7 +2524,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val TEAM_RESPAWN_BOOST_MILLIS = 30 * 60 * 1000L
 		private const val TEAM_RESPAWN_PROTECTION_MILLIS = 10 * 1000L
 		private const val TEAM_BEACON_MILLIS = 30 * 60 * 1000L
-		private const val ELYTRA_SCORE_SPEED = 25.0
+		private const val ELYTRA_SCORE_SPEED = 100.0 / 3.6
 		private const val ELYTRA_SCORE_INTERVAL_MILLIS = 30 * 1000L
 		private const val INTERNAL_GAME_MODE_CHANGE_WINDOW_MILLIS = 2 * 1000L
 		private const val JAMMED_REVEAL_NOTICE_COOLDOWN_MILLIS = 30 * 1000L
