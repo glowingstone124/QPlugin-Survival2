@@ -126,6 +126,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	)
 	private var tickTask: BukkitTask? = null
 	private var visualTask: BukkitTask? = null
+	private var teamSyncTask: BukkitTask? = null
 	private var lastPlacedKeyScoreAt = 0L
 	private var lastRefreshKeyAt = 0L
 	private var startedAtMillis = 0L
@@ -148,6 +149,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		updateScoreboard()
 		tickTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tick() }, 20L, 20L)
 		visualTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { renderVisuals() }, 5L, 5L)
+		teamSyncTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+			Bukkit.getOnlinePlayers().forEach { player -> syncSelectedTeam(player) {} }
+		}, 100L, 20L * 60L)
 	}
 
 	fun stop() {
@@ -156,6 +160,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		tickTask = null
 		visualTask?.cancel()
 		visualTask = null
+		teamSyncTask?.cancel()
+		teamSyncTask = null
 		clearAreaBossBars()
 		clearScoreboard()
 		save()
