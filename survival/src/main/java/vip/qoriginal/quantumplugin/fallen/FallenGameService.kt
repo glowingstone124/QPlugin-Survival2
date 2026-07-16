@@ -90,7 +90,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val trackingDustUntil = ConcurrentHashMap<UUID, Long>()
 	private val activeTracks = ConcurrentHashMap<UUID, ActiveTrack>()
 	private val jammedRevealNoticeUntil = ConcurrentHashMap<String, Long>()
-	private val teamBeacons = ConcurrentHashMap<FallenTeam, TeamBeacon>()
 	private val elytraSamples = ConcurrentHashMap<UUID, ElytraSample>()
 	private val placedScoringBlocks = ConcurrentHashMap.newKeySet<String>()
 	private val allowedGameModeChanges = ConcurrentHashMap<UUID, Long>()
@@ -114,10 +113,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		)
 	)
 
-	// Local flat-world test stations. Replace only coordinates when the final map is ready.
+	// Fixed A-team stations. Coordinates are the minimum corners of their 6x3x6 regions.
 	private val fixedStations = listOf(
-		FallenStation("a_old_city", FallenTeam.A, OVERWORLD_NAME, -56, -60, 0, setOf("a_fu_island")),
-		FallenStation("a_fu_island", FallenTeam.A, OVERWORLD_NAME, -56, -60, 128, setOf("a_old_city"))
+		FallenStation("a_old_city", FallenTeam.A, OVERWORLD_NAME, 388, 67, 60, setOf("a_fu_island")),
+		FallenStation("a_fu_island", FallenTeam.A, OVERWORLD_NAME, -11725, -32, 827, setOf("a_old_city"))
 	)
 	private var tickTask: BukkitTask? = null
 	private var visualTask: BukkitTask? = null
@@ -181,6 +180,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		applyWorldRules()
 		ensureInitialKeys()
 		broadcast(Component.text("《陷落》活动开始。部署阶段持续 2 小时。", NamedTextColor.GOLD))
+		doctorBroadcast("欢迎入场，各位受试者。请妥善安置十五枚密钥——我会记录你们的每一次选择。")
 		save()
 	}
 
@@ -191,6 +191,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val winners = winnerTeams()
 		val winnerText = if (winners.isEmpty()) "无胜者" else winners.joinToString("、") { it.displayName }
 		broadcast(Component.text("$reason。胜者: $winnerText", NamedTextColor.GOLD))
+		doctorBroadcast("实验阶段结束。$winnerText 获得了继续见证黎明的资格。")
 		broadcastSettlement()
 		save()
 	}
@@ -228,6 +229,14 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun teamOf(player: Player): FallenTeam? = playerTeams[player.uniqueId]
+
+	fun welcomePlayer(player: Player) {
+		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return
+		player.sendMessage(
+			Component.text("[Doc. Steinbeck] ", NamedTextColor.DARK_PURPLE)
+				.append(Component.text("欢迎回来，${player.name}。实验阶段：${phase.displayName()}；剩余时间：${formatDuration(remainingMillis())}。", NamedTextColor.LIGHT_PURPLE))
+		)
+	}
 
 	fun scoreSnapshot(): Map<FallenTeam, Int> = scores.toMap()
 
@@ -448,51 +457,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				keyAlertUntil[key.id] = System.currentTimeMillis() + KEY_ALERT_MILLIS
 				alertTeam(team, Component.text("密钥 ${key.shortId()} 已部署密钥警戒，30 分钟内敌方靠近 30 格会提醒。", NamedTextColor.AQUA))
 			}
-			"beacon" -> {
-				if (!isInTeamRegion(team, player.location)) {
-					CommandMessages.warning(player, "传送信标只能设置在己方阵营区域内。")
-					return false
-				}
-				if (!spendScore(player, team, 1200)) return false
-				teamBeacons[team] = TeamBeacon(player.location.clone(), System.currentTimeMillis() + TEAM_BEACON_MILLIS)
-				alertTeam(team, Component.text("${player.name} 设置了临时传送信标，30 分钟内可用。", NamedTextColor.AQUA))
-			}
 			else -> throw IllegalArgumentException("未知购买项: $item")
 		}
 		save()
-		return true
-	}
-
-	fun teleportToBeacon(player: Player): Boolean {
-		val team = teamOf(player)
-		if (team == null) {
-			CommandMessages.error(player, "你还没有分配阵营。")
-			return true
-		}
-		val beacon = teamBeacons[team]
-		if (beacon == null || beacon.expiresAtMillis <= System.currentTimeMillis()) {
-			teamBeacons.remove(team)
-			CommandMessages.warning(player, "你的阵营没有可用的传送信标。")
-			return true
-		}
-		if (!isInTeamRegion(team, player.location)) {
-			CommandMessages.warning(player, "只能从己方阵营区域内使用传送信标。")
-			return true
-		}
-		if (!sameTeamRegion(team, player.location, beacon.location)) {
-			CommandMessages.warning(player, "传送信标不能跨阵营区域使用。")
-			return true
-		}
-		if (hasKeyItem(player)) {
-			CommandMessages.warning(player, "持有密钥时不能使用传送信标。")
-			return true
-		}
-		if (isCombatTagged(player)) {
-			CommandMessages.warning(player, "战斗状态下不能使用传送信标。")
-			return true
-		}
-		player.teleport(beacon.location)
-		CommandMessages.success(player, "已传送至阵营信标。")
 		return true
 	}
 
@@ -614,6 +581,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			addScore(team, 500)
 			convertedKeys[team] = (convertedKeys[team] ?: 0) + 1
 			addScore(key.originalTeam, -400)
+			doctorBroadcast("有趣。${player.name} 已将 ${key.originalTeam.displayName} 的密钥转化为 ${team.displayName} 的新生命线。")
 		}
 		broadcast(Component.text("${player.name} 为 ${team.displayName} 放置了密钥 ${key.shortId()}", team.color))
 		if (phase == FallenPhase.OVERTIME) {
@@ -671,7 +639,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		key.state = FallenKeyState.SELF_DESTRUCTING
 		key.holder = player.uniqueId
 		key.selfDestructAtMillis = now + SELF_DESTRUCT_MILLIS
-		broadcast(Component.text("${player.name} 启动了密钥 ${key.shortId()} 的自毁倒计时。", NamedTextColor.YELLOW))
+		doctorBroadcast("${player.name} 启动了密钥 ${key.shortId()} 的自毁程序。十分钟后，我们将得到一组不可逆的数据。")
 		save()
 		return true
 	}
@@ -1211,6 +1179,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			if (now >= deploymentEndsAt) {
 				phase = FallenPhase.ACTIVE
 				broadcast(Component.text("部署阶段结束，密钥夺取已启用。", NamedTextColor.RED))
+				doctorBroadcast("准备时间结束。现在，请证明哪一座城市最值得继续存在。")
 				save()
 			}
 		}
@@ -1249,6 +1218,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (startedAtMillis == 0L) initializeScheduledTimeline()
 		phase = FallenPhase.OVERTIME
 		broadcast(Component.text("最长游戏时间到达，进入 30 分钟加时。所有放置密钥坐标公开，密钥持续积分停止，指南针免费。", NamedTextColor.GOLD))
+		doctorBroadcast("数据仍然无法区分你们。很好——我已经公开全部密钥坐标，开始最后三十分钟。")
 		broadcastPlacedKeyCoordinates()
 		save()
 	}
@@ -1469,7 +1439,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		addScore(oldOwner, -100)
 		captureProgress.clear()
 		recentCaptureUntil[player.uniqueId] = System.currentTimeMillis() + RECENT_CAPTURE_TELEPORT_BLOCK_MILLIS
-		broadcast(Component.text("${player.name} 夺取了 ${oldOwner.displayName} 的密钥 ${key.shortId()}", NamedTextColor.RED))
+		doctorBroadcast("${player.name} 从 ${oldOwner.displayName} 夺走了密钥 ${key.shortId()}。让我们看看它能否活着回到另一座城市。")
 		save()
 	}
 
@@ -1489,7 +1459,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			addScore(key.ownerTeam, 250)
 			addScore(key.originalTeam, -250)
 			destroyedKeys[key.ownerTeam] = (destroyedKeys[key.ownerTeam] ?: 0) + 1
-			broadcast(Component.text("${key.ownerTeam.displayName} 成功自毁密钥 ${key.shortId()}", NamedTextColor.GOLD))
+			doctorBroadcast("密钥 ${key.shortId()} 已化为灰烬。${key.ownerTeam.displayName} 完成了这项破坏性实验。")
 			changed = true
 		}
 		if (changed) save()
@@ -1571,7 +1541,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				continue
 			}
 			val since = dangerSince.getOrPut(team) {
-				broadcast(Component.text("${team.displayName} 没有有效密钥，进入 10 分钟濒危状态。", NamedTextColor.YELLOW))
+				doctorBroadcast("${team.displayName} 的生命体征已经归零。十分钟后若仍无有效密钥，我将终止该组实验。")
 				save()
 				now
 			}
@@ -1929,10 +1899,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		return regionsOf(team).any { it.contains(location) }
 	}
 
-	private fun sameTeamRegion(team: FallenTeam, first: Location, second: Location): Boolean {
-		return regionsOf(team).any { it.contains(first) && it.contains(second) }
-	}
-
 	private fun isSafeRespawn(team: FallenTeam, location: Location): Boolean {
 		if (!isInTeamRegion(team, location) || location.y < 0) return false
 		if (nearEnemyPlacedKey(location, team, 30.0)) return false
@@ -2170,7 +2136,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				player.gameMode = GameMode.SPECTATOR
 			}
 		}
-		broadcast(Component.text("${team.displayName} 已出局。原因: $reason。", NamedTextColor.RED))
+		doctorBroadcast("${team.displayName} 已从实验中淘汰。原因：$reason。")
 		save()
 	}
 
@@ -2300,6 +2266,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		Bukkit.broadcast(Component.text("[陷落] ", NamedTextColor.DARK_RED).append(component))
 	}
 
+	private fun doctorBroadcast(message: String) {
+		Bukkit.broadcast(
+			Component.text("[Doc. Steinbeck] ", NamedTextColor.DARK_PURPLE)
+				.append(Component.text(message, NamedTextColor.LIGHT_PURPLE))
+		)
+	}
+
 	private fun alertTeam(team: FallenTeam, component: Component) {
 		for (player in Bukkit.getOnlinePlayers()) {
 			if (teamOf(player) == team) {
@@ -2359,25 +2332,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			for (teamName in section.getKeys(false)) {
 				val until = section.getLong(teamName)
 				if (until > System.currentTimeMillis()) teamRespawnBoostUntil[FallenTeam.parse(teamName)] = until
-			}
-		}
-		config.getConfigurationSection("team-beacons")?.let { section ->
-			for (teamName in section.getKeys(false)) {
-				val beaconSection = section.getConfigurationSection(teamName) ?: continue
-				val expiresAt = beaconSection.getLong("expires-at", 0L)
-				if (expiresAt <= System.currentTimeMillis()) continue
-				val world = Bukkit.getWorld(beaconSection.getString("world") ?: continue) ?: continue
-				teamBeacons[FallenTeam.parse(teamName)] = TeamBeacon(
-					Location(
-						world,
-						beaconSection.getDouble("x"),
-						beaconSection.getDouble("y"),
-						beaconSection.getDouble("z"),
-						beaconSection.getDouble("yaw").toFloat(),
-						beaconSection.getDouble("pitch").toFloat()
-					),
-					expiresAt
-				)
 			}
 		}
 		config.getConfigurationSection("players")?.let { section ->
@@ -2449,16 +2403,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		config["eliminated"] = eliminatedTeams.map { it.name }
 		config["announced"] = announcedMilestones.toList()
 		for ((team, since) in dangerSince) config["danger-since.${team.name}"] = since
-		for ((team, beacon) in teamBeacons) {
-			if (beacon.expiresAtMillis <= System.currentTimeMillis()) continue
-			config["team-beacons.${team.name}.world"] = beacon.location.world?.name
-			config["team-beacons.${team.name}.x"] = beacon.location.x
-			config["team-beacons.${team.name}.y"] = beacon.location.y
-			config["team-beacons.${team.name}.z"] = beacon.location.z
-			config["team-beacons.${team.name}.yaw"] = beacon.location.yaw.toDouble()
-			config["team-beacons.${team.name}.pitch"] = beacon.location.pitch.toDouble()
-			config["team-beacons.${team.name}.expires-at"] = beacon.expiresAtMillis
-		}
 		for ((id, reveal) in preciseReveals) {
 			config["precise-reveals.$id.requester"] = reveal.requesterTeam.name
 			config["precise-reveals.$id.target"] = reveal.targetTeam.name
@@ -2523,7 +2467,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val BLAST_PROTECTION_MILLIS = 120 * 1000L
 		private const val TEAM_RESPAWN_BOOST_MILLIS = 30 * 60 * 1000L
 		private const val TEAM_RESPAWN_PROTECTION_MILLIS = 10 * 1000L
-		private const val TEAM_BEACON_MILLIS = 30 * 60 * 1000L
 		private const val ELYTRA_SCORE_SPEED = 100.0 / 3.6
 		private const val ELYTRA_SCORE_INTERVAL_MILLIS = 30 * 1000L
 		private const val INTERNAL_GAME_MODE_CHANGE_WINDOW_MILLIS = 2 * 1000L
@@ -2608,8 +2551,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	)
 
 	private data class ActiveTrack(val targetId: UUID, val untilMillis: Long)
-
-	private data class TeamBeacon(val location: Location, val expiresAtMillis: Long)
 
 	private data class ElytraSample(val location: Location, val atMillis: Long, val accumulatedMillis: Long)
 
