@@ -58,8 +58,10 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	@EventHandler
 	fun onPlayerJoin(event: PlayerJoinEvent) {
 		service.sanitizeForbiddenEventItems(event.player)
-		service.claimPendingPoolKeys(event.player)
-		service.welcomePlayer(event.player)
+		service.syncSelectedTeam(event.player) {
+			service.claimPendingPoolKeys(event.player)
+			service.welcomePlayer(event.player)
+		}
 	}
 
 	@EventHandler

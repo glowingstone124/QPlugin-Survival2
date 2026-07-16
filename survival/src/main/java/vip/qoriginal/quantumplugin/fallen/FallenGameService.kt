@@ -32,12 +32,18 @@ import org.bukkit.scheduler.BukkitTask
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
 import org.bukkit.scoreboard.RenderType
+import com.google.gson.JsonParser
 import vip.qoriginal.quantumplugin.CommandMessages
+import vip.qoriginal.quantumplugin.Config
+import vip.qoriginal.quantumplugin.Request
 import java.io.File
 import java.io.IOException
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.EnumMap
+import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
@@ -219,6 +225,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun assignTeam(playerId: UUID, team: FallenTeam) {
+		if (playerTeams[playerId] == team) return
 		playerTeams[playerId] = team
 		save()
 	}
@@ -229,6 +236,34 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun teamOf(player: Player): FallenTeam? = playerTeams[player.uniqueId]
+
+	/**
+	 * Pulls the permanent web selection when a player joins. The callback always runs
+	 * on the server thread, including when the API is unavailable or no choice exists.
+	 */
+	fun syncSelectedTeam(player: Player, afterSync: () -> Unit) {
+		val username = URLEncoder.encode(player.name, StandardCharsets.UTF_8)
+		val url = "${Config.API_ENDPOINT}/qo/fallen/team?username=$username"
+		val headers = Optional.of(mapOf("Authorization" to "Bearer ${Config.API_SECRET}"))
+		Request.sendGetRequest(url, headers).whenComplete { body, error ->
+			plugin.server.scheduler.runTask(plugin, Runnable {
+				if (!player.isOnline) return@Runnable
+				if (error != null) {
+					plugin.logger.warning("Failed to sync Fallen team for ${player.name}: ${error.message}")
+				} else if (!body.isNullOrBlank()) {
+					runCatching {
+						val response = JsonParser.parseString(body).asJsonObject
+						if (response.get("selected")?.asBoolean == true) {
+							assignTeam(player.uniqueId, FallenTeam.parse(response.get("team")?.asString))
+						}
+					}.onFailure {
+						plugin.logger.warning("Invalid Fallen team response for ${player.name}: ${it.message}")
+					}
+				}
+				afterSync()
+			})
+		}
+	}
 
 	fun welcomePlayer(player: Player) {
 		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return
