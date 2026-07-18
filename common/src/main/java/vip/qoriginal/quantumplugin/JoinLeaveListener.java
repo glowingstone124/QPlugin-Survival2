@@ -35,6 +35,7 @@ public class JoinLeaveListener implements Listener {
         player.removeScoreboardTag("guest");
         player.removeScoreboardTag("visitor");
         player.removeScoreboardTag("visitor_login");
+        DailyLoginAdvertisement.showIfFirstLoginToday(player);
         JsonObject relationship = JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + player.getName()).get()).getAsJsonObject();
         if (relationship.has("code")) {
             if (relationship.get("code").getAsInt() == 0) {

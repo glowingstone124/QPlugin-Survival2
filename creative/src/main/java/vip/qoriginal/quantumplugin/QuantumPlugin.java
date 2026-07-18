@@ -40,6 +40,7 @@ public final class QuantumPlugin extends JavaPlugin {
         ChatSync.configure(4, false);
         instance = this;
         PluginContext.setPlugin(this);
+        DailyLoginAdvertisement.init(this);
         servuxEntityDataBridge = new ServuxEntityDataBridge(this);
         PlayerEventListener.setMessageSink(message -> new ChatSync().sendChatMsg(message));
         CommandSuggester.register(this, List.of(

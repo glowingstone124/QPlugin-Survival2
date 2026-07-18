@@ -65,6 +65,7 @@ public final class QuantumPlugin extends JavaPlugin {
         WORLD_MAIN = Bukkit.getWorld("world");
         instance = this;
         PluginContext.setPlugin(this);
+        DailyLoginAdvertisement.init(this);
         servuxEntityDataBridge = new ServuxEntityDataBridge(this);
         StatusUpload.setPlayerFilter(player ->
                 !FakePlayerManager.isFakePlayer(player)
