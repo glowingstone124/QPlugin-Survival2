@@ -8,6 +8,10 @@ import org.bukkit.entity.Player
 
 class CustomGamemodeCmd : CommandExecutor {
 	override fun onCommand(p0: CommandSender, p1: Command, p2: String, p3: Array<out String>): Boolean {
+		if (!Config.gameModeSwitchEnabled()) {
+			p0.sendMessage("游戏模式切换功能已禁用。")
+			return true
+		}
 		if (p0 !is Player) {
 			p0.sendMessage("This command can only be executed by the player!")
 			return true

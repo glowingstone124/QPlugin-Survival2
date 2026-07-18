@@ -73,4 +73,13 @@ object Config {
 		val raw = configData["LLM_REQUEST_TIMEOUT_MILLIS"] ?: return 120_000
 		return raw.toString().toIntOrNull()?.coerceAtLeast(5_000) ?: 120_000
 	}
+
+	fun gameModeSwitchEnabled(): Boolean {
+		val raw = configData["GAMEMODE_SWITCH_ENABLED"] ?: return true
+		return when (raw) {
+			is Boolean -> raw
+			is Number -> raw.toInt() != 0
+			else -> raw.toString().trim().equals("true", ignoreCase = true)
+		}
+	}
 }

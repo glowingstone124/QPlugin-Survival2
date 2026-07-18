@@ -85,6 +85,8 @@ public final class QuantumPlugin extends JavaPlugin {
         System.out.println("end scanning triggers");
         System.out.println("1.14.5.5.1 Started.");
         if (DEBUG_FLAG) {
+
+
             System.out.println("QPlugin is running in debug mode. More logs will be written. Set DEBUG=false to disable this feature.");
         }
         try {
