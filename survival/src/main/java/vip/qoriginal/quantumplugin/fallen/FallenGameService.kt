@@ -15,6 +15,7 @@ import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.Particle
+import org.bukkit.Sound
 import org.bukkit.attribute.Attribute
 import org.bukkit.attribute.AttributeModifier
 import org.bukkit.boss.BarColor
@@ -22,7 +23,10 @@ import org.bukkit.boss.BarStyle
 import org.bukkit.boss.BossBar
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
+import org.bukkit.entity.AbstractArrow
+import org.bukkit.entity.Arrow
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.ShapelessRecipe
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.potion.PotionEffect
@@ -63,6 +67,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val forbiddenBuffSnowballKey = NamespacedKey(plugin, "buff_snowball")
 	private val territorySpeedBonusKey = NamespacedKey(plugin, "fallen_territory_speed_bonus")
 	private val miningSpeedBonusKey = NamespacedKey(plugin, "fallen_mining_speed_bonus")
+	private val alloyBulletItemKey = NamespacedKey(plugin, "fallen_alloy_bullet_item")
+	private val alloyBulletProjectileKey = NamespacedKey(plugin, "fallen_alloy_bullet_projectile")
+	private val alloyBulletRecipeKey = NamespacedKey(plugin, "fallen_alloy_bullets")
 	private val dataFile = File(plugin.dataFolder, "fallen.yml")
 	private val playerTeams = ConcurrentHashMap<UUID, FallenTeam>()
 	private val scores = EnumMap<FallenTeam, Int>(FallenTeam::class.java)
@@ -133,6 +140,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private var endedAtMillis = 0L
 	private var visualFrame = 0
 
+	@Volatile
 	var phase: FallenPhase = FallenPhase.IDLE
 		private set
 
@@ -145,6 +153,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun start() {
 		load()
+		registerAlloyBulletRecipe()
 		normalizeScheduledTimeline()
 		updateScoreboard()
 		tickTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tick() }, 20L, 20L)
@@ -155,6 +164,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun stop() {
+		Bukkit.removeRecipe(alloyBulletRecipeKey)
 		clearTeamBonuses()
 		tickTask?.cancel()
 		tickTask = null
@@ -243,6 +253,63 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun teamOf(player: Player): FallenTeam? = playerTeams[player.uniqueId]
 
+	fun fireAlloyBullet(player: Player, item: ItemStack?): Boolean {
+		if (!isAlloyBulletItem(item)) return false
+		item ?: return false
+		item.amount -= 1
+
+		val velocity = player.eyeLocation.direction.normalize().multiply(ALLOY_BULLET_SPEED_BLOCKS_PER_TICK)
+		val arrow = player.launchProjectile(Arrow::class.java, velocity)
+		arrow.persistentDataContainer.set(alloyBulletProjectileKey, PersistentDataType.BYTE, 1)
+		arrow.damage = ALLOY_BULLET_BASE_DAMAGE
+		arrow.pickupStatus = AbstractArrow.PickupStatus.DISALLOWED
+		arrow.isCritical = false
+		player.world.playSound(player.location, Sound.ENTITY_ARROW_SHOOT, 1.0f, 0.7f)
+		return true
+	}
+
+	private fun isAlloyBulletItem(item: ItemStack?): Boolean {
+		return item?.itemMeta?.persistentDataContainer?.has(
+			alloyBulletItemKey,
+			PersistentDataType.BYTE
+		) == true
+	}
+
+	private fun alloyBulletItem(amount: Int): ItemStack {
+		return ItemStack(Material.ECHO_SHARD, amount).apply {
+			itemMeta = itemMeta.apply {
+				displayName(Component.text("合金弹头", NamedTextColor.GRAY))
+				lore(listOf(
+					Component.text("右键发射", NamedTextColor.YELLOW),
+					Component.text("初速度: 100 m/s", NamedTextColor.DARK_GRAY),
+					Component.text("近距离伤害约 10，受距离和防具影响", NamedTextColor.DARK_GRAY)
+				))
+				persistentDataContainer.set(alloyBulletItemKey, PersistentDataType.BYTE, 1)
+			}
+		}
+	}
+
+	private fun registerAlloyBulletRecipe() {
+		Bukkit.removeRecipe(alloyBulletRecipeKey)
+		Bukkit.addRecipe(
+			ShapelessRecipe(alloyBulletRecipeKey, alloyBulletItem(64))
+				.addIngredient(Material.NETHERITE_INGOT)
+		)
+	}
+
+	fun isFriendlyFire(attacker: Player, target: Player): Boolean {
+		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return false
+		val attackerTeam = teamOf(attacker) ?: return false
+		return attackerTeam == teamOf(target)
+	}
+
+	fun shouldBroadcastChatGlobally(player: Player, message: String): Boolean {
+		return phase == FallenPhase.IDLE
+			|| phase == FallenPhase.ENDED
+			|| teamOf(player) == null
+			|| message.startsWith("!")
+	}
+
 	/**
 	 * Pulls the permanent web selection when a player joins. The callback always runs
 	 * on the server thread, including when the API is unavailable or no choice exists.
@@ -259,7 +326,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				} else if (!body.isNullOrBlank()) {
 					runCatching {
 						val response = JsonParser.parseString(body).asJsonObject
-						if (response.get("selected")?.asBoolean == true) {
+						if (response.get("selected")?.asBoolean == true && response.get("finalized")?.asBoolean == true) {
 							assignTeam(player.uniqueId, FallenTeam.parse(response.get("team")?.asString))
 						}
 					}.onFailure {
@@ -2459,6 +2526,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	companion object {
+		private const val ALLOY_BULLET_BASE_DAMAGE = 2.0
+		private const val ALLOY_BULLET_SPEED_BLOCKS_PER_TICK = 5.0
 		private val KEY_SHAPE_PIXELS = listOf(
 			-4 to 1, -4 to 2, -3 to 3, -2 to 3, -1 to 2, -1 to 1, -2 to 0, -3 to 0,
 			-1 to 1, 0 to 1, 1 to 1, 2 to 1, 3 to 1, 4 to 1, 5 to 1,

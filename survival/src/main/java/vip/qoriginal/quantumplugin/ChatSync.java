@@ -19,6 +19,7 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiPredicate;
 import java.net.HttpURLConnection;
 
 import static vip.qoriginal.quantumplugin.QuantumPlugin.isShutup;
@@ -34,6 +35,11 @@ public class ChatSync implements Listener {
     private static final long QQ_CACHE_TTL_MS = 10 * 60 * 1000L;
     private static final Map<Long, CachedName> qqNameCache = new ConcurrentHashMap<>();
     private static final PlainTextComponentSerializer PLAIN_TEXT = PlainTextComponentSerializer.plainText();
+    private BiPredicate<Player, String> chatUploadFilter = (player, message) -> true;
+
+    public void setChatUploadFilter(BiPredicate<Player, String> chatUploadFilter) {
+        this.chatUploadFilter = chatUploadFilter == null ? (player, message) -> true : chatUploadFilter;
+    }
 
     private static class CachedName {
         final String name;
@@ -50,12 +56,17 @@ public class ChatSync implements Listener {
 
     @EventHandler
     public void onPlayerChat(AsyncChatEvent event) {
+        String originalMessage = PLAIN_TEXT.serialize(event.message());
+        if (!chatUploadFilter.test(event.getPlayer(), originalMessage)) {
+            return;
+        }
+        String outboundMessage = originalMessage.startsWith("!") ? originalMessage.substring(1) : originalMessage;
         if (!isShutup(event.getPlayer())) {
             Thread.startVirtualThread(() -> {
                 try {
 
                     String playerName = event.getPlayer().getName();
-                    String message = PLAIN_TEXT.serialize(event.message());
+                    String message = outboundMessage;
                     MessageWrapper mw = new MessageWrapper(message, ChatType.GAME_CHAT.getChatType(), Config.INSTANCE.getAPI_SECRET(), QO_CODE, System.currentTimeMillis(), playerName);
                     String llmPrompt = extractLlmPrompt(message);
                     if (llmPrompt != null) {

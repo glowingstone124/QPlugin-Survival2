@@ -1,9 +1,12 @@
 package vip.qoriginal.quantumplugin.fallen
 
+import io.papermc.paper.event.player.AsyncChatEvent
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.GameMode
 import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockPlaceEvent
@@ -28,8 +31,30 @@ import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
 
 class FallenListener(private val service: FallenGameService) : Listener {
+	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+	fun onPlayerChat(event: AsyncChatEvent) {
+		val message = PLAIN_TEXT.serialize(event.message())
+		if (service.shouldBroadcastChatGlobally(event.player, message)) return
+		val senderTeam = service.teamOf(event.player) ?: return
+		event.viewers().removeIf { viewer ->
+			viewer is Player && service.teamOf(viewer) != senderTeam
+		}
+	}
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun removeGlobalChatPrefix(event: AsyncChatEvent) {
+		val message = PLAIN_TEXT.serialize(event.message())
+		if (!message.startsWith("!")) return
+		event.message(Component.text(message.drop(1)))
+	}
+
 	@EventHandler
 	fun onPlayerInteract(event: PlayerInteractEvent) {
+		if ((event.action == Action.RIGHT_CLICK_AIR || event.action == Action.RIGHT_CLICK_BLOCK)
+			&& service.fireAlloyBullet(event.player, event.item)) {
+			event.isCancelled = true
+			return
+		}
 		if (service.rejectForbiddenEventItem(event.player, event.item)) {
 			event.isCancelled = true
 			return
@@ -123,8 +148,12 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	@EventHandler(ignoreCancelled = true)
 	fun onEntityDamageByEntity(event: EntityDamageByEntityEvent) {
 		val attacker = attackingPlayer(event) ?: return
-		service.cancelRespawnProtection(attacker)
 		val target = event.entity as? Player ?: return
+		if (service.isFriendlyFire(attacker, target)) {
+			event.isCancelled = true
+			return
+		}
+		service.cancelRespawnProtection(attacker)
 		service.recordDamage(attacker, target, event.finalDamage)
 	}
 
@@ -202,5 +231,9 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	private fun isExplosionDamage(event: EntityDamageEvent): Boolean {
 		return event.cause == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION
 			|| event.cause == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION
+	}
+
+	companion object {
+		private val PLAIN_TEXT = PlainTextComponentSerializer.plainText()
 	}
 }

@@ -60,6 +60,7 @@ public final class QuantumPlugin extends JavaPlugin {
         WORLD_MAIN = Bukkit.getWorld("world");
         instance = this;
         PluginContext.setPlugin(this);
+        cs.setChatUploadFilter(fallenGameService::shouldBroadcastChatGlobally);
         CommandSuggester.register(this, List.of(
                 "suicide", "shutup", "myloc", "highlight", "showitem", "querybind",
                 "viewInventory", "summontext", "login", "damageindicator", "leavemessage",
