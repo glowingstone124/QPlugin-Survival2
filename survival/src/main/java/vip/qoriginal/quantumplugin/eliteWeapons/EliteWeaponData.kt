@@ -17,6 +17,7 @@ import vip.qoriginal.quantumplugin.Request
 import vip.qoriginal.quantumplugin.asJsonObject
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.util.Optional
 
 class EliteWeaponData {
 
@@ -95,7 +96,8 @@ class EliteWeaponData {
 
 
 		val result = Request
-			.sendGetRequest(logger.strWithDebugPrint("${Config.API_ENDPOINT}/qo/elite/create?owner=${player.name}&type=${item.type.name}&description=$encodedDesc&name=$encodedName"))
+			.sendPostRequest(logger.strWithDebugPrint("${Config.API_ENDPOINT}/qo/elite/create?owner=${player.name}&type=${item.type.name}&description=$encodedDesc&name=$encodedName"), "",
+				Optional.of(mapOf("Token" to Config.API_SECRET)))
 			.get()
 			.asJsonObject()
 

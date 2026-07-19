@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Ranking
@@ -41,7 +43,8 @@ public class Ranking
             return;
         }
         HashMap<String, Long> snapshot = new HashMap<>(rankingMap);
-        Request.sendPostRequest(url, gson.toJson(snapshot)).get();
+        Request.sendPostRequest(url, gson.toJson(snapshot),
+                Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET()))).get();
         snapshot.forEach((player, uploadedAmount) ->
                 rankingMap.computeIfPresent(player, (ignored, currentAmount) -> {
                     long remaining = currentAmount - uploadedAmount;

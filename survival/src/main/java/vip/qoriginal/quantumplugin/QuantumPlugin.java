@@ -169,7 +169,7 @@ public final class QuantumPlugin extends JavaPlugin {
                             + "&ip=" + address.getHostName()).trim();
                     Bukkit.getScheduler().runTaskAsynchronously(QuantumPlugin.this, () -> {
                         try {
-                            Request.sendPostRequest(url, "");
+                            Request.sendPostRequest(url, "", Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
