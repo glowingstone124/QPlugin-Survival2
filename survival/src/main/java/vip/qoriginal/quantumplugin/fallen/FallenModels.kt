@@ -161,7 +161,11 @@ data class FallenStation(
 	}
 
 	fun containsCore(location: Location): Boolean {
-		return contains(location)
+		val world = location.world ?: return false
+		return worldName == world.name
+			&& location.blockX in (x + 1)..(x + 3)
+			&& location.blockY in y until (y + FALLEN_STATION_HEIGHT)
+			&& location.blockZ in (z + 1)..(z + 3)
 	}
 }
 
@@ -177,7 +181,8 @@ data class FallenKey(
 	var z: Int = 0,
 	var holder: UUID? = null,
 	var selfDestructAtMillis: Long = 0L,
-	var expiresAtMillis: Long = 0L
+	var expiresAtMillis: Long = 0L,
+	var conversionScored: Boolean = false
 ) {
 	fun placeAt(location: Location) {
 		val world = location.world ?: throw IllegalArgumentException("密钥位置没有世界。")
@@ -223,6 +228,7 @@ data class FallenKey(
 		section["holder"] = holder?.toString()
 		section["self-destruct-at"] = selfDestructAtMillis
 		section["expires-at"] = expiresAtMillis
+		section["conversion-scored"] = conversionScored
 	}
 
 	companion object {
@@ -240,7 +246,8 @@ data class FallenKey(
 				z = section.getInt("z"),
 				holder = section.getString("holder")?.let(UUID::fromString),
 				selfDestructAtMillis = section.getLong("self-destruct-at"),
-				expiresAtMillis = section.getLong("expires-at")
+				expiresAtMillis = section.getLong("expires-at"),
+				conversionScored = section.getBoolean("conversion-scored", false)
 			)
 		}
 	}

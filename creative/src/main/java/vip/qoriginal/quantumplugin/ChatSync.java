@@ -50,7 +50,6 @@ public class ChatSync implements Listener {
                     String playerName = event.getPlayer().getName();
                     String message = PlainTextComponentSerializer.plainText().serialize(event.originalMessage());
                     MessageWrapper mw = new MessageWrapper(message, ChatType.GAME_CHAT.getChatType(), AuthUtils.INSTANCE.getToken(), QO_CREATIVE_CODE, System.currentTimeMillis(), playerName);
-                    System.out.println(mw.getAsString());
                     Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", mw.getAsString());
                 } catch (Exception e) {
                     e.printStackTrace();

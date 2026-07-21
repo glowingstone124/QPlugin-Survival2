@@ -73,7 +73,6 @@ public class ChatSync implements Listener {
                         handleLlmPrompt(event.getPlayer(), llmPrompt);
                         return;
                     }
-                    System.out.println(mw.getAsString());
                     Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/upload", mw.getAsString());
                 } catch (Exception e) {
                     e.printStackTrace();

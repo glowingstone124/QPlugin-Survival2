@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -66,12 +67,13 @@ public class JoinLeaveListener implements Listener {
     }
 
     @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) throws Exception {
+    public void onPlayerJoin(PlayerJoinEvent event) {
         QuantumPlugin quantumPlugin = QuantumPlugin.getInstance();
         Player player = event.getPlayer();
         player.removeScoreboardTag("guest");
         player.removeScoreboardTag("visitor");
         player.removeScoreboardTag("visitor_login");
+        player.addScoreboardTag("guest");
         Thread.startVirtualThread(() -> {
             try {
                 IPUtils.locIsCn(event, quantumPlugin);
@@ -79,28 +81,48 @@ public class JoinLeaveListener implements Listener {
                 throw new RuntimeException(e);
             }
         });
-        JsonObject relationship = JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + player.getName()).get()).getAsJsonObject();
-        if (relationship.has("code")) {
-            if (relationship.get("code").getAsInt() == 0) {
-                player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original，输入/login 你的密码来登录")
-                        .appendNewline()
-                        .append(Component.text("QQ: " + relationship.get("qq").getAsLong())
-                                .color(TextColor.color(114, 114, 114))));
-                login.handleJoin(event.getPlayer(), false);
-            }
-            sessionStartTimes.put(player, System.currentTimeMillis());
+        Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + player.getName())
+                .whenComplete((body, error) -> Bukkit.getScheduler().runTask(quantumPlugin, () -> {
+                    if (!player.isOnline()) return;
+                    if (error != null || body == null || body.isBlank()) {
+                        player.kick(Component.text("[500 Internal Server Error]内部验证出现错误，请稍后重试。"));
+                        return;
+                    }
+                    try {
+                        finishJoin(player, JsonParser.parseString(body).getAsJsonObject());
+                    } catch (Exception exception) {
+                        log.warn("Failed to validate joined player {}", player.getName(), exception);
+                        player.kick(Component.text("[500 Internal Server Error]内部验证出现错误，请稍后重试。"));
+                    }
+                }));
+    }
 
-            java.net.InetSocketAddress address = player.getAddress();
-            if (address != null) {
-                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + address.getHostName(), "",
-                        Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
-            }
-        } else if (relationship.get("affiliated").getAsBoolean()) {
+    private void finishJoin(Player player, JsonObject relationship) {
+        player.removeScoreboardTag("guest");
+        player.removeScoreboardTag("visitor");
+        if (relationship.has("code") && relationship.get("code").getAsInt() == 0) {
+            player.sendMessage(Component.text("验证通过，欢迎回到Quantum Original，输入/login 你的密码来登录")
+                    .appendNewline()
+                    .append(Component.text("QQ: " + relationship.get("qq").getAsLong())
+                            .color(TextColor.color(114, 114, 114))));
+            login.handleJoin(player, false);
+        } else if (relationship.has("affiliated") && relationship.get("affiliated").getAsBoolean()) {
             player.sendMessage(Component.text("欢迎回到Quantum Original，输入/login 你的密码来登录")
                     .appendNewline()
                     .append(Component.text("您正在使用附属账户，归属于： " + relationship.get("host").getAsString())
                             .color(TextColor.color(114, 114, 114))));
-            login.handleJoin(event.getPlayer(), true);
+            login.handleJoin(player, true);
+        } else {
+            player.addScoreboardTag("guest");
+            player.kick(Component.text("[401 Unauthorized]账户验证失败。"));
+            return;
+        }
+
+        sessionStartTimes.put(player, System.currentTimeMillis());
+        java.net.InetSocketAddress address = player.getAddress();
+        if (address != null) {
+            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + address.getHostString(), "",
+                    Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
         }
     }
 

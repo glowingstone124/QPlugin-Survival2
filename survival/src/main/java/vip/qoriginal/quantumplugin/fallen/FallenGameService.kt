@@ -557,7 +557,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			}
 			addScore(ownerTeam, -COMPASS_COST)
 		}
-		player.inventory.addItem(compassItem(ownerTeam, targetTeam, targetKey))
+		giveOrDrop(player, compassItem(ownerTeam, targetTeam, targetKey))
 		alertTeam(targetTeam, Component.text("${ownerTeam.displayName} 的 ${player.name} 正在定位你方密钥，距离约 ${distanceBand(player.location.distance(targetKey.center() ?: player.location))}。", NamedTextColor.YELLOW))
 		CommandMessages.success(player, "已购买指向 ${targetTeam.displayName} 的密钥指南针。")
 		save()
@@ -583,12 +583,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		when (item.lowercase()) {
 			"supply" -> {
 				if (!spendScore(player, team, 300)) return false
-				player.inventory.addItem(ItemStack(Material.GOLDEN_CARROT, 32), ItemStack(Material.ARROW, 32), ItemStack(Material.FIREWORK_ROCKET, 32))
+				giveOrDrop(player, ItemStack(Material.GOLDEN_CARROT, 32), ItemStack(Material.ARROW, 32), ItemStack(Material.FIREWORK_ROCKET, 32))
 				CommandMessages.success(player, "已购买阵营补给包。")
 			}
 			"advanced" -> {
 				if (!spendScore(player, team, 800)) return false
-				player.inventory.addItem(ItemStack(Material.GOLDEN_APPLE, 4), ItemStack(Material.ENDER_PEARL, 16), ItemStack(Material.FIREWORK_ROCKET, 48))
+				giveOrDrop(player, ItemStack(Material.GOLDEN_APPLE, 4), ItemStack(Material.ENDER_PEARL, 16), ItemStack(Material.FIREWORK_ROCKET, 48))
 				CommandMessages.success(player, "已购买高级补给包。")
 			}
 			"resistance" -> {
@@ -608,7 +608,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			}
 			"harness" -> {
 				if (!spendScore(player, team, ACCELERATION_HARNESS_COST)) return false
-				player.inventory.addItem(accelerationHarnessItem())
+				giveOrDrop(player, accelerationHarnessItem())
 				CommandMessages.success(player, "已购买粉色加速挽具，可供乐魂穿戴。")
 			}
 			"jammer" -> {
@@ -765,6 +765,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			CommandMessages.warning(player, "密钥只能放置在己方阵营区域内。")
 			return true
 		}
+		if (keys.values.any { it.id != key.id && it.state == FallenKeyState.PLACED && keyRegionsOverlap(it, min) }) {
+			CommandMessages.warning(player, "密钥区域不能与已有密钥重叠。")
+			return true
+		}
 		val blocked = firstBlockingKeyRegionBlock(min)
 		if (blocked != null) {
 			CommandMessages.warning(
@@ -779,10 +783,11 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		key.center()?.let { renderKeyPlacementBurst(it, teamDust(team)) }
 		item.amount -= 1
 		recentCaptureUntil.remove(player.uniqueId)
-		if (key.originalTeam != team) {
+		if (key.originalTeam != team && !key.conversionScored) {
 			addScore(team, 500)
 			convertedKeys[team] = (convertedKeys[team] ?: 0) + 1
 			addScore(key.originalTeam, -400)
+			key.conversionScored = true
 			doctorBroadcast("有趣。${player.name} 已将 ${key.originalTeam.displayName} 的密钥转化为 ${team.displayName} 的新生命线。")
 		}
 		broadcast(Component.text("${player.name} 为 ${team.displayName} 放置了密钥 ${key.shortId()}", team.color))
@@ -797,11 +802,11 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun requestSelfDestruct(player: Player, item: ItemStack): Boolean {
+		val id = keyId(item) ?: return false
 		if (!phase.allowsKeyCapture()) {
 			CommandMessages.warning(player, "当前阶段不能启动密钥自毁。")
 			return true
 		}
-		val id = keyId(item) ?: return false
 		val key = keys[id]
 		if (key == null) {
 			CommandMessages.error(player, "这个密钥没有活动记录。")
@@ -849,7 +854,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	fun dropPlayerKeys(player: Player) {
 		for (item in player.inventory.contents.filterNotNull()) {
 			val id = keyId(item) ?: continue
-			player.world.dropItemNaturally(player.location, item.clone())
+			player.world.dropItem(player.location, item.clone())
 			item.amount = 0
 			markKeyDropped(id, player.location)
 		}
@@ -1095,12 +1100,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return false
 		val team = teamOf(player) ?: return false
 		if (team in eliminatedTeams) return false
-		val now = System.currentTimeMillis()
 		val station = fixedStations.firstOrNull { it.team != team && it.containsCore(location) } ?: return false
-		if (isStationDisrupted(station, now)) return true
-		stationDisruptedUntil[station.id] = now + STATION_DISRUPT_MILLIS
-		alertTeam(station.team, Component.text("${team.displayName} 的 ${player.name} 破坏传送站 ${station.id} 核心，站点被干扰 10 分钟。", NamedTextColor.RED))
-		save()
+		CommandMessages.warning(player, "传送站核心不可直接破坏，请在核心区域连续停留 8 秒进行干扰。")
 		return true
 	}
 
@@ -1646,6 +1647,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun processSelfDestruct() {
+		if (!phase.allowsKeyCapture()) return
 		val now = System.currentTimeMillis()
 		var changed = false
 		for (key in keys.values) {
@@ -1752,8 +1754,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			}
 		}
 		val aliveTeams = aliveTeams()
-		if (aliveTeams.size == 1) {
-			endGame("${aliveTeams.single().displayName} 成为唯一存活阵营")
+		when (aliveTeams.size) {
+			0 -> endGame("所有阵营均已淘汰")
+			1 -> endGame("${aliveTeams.single().displayName} 成为唯一存活阵营")
 		}
 	}
 
@@ -2154,7 +2157,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if ((recentCaptureUntil[player.uniqueId] ?: 0L) > now) return true
 		return player.inventory.contents.filterNotNull()
 			.mapNotNull { keyId(it)?.let(keys::get) }
-			.any { it.state == FallenKeyState.SELF_DESTRUCTING }
+			.any { it.type == FallenKeyType.STOLEN || it.state == FallenKeyState.SELF_DESTRUCTING }
 	}
 
 	private fun nearEnemyPlacedKey(player: Player, team: FallenTeam, radius: Double): Boolean {
@@ -2448,6 +2451,23 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		markKeyDropped(key.id, player.location)
 		CommandMessages.warning(player, "背包已满，密钥 ${key.shortId()} 已掉落在你脚下。")
 		return false
+	}
+
+	private fun giveOrDrop(player: Player, vararg items: ItemStack) {
+		for (leftover in player.inventory.addItem(*items).values) {
+			player.world.dropItemNaturally(player.location, leftover)
+		}
+	}
+
+	private fun keyRegionsOverlap(existing: FallenKey, candidateMin: Location): Boolean {
+		val world = candidateMin.world ?: return false
+		if (existing.worldName != world.name) return false
+		val x = candidateMin.blockX
+		val y = candidateMin.blockY
+		val z = candidateMin.blockZ
+		return x < existing.x + FALLEN_KEY_WIDTH && x + FALLEN_KEY_WIDTH > existing.x
+			&& y < existing.y + FALLEN_KEY_HEIGHT && y + FALLEN_KEY_HEIGHT > existing.y
+			&& z < existing.z + FALLEN_KEY_DEPTH && z + FALLEN_KEY_DEPTH > existing.z
 	}
 
 	private fun firstBlockingKeyRegionBlock(min: Location): org.bukkit.block.Block? {

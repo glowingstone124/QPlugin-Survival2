@@ -37,6 +37,9 @@ import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
 
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public final class QuantumPlugin extends JavaPlugin {
@@ -127,7 +130,7 @@ public final class QuantumPlugin extends JavaPlugin {
                     }
                 }
             }
-        }.runTaskTimerAsynchronously(this, 0L, 30L);
+        }.runTaskTimer(this, 0L, 30L);
 
         Block b = Objects.requireNonNull(Bukkit.getWorld("world")).getBlockAt(-1782, 68, 720);
         if (b.getChunk().load()) {
@@ -279,31 +282,51 @@ public final class QuantumPlugin extends JavaPlugin {
                 CommandMessages.playerOnly(sender);
                 return true;
             }
-            try {
-                String result = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + args[0]).get();
-                JsonObject queryObj = (JsonObject) JsonParser.parseString(result);
-                if (queryObj.get("code").getAsInt() != 0) {
-                    sender.sendMessage("该玩家不存在！");
-                    return true;
-                }
-                String res2 = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/inventory/request?name=" + args[0] + "&from=" + sender.getName()).get();
-                if (JsonParser.parseString(res2).getAsJsonObject().get("code").getAsInt() == 0) {
-                    String key = JsonParser.parseString(res2).getAsJsonObject().get("key").getAsString();
-                    sender.sendMessage(Component.text("已经发送请求，请等待对方验证。")
-                            .color(TextColor.color(67, 205, 128))
-                            .append(Component.text("\n"))
-                            .append(Component.text("保管好你的Key: " + key)
-                                    .clickEvent(ClickEvent.copyToClipboard(key))
-                            )
-                    );
-                    piv.insertKey(args[0], key);
-                } else {
-                    sender.sendMessage(Component.text("请求未通过。可能你之前已经发送了请求，也可能当前的请求数已经过多。").color(TextColor.color(67, 205, 128)));
-                }
-
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+            Player viewer = (Player) sender;
+            String target = args[0];
+            String encodedTarget = URLEncoder.encode(target, StandardCharsets.UTF_8);
+            Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/download/registry?name=" + encodedTarget)
+                    .whenComplete((result, lookupError) -> {
+                        if (lookupError != null || result == null || result.isBlank()) {
+                            Bukkit.getScheduler().runTask(this, () -> CommandMessages.error(viewer, "玩家信息查询失败，请稍后重试。"));
+                            return;
+                        }
+                        try {
+                            JsonObject queryObj = JsonParser.parseString(result).getAsJsonObject();
+                            boolean registered = queryObj.has("code") && queryObj.get("code").getAsInt() == 0;
+                            boolean affiliated = queryObj.has("affiliated") && queryObj.get("affiliated").getAsBoolean();
+                            if (!registered && !affiliated) {
+                                Bukkit.getScheduler().runTask(this, () -> CommandMessages.warning(viewer, "该玩家不存在！"));
+                                return;
+                            }
+                            String requestUrl = Config.INSTANCE.getAPI_ENDPOINT() + "/qo/inventory/request?name=" + encodedTarget
+                                    + "&from=" + URLEncoder.encode(viewer.getName(), StandardCharsets.UTF_8);
+                            Request.sendPostRequestWithStatus(requestUrl, "", Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())))
+                                    .whenComplete((response, requestError) -> Bukkit.getScheduler().runTask(this, () -> {
+                                        if (!viewer.isOnline()) return;
+                                        if (requestError != null || response == null || response.status != HttpURLConnection.HTTP_OK) {
+                                            CommandMessages.warning(viewer, "请求未通过。可能已有相同请求，或待处理请求过多。");
+                                            return;
+                                        }
+                                        try {
+                                            JsonObject responseJson = JsonParser.parseString(response.body).getAsJsonObject();
+                                            String key = responseJson.get("key").getAsString();
+                                            viewer.sendMessage(Component.text("已经发送请求，请等待对方验证。")
+                                                    .color(TextColor.color(67, 205, 128))
+                                                    .append(Component.text("\n"))
+                                                    .append(Component.text("保管好你的Key: " + key)
+                                                            .clickEvent(ClickEvent.copyToClipboard(key))));
+                                            piv.insertKey(target, key);
+                                        } catch (Exception exception) {
+                                            getLogger().warning("解析背包查看请求失败: " + exception.getMessage());
+                                            CommandMessages.error(viewer, "背包查看请求返回异常，请稍后重试。");
+                                        }
+                                    }));
+                        } catch (Exception exception) {
+                            getLogger().warning("创建背包查看请求失败: " + exception.getMessage());
+                            Bukkit.getScheduler().runTask(this, () -> CommandMessages.error(viewer, "背包查看请求失败，请稍后重试。"));
+                        }
+                    });
         } else if (sender instanceof Player player && command.getName().equalsIgnoreCase("summontext")) {
             if (args.length >= 1) {
                 String jsonText = String.join(" ", args);

@@ -12,13 +12,17 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
+import java.net.HttpURLConnection;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PlayerInventoryViewer implements Listener {
     private static final Map<UUID, UUID> openInventories = new ConcurrentHashMap<>();
     private static final Map<String,String> keyRing = new ConcurrentHashMap<>();
+    private static final Set<String> consumingKeys = ConcurrentHashMap.newKeySet();
 
     private void openInventoryForPlayer(Player viewer, Player target) {
         Inventory targetInventory = target.getInventory();
@@ -37,22 +41,56 @@ public class PlayerInventoryViewer implements Listener {
 
     public void init() {
         Bukkit.getScheduler().runTaskTimerAsynchronously(QuantumPlugin.getInstance(), () -> {
-            keyRing.forEach((username,key) -> {
+            keyRing.forEach((key, username) -> {
                 try {
-                    JsonObject activity = JsonParser.parseString(Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/inventory/query?secrets=" + key).get()).getAsJsonObject();
+                    Optional<Map<String, String>> headers = Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET()));
+                    Request.Response response = Request.sendGetRequestWithStatus(
+                            Config.INSTANCE.getAPI_ENDPOINT() + "/qo/inventory/query?secrets=" + key,
+                            headers
+                    ).get();
+                    if (response.status == HttpURLConnection.HTTP_NOT_FOUND || response.status == HttpURLConnection.HTTP_GONE) {
+                        keyRing.remove(key, username);
+                        return;
+                    }
+                    if (response.status != HttpURLConnection.HTTP_OK) return;
+                    JsonObject activity = JsonParser.parseString(response.body).getAsJsonObject();
                     int operation = activity.get("approved").getAsInt();
-                    String viewer = activity.get("viewer").getAsString();
-                    if (operation == 0){
+                    if (operation == 0 && consumingKeys.add(key)){
                         Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), () -> {
+                            String viewer = activity.get("viewer").getAsString();
                             Player viewerPlayer = getPlayer(viewer);
                             Player ownerPlayer = getPlayer(username);
-                            if (viewerPlayer != null && ownerPlayer != null) {
-                                openInventoryForPlayer(viewerPlayer, ownerPlayer);
+                            if (viewerPlayer == null || ownerPlayer == null) {
+                                consumingKeys.remove(key);
+                                return;
                             }
+                            Request.sendPostRequestWithStatus(
+                                    Config.INSTANCE.getAPI_ENDPOINT() + "/qo/inventory/consume?secret=" + key,
+                                    "",
+                                    headers
+                            ).whenComplete((consumed, consumeError) -> {
+                                try {
+                                    if (consumeError != null || consumed == null || consumed.status != HttpURLConnection.HTTP_OK) return;
+                                    JsonObject consumedRequest = JsonParser.parseString(consumed.body).getAsJsonObject();
+                                    String approvedViewer = consumedRequest.get("viewer").getAsString();
+                                    String owner = consumedRequest.get("owner").getAsString();
+                                    if (!owner.equalsIgnoreCase(username) || !approvedViewer.equalsIgnoreCase(viewer)) return;
+                                    keyRing.remove(key, username);
+                                    Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), () -> {
+                                        Player currentViewer = getPlayer(approvedViewer);
+                                        Player currentOwner = getPlayer(owner);
+                                        if (currentViewer != null && currentOwner != null) {
+                                            openInventoryForPlayer(currentViewer, currentOwner);
+                                        }
+                                    });
+                                } finally {
+                                    consumingKeys.remove(key);
+                                }
+                            });
                         });
                     }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    QuantumPlugin.getInstance().getLogger().warning("查询背包查看许可失败: " + e.getMessage());
                 }
             });
         }, 0L, 20L);
@@ -74,7 +112,7 @@ public class PlayerInventoryViewer implements Listener {
 
     }
     public void insertKey(String playername, String key){
-        keyRing.put(playername,key);
+        keyRing.put(key, playername);
     }
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {

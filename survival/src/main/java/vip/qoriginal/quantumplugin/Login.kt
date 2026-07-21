@@ -146,11 +146,15 @@ class Login : Listener {
 		} else {
 			player.addScoreboardTag("visitor")
 		}
-		Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
-			if (player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor")) {
+		object : BukkitRunnable() {
+			override fun run() {
+				if (!player.isOnline || (!player.scoreboardTags.contains("guest") && !player.scoreboardTags.contains("visitor"))) {
+					cancel()
+					return
+				}
 				player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
 			}
-		}, 0, 20)
+		}.runTaskTimer(QuantumPlugin.getInstance(), 0, 20)
 	}
 
 	@EventHandler
