@@ -25,6 +25,7 @@ import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.entity.AbstractArrow
 import org.bukkit.entity.Arrow
+import org.bukkit.inventory.EquipmentSlotGroup
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.ShapelessRecipe
 import org.bukkit.persistence.PersistentDataType
@@ -70,6 +71,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val forbiddenBuffSnowballKey = NamespacedKey(plugin, "buff_snowball")
 	private val territorySpeedBonusKey = NamespacedKey(plugin, "fallen_territory_speed_bonus")
 	private val miningSpeedBonusKey = NamespacedKey(plugin, "fallen_mining_speed_bonus")
+	private val accelerationHarnessModifierKey = NamespacedKey(plugin, "fallen_acceleration_harness")
 	private val alloyBulletItemKey = NamespacedKey(plugin, "fallen_alloy_bullet_item")
 	private val alloyBulletProjectileKey = NamespacedKey(plugin, "fallen_alloy_bullet_projectile")
 	private val alloyBulletRecipeKey = NamespacedKey(plugin, "fallen_alloy_bullets")
@@ -604,6 +606,11 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				player.addPotionEffect(PotionEffect(PotionEffectType.NIGHT_VISION, 10 * 60 * 20, 0))
 				CommandMessages.success(player, "已获得 10 分钟夜视。")
 			}
+			"harness" -> {
+				if (!spendScore(player, team, ACCELERATION_HARNESS_COST)) return false
+				player.inventory.addItem(accelerationHarnessItem())
+				CommandMessages.success(player, "已购买粉色加速挽具，可供乐魂穿戴。")
+			}
 			"jammer" -> {
 				if (!requireCaptureShop(player, "部署区域干扰器")) return false
 				val key = nearbyOwnPlacedKey(player, team, "区域干扰器") ?: return false
@@ -638,6 +645,24 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 		save()
 		return true
+	}
+
+	private fun accelerationHarnessItem(): ItemStack {
+		return ItemStack(Material.PINK_HARNESS).apply {
+			itemMeta = itemMeta.apply {
+				displayName(Component.text("粉色加速挽具", NamedTextColor.LIGHT_PURPLE))
+				lore(listOf(Component.text("乐魂穿戴后飞行速度 +0.15", NamedTextColor.GRAY)))
+				addAttributeModifier(
+					Attribute.FLYING_SPEED,
+					AttributeModifier(
+						accelerationHarnessModifierKey,
+						ACCELERATION_HARNESS_FLYING_SPEED,
+						AttributeModifier.Operation.ADD_NUMBER,
+						EquipmentSlotGroup.BODY
+					)
+				)
+			}
+		}
 	}
 
 	fun forceEliminate(team: FallenTeam, reason: String = "管理员裁定出局"): Boolean {
@@ -2595,6 +2620,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	companion object {
+		private const val ACCELERATION_HARNESS_COST = 700
+		private const val ACCELERATION_HARNESS_FLYING_SPEED = 0.15
 		private const val ACTIVITY_STATUS_WARNING_INTERVAL_MILLIS = 60_000L
 		private const val ALLOY_BULLET_BASE_DAMAGE = 2.0
 		private const val ALLOY_BULLET_SPEED_BLOCKS_PER_TICK = 5.0

@@ -98,6 +98,7 @@ class FallenShopCommand(private val service: FallenGameService) : CommandExecuto
 		NIGHT_VISION(11, "临时夜视", 150, purchase = { service, player -> service.buyShopItem(player, "nightvision") }),
 		BLAST(12, "防爆增益", 900, purchase = { service, player -> service.buyShopItem(player, "blast") }),
 		RESPAWN(13, "复活保护", 900, purchase = { service, player -> service.buyShopItem(player, "respawn") }),
-		KEY_ALERT(14, "密钥警戒", 700, purchase = { service, player -> service.buyShopItem(player, "keyalert") });
+		KEY_ALERT(14, "密钥警戒", 700, purchase = { service, player -> service.buyShopItem(player, "keyalert") }),
+		ACCELERATION_HARNESS(15, "粉色加速挽具（乐魂用，飞行速度 +0.15）", 700, purchase = { service, player -> service.buyShopItem(player, "harness") });
 	}
 }

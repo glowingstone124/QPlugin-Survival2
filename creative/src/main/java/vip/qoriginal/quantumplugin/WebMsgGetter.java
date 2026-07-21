@@ -8,6 +8,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.Optional;
 import java.util.TimerTask;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -17,7 +19,10 @@ public class WebMsgGetter extends TimerTask{
     @Override
     public void run(){
         try {
-            String response = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() +"/qo/msglist/download").get();
+            String response = Request.sendGetRequest(
+                    Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/download",
+                    Optional.of(Map.of("Authorization", Config.INSTANCE.getAPI_SECRET()))
+            ).get();
             JSONObject remoteObj = new JSONObject(response);
             JSONArray remoteRaw = remoteObj.getJSONArray("messages");
             ArrayList<String> remoteArr = parseArrList(remoteRaw);

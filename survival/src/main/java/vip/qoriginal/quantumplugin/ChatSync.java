@@ -216,6 +216,7 @@ public class ChatSync implements Listener {
         public void run() {
             try {
                 Map<String, String> headers = new HashMap<>();
+                headers.put("Authorization", Config.INSTANCE.getAPI_SECRET());
                 if (lastEtag != null && !lastEtag.isBlank()) {
                     headers.put("If-None-Match", lastEtag);
                 }

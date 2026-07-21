@@ -9,6 +9,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
+import java.util.Optional
 
 class LeaveMessageComponent {
 
@@ -29,7 +30,8 @@ class LeaveMessageComponent {
 			return false;
 		}
 
-		val res = Request.sendPostRequest(Config.API_ENDPOINT + "/qo/leavemessage/upload?from=${player.name}&to=${target}&message=${message}", "").get().asJsonObject()
+		val res = Request.sendPostRequest(Config.API_ENDPOINT + "/qo/leavemessage/upload?from=${player.name}&to=${target}&message=${message}", "",
+			Optional.of(mapOf("Token" to Config.API_SECRET))).get().asJsonObject()
 		when(res.get("code").asInt) {
 			0 -> player.sendMessage("发送成功。"); return true,
 			1 -> player.sendMessage("您不被允许发送消息。")
@@ -40,7 +42,8 @@ class LeaveMessageComponent {
 	}
 
 	fun getMessages(player: Player): List<Component> {
-		val result = Request.sendGetRequest(Config.API_ENDPOINT + "/qo/leavemessage/get?receiver=${player.name}")
+		val result = Request.sendGetRequest(Config.API_ENDPOINT + "/qo/leavemessage/get?receiver=${player.name}",
+			Optional.of(mapOf("Token" to Config.API_SECRET)))
 			.get().asJsonArray()
 
 

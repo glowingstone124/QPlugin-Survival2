@@ -82,7 +82,10 @@ class Login : Listener {
 		scope.launch {
 			val loginResult = withContext(Dispatchers.IO) {
 				JsonParser.parseString(
-					Request.sendGetRequest(Config.API_ENDPOINT + "/qo/game/login?username=${player.name}&password=$password&ip=${player.address?.hostName}".trimIndent())
+					Request.sendPostRequest(
+						Config.API_ENDPOINT + "/qo/game/login",
+						gson.toJson(mapOf("username" to player.name, "password" to password, "ip" to player.address?.hostName, "web" to false))
+					)
 						.get()
 				).asJsonObject
 			}

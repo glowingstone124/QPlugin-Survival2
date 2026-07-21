@@ -90,7 +90,8 @@ public class JoinLeaveListener implements Listener {
             }
             sessionStartTimes.put(player, System.currentTimeMillis());
 
-            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + Objects.requireNonNull(player.getAddress()).getHostName(), "");
+            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + Objects.requireNonNull(player.getAddress()).getHostName(), "",
+                    Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
         } else if (relationship.get("affiliated").getAsBoolean()) {
             player.sendMessage(Component.text("欢迎回到Quantum Original，输入/login 你的密码来登录")
                     .appendNewline()
@@ -109,8 +110,10 @@ public class JoinLeaveListener implements Listener {
             long minutesPlayed = sessionDuration / (1000 * 60);
             player.sendMessage("你的本次游玩时长为: " + minutesPlayed + " 分钟");
             cs.sendChatMsg("玩家" + event.getPlayer().getName() + "退出了服务器，本次游玩时间 " + minutesPlayed + "分钟");
-            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/upload/gametimerecord?name=" + player.getName() + "&time=" + minutesPlayed, "");
-            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/offline?name=" + player.getName(), "");
+            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/upload/gametimerecord?name=" + player.getName() + "&time=" + minutesPlayed, "",
+                    Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
+            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/offline?name=" + player.getName(), "",
+                    Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
             sessionStartTimes.remove(player);
         }
     }

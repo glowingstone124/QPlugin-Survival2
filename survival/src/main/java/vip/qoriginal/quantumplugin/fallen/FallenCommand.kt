@@ -61,7 +61,7 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				.appendNewline()
 				.append(line("$root key list", "查看密钥"))
 				.appendNewline()
-				.append(line("$root buy <compass|scan|jammer|tracking|supply|advanced|resistance|speed|nightvision|blast|respawn|keyalert> ...", "购买积分物品"))
+				.append(line("$root buy <compass|scan|jammer|tracking|supply|advanced|resistance|speed|nightvision|blast|respawn|keyalert|harness> ...", "购买积分物品"))
 				.appendNewline()
 				.append(line("$root score [add|set] <A|B|C> <amount>", "查看或调整积分"))
 				.appendNewline()
@@ -208,14 +208,14 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 
 	private fun buy(sender: CommandSender, args: Array<out String>) {
 		val player = sender as? Player ?: throw IllegalArgumentException("只有玩家可以购买物品。")
-		require(args.size >= 2) { "用法: /fallen buy <compass|scan|jammer|tracking|supply|advanced|resistance|speed|nightvision|blast|respawn|keyalert> ..." }
+		require(args.size >= 2) { "用法: /fallen buy <compass|scan|jammer|tracking|supply|advanced|resistance|speed|nightvision|blast|respawn|keyalert|harness> ..." }
 		when (args[1].lowercase()) {
 			"compass" -> {
 				require(args.size == 3) { "用法: /fallen buy compass <A|B|C>" }
 				service.buyCompass(player, FallenTeam.parse(args[2]))
 			}
 			"scan" -> service.buyShortScan(player)
-			"jammer", "tracking", "supply", "advanced", "resistance", "speed", "nightvision", "blast", "respawn", "keyalert" -> service.buyShopItem(player, args[1])
+			"jammer", "tracking", "supply", "advanced", "resistance", "speed", "nightvision", "blast", "respawn", "keyalert", "harness" -> service.buyShopItem(player, args[1])
 			else -> throw IllegalArgumentException("未知购买项: ${args[1]}")
 		}
 	}

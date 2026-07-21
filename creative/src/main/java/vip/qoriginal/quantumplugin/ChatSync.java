@@ -77,7 +77,10 @@ public class ChatSync implements Listener {
         @Override
         public void run() {
             try {
-                String response = Request.sendGetRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/download").get();
+                String response = Request.sendGetRequest(
+                        Config.INSTANCE.getAPI_ENDPOINT() + "/qo/msglist/download",
+                        Optional.of(Map.of("Authorization", Config.INSTANCE.getAPI_SECRET()))
+                ).get();
                 JsonElement jsonElement = JsonParser.parseString(response);
 
                 if (jsonElement.isJsonObject()) {
