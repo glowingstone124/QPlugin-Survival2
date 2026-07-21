@@ -36,6 +36,8 @@ import org.bukkit.scheduler.BukkitTask
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
 import org.bukkit.scoreboard.RenderType
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import vip.qoriginal.quantumplugin.CommandMessages
 import vip.qoriginal.quantumplugin.Config
@@ -50,6 +52,7 @@ import java.util.EnumMap
 import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.ln
@@ -134,6 +137,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private var tickTask: BukkitTask? = null
 	private var visualTask: BukkitTask? = null
 	private var teamSyncTask: BukkitTask? = null
+	private var activityStatusUploadTask: BukkitTask? = null
+	private val activityStatusUploadInFlight = AtomicBoolean(false)
+	private var lastActivityStatusWarningAt = 0L
 	private var lastPlacedKeyScoreAt = 0L
 	private var lastRefreshKeyAt = 0L
 	private var startedAtMillis = 0L
@@ -158,9 +164,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		updateScoreboard()
 		tickTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tick() }, 20L, 20L)
 		visualTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { renderVisuals() }, 5L, 5L)
-		teamSyncTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
-			Bukkit.getOnlinePlayers().forEach { player -> syncSelectedTeam(player) {} }
-		}, 100L, 20L * 60L)
+		if (qoApiEnabled()) {
+			teamSyncTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+				Bukkit.getOnlinePlayers().forEach { player -> syncSelectedTeam(player) {} }
+			}, 100L, 20L * 60L)
+			activityStatusUploadTask = Bukkit.getScheduler().runTaskTimer(
+				plugin,
+				Runnable { uploadActivityStatus() },
+				20L,
+				20L
+			)
+		}
 	}
 
 	fun stop() {
@@ -172,6 +186,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		visualTask = null
 		teamSyncTask?.cancel()
 		teamSyncTask = null
+		activityStatusUploadTask?.cancel()
+		activityStatusUploadTask = null
 		clearAreaBossBars()
 		clearScoreboard()
 		save()
@@ -347,6 +363,59 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun scoreSnapshot(): Map<FallenTeam, Int> = scores.toMap()
+
+	private fun uploadActivityStatus() {
+		if (!activityStatusUploadInFlight.compareAndSet(false, true)) return
+		val snapshot = activityStatusJson().toString()
+		val headers = Optional.of(mapOf("Authorization" to "Bearer ${Config.API_SECRET}"))
+		Request.sendPostRequest("${Config.API_ENDPOINT}/qo/fallen/status", snapshot, headers).whenComplete { body, error ->
+			activityStatusUploadInFlight.set(false)
+			val accepted = error == null && runCatching {
+				JsonParser.parseString(body).asJsonObject.get("ok")?.asBoolean == true
+			}.getOrDefault(false)
+			if (!accepted) {
+				warnActivityStatusUpload(error?.message ?: "API rejected the snapshot")
+			}
+		}
+	}
+
+	private fun activityStatusJson(): JsonObject = JsonObject().apply {
+		addProperty("phase", phase.name)
+		addProperty("startedAt", startedAtMillis)
+		addProperty("remainingMillis", remainingMillis())
+		addProperty("timestamp", System.currentTimeMillis())
+		add("teams", JsonArray().apply {
+			FallenTeam.entries.forEach { team ->
+				add(JsonObject().apply {
+					addProperty("team", team.name)
+					addProperty("score", scores[team] ?: 0)
+					addProperty("eliminated", team in eliminatedTeams)
+					add("players", JsonArray().apply {
+						playerTeams.entries
+							.asSequence()
+							.filter { it.value == team }
+							.map { it.key to (Bukkit.getOfflinePlayer(it.key).name ?: it.key.toString()) }
+							.sortedBy { it.second.lowercase() }
+							.forEach { (playerId, name) ->
+								add(JsonObject().apply {
+									addProperty("name", name)
+									addProperty("online", Bukkit.getPlayer(playerId)?.isOnline == true)
+								})
+							}
+					})
+				})
+			}
+		})
+	}
+
+	private fun warnActivityStatusUpload(message: String) {
+		val now = System.currentTimeMillis()
+		if (now - lastActivityStatusWarningAt < ACTIVITY_STATUS_WARNING_INTERVAL_MILLIS) return
+		lastActivityStatusWarningAt = now
+		plugin.logger.warning("Failed to upload Fallen activity status: $message")
+	}
+
+	private fun qoApiEnabled(): Boolean = !"true".equals(System.getenv("DISABLE_QO_API"), ignoreCase = true)
 
 	fun regionSnapshot(): Map<FallenTeam, List<FallenRegion>> {
 		return FallenTeam.entries.associateWith { regionsOf(it) }
@@ -2526,6 +2595,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	companion object {
+		private const val ACTIVITY_STATUS_WARNING_INTERVAL_MILLIS = 60_000L
 		private const val ALLOY_BULLET_BASE_DAMAGE = 2.0
 		private const val ALLOY_BULLET_SPEED_BLOCKS_PER_TICK = 5.0
 		private val KEY_SHAPE_PIXELS = listOf(
