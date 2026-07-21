@@ -41,7 +41,6 @@ public final class FakePlayerManager {
     public static final String SCOREBOARD_TAG = "quantum_fake_player";
 
     private static final Field PLAYERS_BY_NAME_FIELD = playerListField("playersByName");
-    private static final Field PLAYERS_BY_UUID_FIELD = playerListField("playersByUUID");
 
     private final Map<String, ServerPlayer> players = new ConcurrentHashMap<>();
 
@@ -128,15 +127,15 @@ public final class FakePlayerManager {
     }
 
     private void registerPlayer(PlayerList playerList, ServerPlayer player) {
-        playerList.players.add(player);
+        playerList.getPlayers().add(player);
         playersByName(playerList).put(key(player.getScoreboardName()), player);
-        playersByUuid(playerList).put(player.getUUID(), player);
+        playerList.getPlayersByUUID().put(player.getUUID(), player);
     }
 
     private void unregisterPlayer(PlayerList playerList, ServerPlayer player) {
-        playerList.players.remove(player);
+        playerList.getPlayers().remove(player);
         playersByName(playerList).remove(key(player.getScoreboardName()));
-        playersByUuid(playerList).remove(player.getUUID());
+        playerList.getPlayersByUUID().remove(player.getUUID());
     }
 
     private void broadcastJoin(ServerPlayer player) {
@@ -155,15 +154,6 @@ public final class FakePlayerManager {
             return (Map<String, ServerPlayer>) PLAYERS_BY_NAME_FIELD.get(playerList);
         } catch (IllegalAccessException exception) {
             throw new IllegalStateException("无法访问 PlayerList.playersByName", exception);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<UUID, ServerPlayer> playersByUuid(PlayerList playerList) {
-        try {
-            return (Map<UUID, ServerPlayer>) PLAYERS_BY_UUID_FIELD.get(playerList);
-        } catch (IllegalAccessException exception) {
-            throw new IllegalStateException("无法访问 PlayerList.playersByUUID", exception);
         }
     }
 

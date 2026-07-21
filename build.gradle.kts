@@ -127,7 +127,7 @@ project(":survival") {
 	dependencies {
 		"ksp"(project(":processor"))
 		"implementation"("io.github.classgraph:classgraph:4.8.181")
-		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.1.2.build.+")
+		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.2.build.+")
 	}
 }
 
@@ -142,7 +142,7 @@ project(":common") {
 	}
 
 	dependencies {
-		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.1.2.build.+")
+		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.2.build.+")
 	}
 }
 
