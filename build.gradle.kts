@@ -129,6 +129,11 @@ project(":survival") {
 		"ksp"(project(":processor"))
 		"implementation"("io.github.classgraph:classgraph:4.8.181")
 		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.1.2.build.+")
+		"testImplementation"(kotlin("test-junit5"))
+	}
+
+	tasks.withType<Test>().configureEach {
+		useJUnitPlatform()
 	}
 }
 

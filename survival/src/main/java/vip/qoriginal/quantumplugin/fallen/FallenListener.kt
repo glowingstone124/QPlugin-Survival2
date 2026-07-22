@@ -19,6 +19,7 @@ import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.entity.ProjectileLaunchEvent
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.player.PlayerDropItemEvent
+import org.bukkit.event.player.AsyncPlayerPreLoginEvent
 import org.bukkit.event.player.PlayerGameModeChangeEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerJoinEvent
@@ -31,6 +32,12 @@ import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
 
 class FallenListener(private val service: FallenGameService) : Listener {
+	@EventHandler(priority = EventPriority.HIGHEST)
+	fun onPlayerPreLogin(event: AsyncPlayerPreLoginEvent) {
+		val message = service.curfewDisconnectMessage() ?: return
+		event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, message)
+	}
+
 	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
 	fun onPlayerChat(event: AsyncChatEvent) {
 		val message = PLAIN_TEXT.serialize(event.message())
@@ -82,11 +89,7 @@ class FallenListener(private val service: FallenGameService) : Listener {
 
 	@EventHandler
 	fun onPlayerJoin(event: PlayerJoinEvent) {
-		service.sanitizeForbiddenEventItems(event.player)
-		service.syncSelectedTeam(event.player) {
-			service.claimPendingPoolKeys(event.player)
-			service.welcomePlayer(event.player)
-		}
+		service.handleJoin(event.player)
 	}
 
 	@EventHandler

@@ -47,6 +47,7 @@ import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.EnumMap
@@ -77,6 +78,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val alloyBulletRecipeKey = NamespacedKey(plugin, "fallen_alloy_bullets")
 	private val dataFile = File(plugin.dataFolder, "fallen.yml")
 	private val playerTeams = ConcurrentHashMap<UUID, FallenTeam>()
+	private val pendingAdmissions = ConcurrentHashMap.newKeySet<UUID>()
 	private val scores = EnumMap<FallenTeam, Int>(FallenTeam::class.java)
 	private val kills = EnumMap<FallenTeam, Int>(FallenTeam::class.java)
 	private val convertedKeys = EnumMap<FallenTeam, Int>(FallenTeam::class.java)
@@ -168,7 +170,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		visualTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { renderVisuals() }, 5L, 5L)
 		if (qoApiEnabled()) {
 			teamSyncTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
-				Bukkit.getOnlinePlayers().forEach { player -> syncSelectedTeam(player) {} }
+				Bukkit.getOnlinePlayers().forEach { player -> syncSelectedTeam(player) { _ -> } }
 			}, 100L, 20L * 60L)
 			activityStatusUploadTask = Bukkit.getScheduler().runTaskTimer(
 				plugin,
@@ -206,6 +208,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 		broadcast(Component.text("《陷落》阶段切换为 ${next.name}", NamedTextColor.GOLD))
 		save()
+		if (FallenAccessPolicy.isEventInProgress(next)) {
+			validateOnlinePlayers()
+		}
 	}
 
 	fun startGame() {
@@ -222,6 +227,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		broadcast(Component.text("《陷落》活动开始。部署阶段持续 2 小时。", NamedTextColor.GOLD))
 		doctorBroadcast("欢迎入场，各位受试者。请妥善安置十五枚密钥——我会记录你们的每一次选择。")
 		save()
+		validateOnlinePlayers()
 	}
 
 	fun endGame(reason: String = "活动结束") {
@@ -270,6 +276,81 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun teamOf(player: Player): FallenTeam? = playerTeams[player.uniqueId]
+
+	fun curfewDisconnectMessage(now: Instant = Instant.now()): Component? {
+		if (!FallenAccessPolicy.isCurfew(phase, now)) return null
+		return Component.text("《陷落》活动宵禁中", NamedTextColor.RED)
+			.appendNewline()
+			.append(Component.text("每日 01:00–07:00（北京时间）服务器暂停开放，请于 07:00 后再来。", NamedTextColor.YELLOW))
+	}
+
+	/**
+	 * Before the event this only warms the finalized team cache. During gameplay,
+	 * QAPI is the source of truth for finalized and latecomer assignments. Eliminated
+	 * teams always rejoin as spectators.
+	 */
+	fun handleJoin(player: Player) {
+		if (!pendingAdmissions.add(player.uniqueId)) return
+		syncSelectedTeam(player) { lookupSucceeded ->
+			admitJoinedPlayer(player, lookupSucceeded)
+		}
+	}
+
+	private fun validateOnlinePlayers() {
+		Bukkit.getOnlinePlayers().forEach { player ->
+			if (!pendingAdmissions.add(player.uniqueId)) return@forEach
+			syncSelectedTeam(player) { lookupSucceeded ->
+				admitJoinedPlayer(player, lookupSucceeded)
+			}
+		}
+	}
+
+	private fun admitJoinedPlayer(player: Player, teamLookupSucceeded: Boolean) {
+		if (!player.isOnline || !FallenAccessPolicy.isEventInProgress(phase)) {
+			pendingAdmissions.remove(player.uniqueId)
+			return
+		}
+		curfewDisconnectMessage()?.let {
+			pendingAdmissions.remove(player.uniqueId)
+			player.kick(it)
+			return
+		}
+		if (player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor")) {
+			plugin.server.scheduler.runTaskLater(plugin, Runnable {
+				admitJoinedPlayer(player, teamLookupSucceeded)
+			}, 20L)
+			return
+		}
+		pendingAdmissions.remove(player.uniqueId)
+		val team = teamOf(player)
+		if (team == null) {
+			val detail = if (teamLookupSucceeded) {
+				"QAPI 尚未返回最终阵营，请稍后重试。"
+			} else {
+				"阵营分配服务暂时不可用，请稍后重试。"
+			}
+			player.kick(
+				Component.text("《陷落》入场失败", NamedTextColor.RED)
+					.appendNewline()
+					.append(Component.text(detail, NamedTextColor.YELLOW))
+			)
+			return
+		}
+		sanitizeForbiddenEventItems(player)
+		if (team in eliminatedTeams) {
+			allowNextGameModeChange(player)
+			player.gameMode = GameMode.SPECTATOR
+			player.sendMessage(Component.text("你的阵营已经出局，你将以旁观者身份加入。", NamedTextColor.YELLOW))
+			welcomePlayer(player)
+			return
+		}
+		if (player.gameMode != GameMode.SURVIVAL) {
+			allowNextGameModeChange(player)
+			player.gameMode = GameMode.SURVIVAL
+		}
+		claimPendingPoolKeys(player)
+		welcomePlayer(player)
+	}
 
 	fun fireAlloyBullet(player: Player, item: ItemStack?): Boolean {
 		if (!isAlloyBulletItem(item)) return false
@@ -332,26 +413,29 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	 * Pulls the permanent web selection when a player joins. The callback always runs
 	 * on the server thread, including when the API is unavailable or no choice exists.
 	 */
-	fun syncSelectedTeam(player: Player, afterSync: () -> Unit) {
+	fun syncSelectedTeam(player: Player, afterSync: (Boolean) -> Unit) {
+		if (!qoApiEnabled()) {
+			afterSync(true)
+			return
+		}
 		val username = URLEncoder.encode(player.name, StandardCharsets.UTF_8)
 		val url = "${Config.API_ENDPOINT}/qo/fallen/team?username=$username"
 		val headers = Optional.of(mapOf("Authorization" to "Bearer ${Config.API_SECRET}"))
 		Request.sendGetRequest(url, headers).whenComplete { body, error ->
 			plugin.server.scheduler.runTask(plugin, Runnable {
 				if (!player.isOnline) return@Runnable
+				var lookupSucceeded = false
 				if (error != null) {
 					plugin.logger.warning("Failed to sync Fallen team for ${player.name}: ${error.message}")
 				} else if (!body.isNullOrBlank()) {
-					runCatching {
-						val response = JsonParser.parseString(body).asJsonObject
-						if (response.get("selected")?.asBoolean == true && response.get("finalized")?.asBoolean == true) {
-							assignTeam(player.uniqueId, FallenTeam.parse(response.get("team")?.asString))
-						}
-					}.onFailure {
-						plugin.logger.warning("Invalid Fallen team response for ${player.name}: ${it.message}")
+					val lookup = FallenTeamApi.parseLookupResponse(body)
+					lookupSucceeded = lookup.responseValid
+					lookup.finalizedTeam?.let { assignTeam(player.uniqueId, it) }
+					if (!lookup.responseValid) {
+						plugin.logger.warning("Invalid Fallen team response for ${player.name}")
 					}
 				}
-				afterSync()
+				afterSync(lookupSucceeded)
 			})
 		}
 	}
@@ -862,6 +946,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun handleQuit(player: Player) {
+		pendingAdmissions.remove(player.uniqueId)
 		if (!hasKeyItem(player)) return
 		if (shouldDropKeysOnQuit(player)) {
 			dropPlayerKeys(player)
@@ -1201,6 +1286,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			applyWorldRules()
 		}
 		processTimeline()
+		if (enforceCurfew()) return
 		processCaptures()
 		processSelfDestruct()
 		processRefreshKeys()
@@ -1215,6 +1301,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		processEliminations()
 		updateAreaBossBars()
 		updateScoreboard()
+	}
+
+	private fun enforceCurfew(): Boolean {
+		val message = curfewDisconnectMessage() ?: return false
+		Bukkit.getOnlinePlayers().forEach { it.kick(message) }
+		return true
 	}
 
 	private fun renderVisuals() {
