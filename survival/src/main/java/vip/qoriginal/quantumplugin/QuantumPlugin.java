@@ -19,6 +19,7 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -34,6 +35,8 @@ import vip.qoriginal.quantumplugin.flightUtil.*;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
 import vip.qoriginal.quantumplugin.servux.ServuxEntityDataBridge;
+import vip.qoriginal.quantumplugin.registration.MinecraftRegistrationTest;
+import vip.qoriginal.quantumplugin.registration.ReservedMinecraftRegistrationTest;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
 import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
@@ -54,6 +57,7 @@ public final class QuantumPlugin extends JavaPlugin {
     FlightAutoDetector flightAutoDetector;
     Flight flight = new Flight();
     private final FakePlayerManager fakePlayerManager = new FakePlayerManager();
+    private final MinecraftRegistrationTest minecraftRegistrationTest = new ReservedMinecraftRegistrationTest();
     private ServuxEntityDataBridge servuxEntityDataBridge;
     public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
@@ -65,6 +69,12 @@ public final class QuantumPlugin extends JavaPlugin {
         WORLD_MAIN = Bukkit.getWorld("world");
         instance = this;
         PluginContext.setPlugin(this);
+        getServer().getServicesManager().register(
+                MinecraftRegistrationTest.class,
+                minecraftRegistrationTest,
+                this,
+                ServicePriority.Normal
+        );
         DailyLoginAdvertisement.init(this);
         servuxEntityDataBridge = new ServuxEntityDataBridge(this);
         StatusUpload.setPlayerFilter(player ->
