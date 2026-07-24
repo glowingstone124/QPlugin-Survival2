@@ -1,0 +1,11 @@
+trigger:
+  type: interact-block
+  once: true
+  action: right_click_block
+  material: stone_button
+  position: { x: 18, y: 2, z: 9 }
+
+messages:
+  - delay-ticks: 0
+    channel: chat
+    text: "<green>通路已激活。"

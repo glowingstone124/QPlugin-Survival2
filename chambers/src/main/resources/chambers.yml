@@ -1,0 +1,25 @@
+# 每次测试从 pool 中随机抽取文件夹，单轮不会重复；数量大于 pool 时使用全部测试室。
+selection-count: 3
+pool: []
+
+# 模板世界仅用于搭建和导出结构。玩家实例始终是独立的临时虚空世界。
+world:
+  template: chambers_template
+  instance-prefix: qchamber_
+
+# 抽中的结构沿 X 轴依次放置；所有 goal.yml 坐标均相对于各自结构原点。
+placement:
+  origin:
+    x: 0
+    y: 64
+    z: 0
+  gap: 32
+
+# 可选：完成或退出测试后返回的位置。未配置时返回开始测试前的位置。
+# lobby:
+#   world: world
+#   x: 0.5
+#   y: 64.0
+#   z: 0.5
+#   yaw: 0.0
+#   pitch: 0.0

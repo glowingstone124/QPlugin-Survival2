@@ -10,6 +10,7 @@ pluginManagement {
 include(":common")
 include(":survival")
 include(":creative")
+include(":chambers")
 include(":processor")
 
 plugins {

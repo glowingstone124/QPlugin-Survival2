@@ -5,10 +5,15 @@ import org.bukkit.entity.Player;
 public interface MinecraftRegistrationTest {
     String METHOD_ID = "minecraft";
     String SESSION_ENDPOINT = "/qo/registration/minecraft/session";
+    String CLAIM_ENDPOINT = "/qo/registration/minecraft/claim";
     String RESULT_ENDPOINT = "/qo/registration/minecraft/result";
 
     boolean isAvailable();
 
+    /**
+     * Starts a test for an online player. Implementations and callers must invoke this on the
+     * Minecraft server thread because a test may teleport the player immediately.
+     */
     StartResult start(Player player, Session session);
 
     void cancel(Player player);

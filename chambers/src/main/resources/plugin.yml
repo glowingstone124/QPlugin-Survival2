@@ -1,0 +1,16 @@
+name: QuantumPlugin-Chambers
+version: '1.14.5.5.1'
+main: vip.qoriginal.quantumplugin.chambers.ChambersPlugin
+api-version: '26.1.2'
+prefix: QP-Chambers
+authors: [ glowingstone124 ]
+description: Multi-chamber Minecraft registration tests for Quantum Original
+website: https://glowingstone.cn/
+commands:
+  chambers:
+    description: 管理多测试室验证流程
+    usage: /<command> <start|leave|status|build|reload>
+permissions:
+  qplugin.chambers.admin:
+    description: 允许管理测试室流程
+    default: op

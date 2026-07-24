@@ -35,7 +35,7 @@ allprojects {
 	}
 }
 
-val javaProjects = listOf(project(":common"), project(":survival"), project(":creative"))
+val javaProjects = listOf(project(":common"), project(":survival"), project(":creative"), project(":chambers"))
 val jsonDependency = libs.org.json.json
 val kotlinStdlibDependency = libs.org.jetbrains.kotlin.kotlin.stdlib
 val kotlinReflectDependency = libs.org.jetbrains.kotlin.kotlin.reflect
@@ -81,6 +81,7 @@ configure(javaProjects) {
 val pluginProjects = mapOf(
 	"survival" to "QuantumPlugin",
 	"creative" to "QuantumPlugin-Creative",
+	"chambers" to "QuantumPlugin-Chambers",
 )
 
 pluginProjects.forEach { (projectName, archiveName) ->
@@ -147,5 +148,5 @@ project(":common") {
 }
 
 tasks.named("build") {
-	dependsOn(":survival:shadowJar", ":creative:shadowJar")
+	dependsOn(":survival:shadowJar", ":creative:shadowJar", ":chambers:shadowJar")
 }

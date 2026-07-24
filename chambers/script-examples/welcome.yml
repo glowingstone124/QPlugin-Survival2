@@ -1,0 +1,8 @@
+trigger:
+  type: enter
+  once: true
+
+messages:
+  - delay-ticks: 0
+    channel: chat
+    text: "<gray>欢迎，{player}。请观察房间并寻找出口。"
