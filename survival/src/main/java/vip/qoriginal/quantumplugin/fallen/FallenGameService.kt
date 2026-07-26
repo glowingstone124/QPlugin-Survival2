@@ -6,6 +6,7 @@ import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.Color
+import org.bukkit.Chunk
 import org.bukkit.Difficulty
 import org.bukkit.GameMode
 import org.bukkit.GameRules
@@ -25,6 +26,9 @@ import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.entity.AbstractArrow
 import org.bukkit.entity.Arrow
+import org.bukkit.entity.Item
+import org.bukkit.inventory.Inventory
+import org.bukkit.inventory.InventoryHolder
 import org.bukkit.inventory.EquipmentSlotGroup
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.ShapelessRecipe
@@ -55,6 +59,7 @@ import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.logging.Level
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.ln
@@ -86,7 +91,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val regions = EnumMap<FallenTeam, MutableList<FallenRegion>>(FallenTeam::class.java)
 	private val keys = ConcurrentHashMap<UUID, FallenKey>()
 	private val deathCounts = ConcurrentHashMap<UUID, Int>()
-	private val dropConfirmUntil = ConcurrentHashMap<UUID, Long>()
+	private val dropConfirmUntil = ConcurrentHashMap<String, Long>()
 	private val captureProgress = ConcurrentHashMap<String, Long>()
 	private val stationUseProgress = ConcurrentHashMap<String, Long>()
 	private val stationDisruptProgress = ConcurrentHashMap<String, Long>()
@@ -118,6 +123,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val announcedMilestones = HashSet<String>()
 	private val scoreboardLines = HashSet<String>()
 	private val areaBossBars = ConcurrentHashMap<UUID, BossBar>()
+	private val respawnWaits = ConcurrentHashMap<UUID, RespawnWait>()
+	private val tickFailureWarningAt = ConcurrentHashMap<String, Long>()
 
 	// Regions are fixed for the event. Boundaries are inclusive block coordinates.
 	private val fixedRegions: Map<FallenTeam, List<FallenRegion>> = mapOf(
@@ -165,6 +172,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		load()
 		registerAlloyBulletRecipe()
 		normalizeScheduledTimeline()
+		plugin.server.scheduler.runTask(plugin, Runnable { reconcileLoadedKeyItems() })
 		updateScoreboard()
 		tickTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tick() }, 20L, 20L)
 		visualTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { renderVisuals() }, 5L, 5L)
@@ -194,6 +202,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		activityStatusUploadTask = null
 		clearAreaBossBars()
 		clearScoreboard()
+		dropConfirmUntil.clear()
 		save()
 	}
 
@@ -221,6 +230,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		announcedMilestones.clear()
 		dangerSince.clear()
 		eliminatedTeams.clear()
+		respawnWaits.clear()
 		phase = FallenPhase.DEPLOYMENT
 		applyWorldRules()
 		ensureInitialKeys()
@@ -290,6 +300,11 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	 * teams always rejoin as spectators.
 	 */
 	fun handleJoin(player: Player) {
+		if (!FallenAccessPolicy.isEventInProgress(phase)) {
+			pendingAdmissions.remove(player.uniqueId)
+			if (respawnWaits.remove(player.uniqueId) != null) save()
+			return
+		}
 		if (!pendingAdmissions.add(player.uniqueId)) return
 		syncSelectedTeam(player) { lookupSucceeded ->
 			admitJoinedPlayer(player, lookupSucceeded)
@@ -336,11 +351,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			)
 			return
 		}
+		reconcilePlayerKeys(player)
 		sanitizeForbiddenEventItems(player)
 		if (team in eliminatedTeams) {
+			respawnWaits.remove(player.uniqueId)
 			allowNextGameModeChange(player)
 			player.gameMode = GameMode.SPECTATOR
 			player.sendMessage(Component.text("你的阵营已经出局，你将以旁观者身份加入。", NamedTextColor.YELLOW))
+			welcomePlayer(player)
+			return
+		}
+		if (resumeRespawnWait(player)) {
 			welcomePlayer(player)
 			return
 		}
@@ -545,6 +566,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		scores[team] = (scores[team] ?: 0) + amount
 	}
 
+	private fun transitionKey(key: FallenKey, next: FallenKeyState) {
+		require(key.state.canTransitionTo(next)) {
+			"密钥 ${key.id} 不能从 ${key.state} 转换到 $next"
+		}
+		key.state = next
+	}
+
 	fun createKeyItem(owner: FallenTeam, original: FallenTeam = owner, type: FallenKeyType = FallenKeyType.INITIAL): ItemStack {
 		val key = FallenKey(UUID.randomUUID(), owner, original, FallenKeyState.ITEM, type)
 		if (type == FallenKeyType.REFRESH) {
@@ -642,7 +670,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			addScore(ownerTeam, -COMPASS_COST)
 		}
 		giveOrDrop(player, compassItem(ownerTeam, targetTeam, targetKey))
-		alertTeam(targetTeam, Component.text("${ownerTeam.displayName} 的 ${player.name} 正在定位你方密钥，距离约 ${distanceBand(player.location.distance(targetKey.center() ?: player.location))}。", NamedTextColor.YELLOW))
+		val targetCenter = targetKey.center()
+		val distanceDescription = if (targetCenter == null || targetCenter.world != player.world) {
+			"位于其他维度"
+		} else {
+			"距离约 ${distanceBand(player.location.distance(targetCenter))}"
+		}
+		alertTeam(targetTeam, Component.text("${ownerTeam.displayName} 的 ${player.name} 正在定位你方密钥，$distanceDescription。", NamedTextColor.YELLOW))
 		CommandMessages.success(player, "已购买指向 ${targetTeam.displayName} 的密钥指南针。")
 		save()
 		return true
@@ -762,7 +796,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val key = matches.single()
 		if (key.state != FallenKeyState.DESTROYED) {
 			key.holder?.let(Bukkit::getPlayer)?.let { removeKeyItem(it, key.id) }
-			key.state = FallenKeyState.DESTROYED
+			transitionKey(key, FallenKeyState.DESTROYED)
 			key.holder = null
 			key.selfDestructAtMillis = 0L
 			broadcast(Component.text("$reason: 密钥 ${key.shortId()} 已作废。", NamedTextColor.RED))
@@ -775,12 +809,15 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	fun keyId(item: ItemStack?): UUID? {
 		if (item == null || item.type.isAir || !item.hasItemMeta()) return null
 		val raw = item.itemMeta.persistentDataContainer.get(keyIdKey, PersistentDataType.STRING) ?: return null
-		return UUID.fromString(raw)
+		return runCatching { UUID.fromString(raw) }.getOrNull()
 	}
+
+	fun isKeyItem(item: ItemStack?): Boolean = keyId(item) != null
 
 	fun isLiveKeyItem(item: ItemStack?): Boolean {
 		val id = keyId(item) ?: return false
-		return keys[id]?.state != FallenKeyState.DESTROYED
+		val state = keys[id]?.state ?: return false
+		return state == FallenKeyState.ITEM || state == FallenKeyState.SELF_DESTRUCTING
 	}
 
 	fun isFallenCompass(item: ItemStack?): Boolean {
@@ -800,6 +837,156 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
+	/**
+	 * Reconciles the inventories that Bukkit can safely expose for an online player.
+	 * The persisted holder is authoritative when two players own the same physical UUID.
+	 */
+	fun reconcilePlayerKeys(player: Player) {
+		val accepted = HashSet<UUID>()
+		for (item in player.inventory.contents.filterNotNull()) {
+			val id = keyId(item) ?: continue
+			val key = keys[id]
+			val validState = key != null && (key.state == FallenKeyState.ITEM || key.state == FallenKeyState.SELF_DESTRUCTING)
+			if (!validState || id in accepted || (key.holder != null && key.holder != player.uniqueId)) {
+				item.amount = 0
+				continue
+			}
+			accepted.add(id)
+			item.amount = 1
+			key.holder = player.uniqueId
+			key.worldName = null
+		}
+
+		val recoveredFromEnderChest = ArrayList<FallenKey>()
+		for (item in player.enderChest.contents.filterNotNull()) {
+			val id = keyId(item) ?: continue
+			val key = keys[id]
+			val validState = key != null && (key.state == FallenKeyState.ITEM || key.state == FallenKeyState.SELF_DESTRUCTING)
+			item.amount = 0
+			if (!validState || id in accepted || (key.holder != null && key.holder != player.uniqueId)) continue
+			accepted.add(id)
+			recoveredFromEnderChest.add(key)
+		}
+		recoveredFromEnderChest.forEach { giveKeyOrDrop(player, it) }
+
+		for (key in keys.values) {
+			if (key.holder != player.uniqueId || key.id in accepted) continue
+			if (key.state == FallenKeyState.ITEM || key.state == FallenKeyState.SELF_DESTRUCTING) {
+				key.holder = null
+				key.worldName = null
+			}
+		}
+		if (recoveredFromEnderChest.isNotEmpty()) {
+			CommandMessages.warning(player, "密钥不能存入末影箱，已将 ${recoveredFromEnderChest.size} 个密钥移回背包或掉落在脚下。")
+		}
+		save()
+	}
+
+	/**
+	 * Reconciles online inventories, loaded item entities and loaded block containers.
+	 * Offline player inventories are checked as soon as their owner joins.
+	 */
+	private fun reconcileLoadedKeyItems() {
+		Bukkit.getOnlinePlayers().forEach(::reconcilePlayerKeys)
+		val accepted = HashSet<UUID>()
+		Bukkit.getOnlinePlayers().forEach { player ->
+			player.inventory.contents.filterNotNull().mapNotNullTo(accepted, ::keyId)
+		}
+
+		for (world in Bukkit.getWorlds()) {
+			for (entity in world.getEntitiesByClass(Item::class.java)) {
+				val id = keyId(entity.itemStack) ?: continue
+				val key = keys[id]
+				val validState = key != null && (key.state == FallenKeyState.ITEM || key.state == FallenKeyState.SELF_DESTRUCTING)
+				if (!validState || id in accepted || key.holder != null) {
+					entity.remove()
+					continue
+				}
+				accepted.add(id)
+				entity.itemStack.amount = 1
+				markKeyDropped(id, entity.location)
+			}
+			for (chunk in world.loadedChunks) {
+				for (state in chunk.tileEntities) {
+					val holder = state as? InventoryHolder ?: continue
+					evacuateKeyItemsFromContainer(holder.inventory, state.location, accepted)
+				}
+			}
+		}
+		save()
+		plugin.logger.info("Fallen key reconciliation completed: ${accepted.size} unique physical key items accepted.")
+	}
+
+	fun reconcileLoadedChunk(chunk: Chunk) {
+		val seen = HashSet<UUID>()
+		var changed = false
+		for (entity in chunk.entities.filterIsInstance<Item>()) {
+			val id = keyId(entity.itemStack) ?: continue
+			val key = keys[id]
+			val validState = key != null && (key.state == FallenKeyState.ITEM || key.state == FallenKeyState.SELF_DESTRUCTING)
+			val matchesPersistedDrop = key != null
+				&& key.holder == null
+				&& key.worldName == entity.world.name
+				&& key.x == entity.location.blockX
+				&& key.y == entity.location.blockY
+				&& key.z == entity.location.blockZ
+			if (!validState || key.holder != null || id in seen || (key.worldName != null && !matchesPersistedDrop)) {
+				entity.remove()
+				changed = true
+				continue
+			}
+			seen.add(id)
+			entity.itemStack.amount = 1
+			markKeyDropped(id, entity.location)
+			changed = true
+		}
+		val accepted = keys.values
+			.asSequence()
+			.filter { it.holder != null || it.worldName != null }
+			.mapTo(HashSet()) { it.id }
+		for (state in chunk.tileEntities) {
+			val holder = state as? InventoryHolder ?: continue
+			if (holder.inventory.contents.any(::isKeyItem)) {
+				evacuateKeyItemsFromContainer(holder.inventory, state.location, accepted)
+				changed = true
+			}
+		}
+		if (changed) save()
+	}
+
+	fun evacuateKeyItemsFromContainer(inventory: Inventory, location: Location) {
+		val accepted = HashSet<UUID>()
+		Bukkit.getOnlinePlayers().forEach { player ->
+			player.inventory.contents.filterNotNull().mapNotNullTo(accepted, ::keyId)
+		}
+		Bukkit.getWorlds().forEach { world ->
+			world.getEntitiesByClass(Item::class.java)
+				.mapNotNullTo(accepted) { keyId(it.itemStack) }
+		}
+		evacuateKeyItemsFromContainer(inventory, location, accepted)
+		save()
+	}
+
+	private fun evacuateKeyItemsFromContainer(inventory: Inventory, location: Location, accepted: MutableSet<UUID>) {
+		for (item in inventory.contents.filterNotNull()) {
+			val id = keyId(item) ?: continue
+			val key = keys[id]
+			val validState = key != null && (key.state == FallenKeyState.ITEM || key.state == FallenKeyState.SELF_DESTRUCTING)
+			item.amount = 0
+			if (!validState || id in accepted) continue
+			val onlineHolder = key.holder?.let(Bukkit::getPlayer)
+			if (onlineHolder != null) {
+				giveKeyOrDrop(onlineHolder, key)
+				accepted.add(id)
+				continue
+			}
+			if (key.holder != null) continue
+			val dropped = location.world?.dropItemNaturally(location, itemFor(key)) ?: continue
+			accepted.add(id)
+			markKeyDropped(id, dropped.location)
+		}
+	}
+
 	fun rejectForbiddenEventItem(player: Player, item: ItemStack?): Boolean {
 		if (!isForbiddenEventItem(item)) return false
 		item?.amount = 0
@@ -816,6 +1003,16 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 		if (key.state == FallenKeyState.DESTROYED) {
 			CommandMessages.warning(player, "这个密钥已作废。")
+			item.amount = 0
+			return true
+		}
+		if (key.state != FallenKeyState.ITEM) {
+			CommandMessages.warning(player, "这个密钥当前不是可放置的物品状态，疑似为重复物品，已移除。")
+			item.amount = 0
+			return true
+		}
+		if (key.holder != player.uniqueId) {
+			CommandMessages.warning(player, "这个密钥不属于你当前持有的有效实例，已移除。")
 			item.amount = 0
 			return true
 		}
@@ -866,6 +1063,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		key.placeAt(min)
 		key.center()?.let { renderKeyPlacementBurst(it, teamDust(team)) }
 		item.amount -= 1
+		removeLoadedPhysicalKeyCopies(id)
 		recentCaptureUntil.remove(player.uniqueId)
 		if (key.originalTeam != team && !key.conversionScored) {
 			addScore(team, 500)
@@ -901,6 +1099,16 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			item.amount = 0
 			return true
 		}
+		if (key.state != FallenKeyState.ITEM) {
+			CommandMessages.warning(player, "这个密钥当前不能启动自毁，疑似为重复物品，已移除。")
+			item.amount = 0
+			return true
+		}
+		if (key.holder != player.uniqueId) {
+			CommandMessages.warning(player, "这个密钥不属于你当前持有的有效实例，已移除。")
+			item.amount = 0
+			return true
+		}
 		val team = teamOf(player)
 		if (team == null) {
 			CommandMessages.error(player, "你还没有分配阵营。")
@@ -919,15 +1127,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			return true
 		}
 		val now = System.currentTimeMillis()
-		val confirmUntil = dropConfirmUntil[player.uniqueId] ?: 0L
+		val confirmKey = "${player.uniqueId}:$id"
+		val confirmUntil = dropConfirmUntil[confirmKey] ?: 0L
 		if (confirmUntil < now) {
-			dropConfirmUntil[player.uniqueId] = now + DROP_CONFIRM_MILLIS
+			dropConfirmUntil.entries.removeIf { it.key.startsWith("${player.uniqueId}:") }
+			dropConfirmUntil[confirmKey] = now + DROP_CONFIRM_MILLIS
 			CommandMessages.warning(player, "再次丢弃密钥以确认启动 10 分钟自毁。")
 			return true
 		}
-		dropConfirmUntil.remove(player.uniqueId)
+		dropConfirmUntil.remove(confirmKey)
 		key.ownerTeam = team
-		key.state = FallenKeyState.SELF_DESTRUCTING
+		transitionKey(key, FallenKeyState.SELF_DESTRUCTING)
 		key.holder = player.uniqueId
 		key.selfDestructAtMillis = now + SELF_DESTRUCT_MILLIS
 		doctorBroadcast("${player.name} 启动了密钥 ${key.shortId()} 的自毁程序。十分钟后，我们将得到一组不可逆的数据。")
@@ -938,7 +1148,11 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	fun dropPlayerKeys(player: Player) {
 		for (item in player.inventory.contents.filterNotNull()) {
 			val id = keyId(item) ?: continue
-			player.world.dropItem(player.location, item.clone())
+			if (!isLiveKeyItem(item)) {
+				item.amount = 0
+				continue
+			}
+			player.world.dropItem(player.location, item.clone().apply { amount = 1 })
 			item.amount = 0
 			markKeyDropped(id, player.location)
 		}
@@ -957,8 +1171,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			val id = keyId(item) ?: continue
 			item.amount = 0
 			keys[id]?.let {
-				if (it.state != FallenKeyState.SELF_DESTRUCTING) {
-					it.state = FallenKeyState.ITEM
+				if (it.state != FallenKeyState.ITEM && it.state != FallenKeyState.SELF_DESTRUCTING) {
+					return@let
 				}
 				it.holder = null
 				it.worldName = null
@@ -975,21 +1189,31 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun handleKeyPickup(player: Player, item: ItemStack): Boolean {
 		val id = keyId(item) ?: return false
-		val key = keys[id] ?: return false
-		if (key.state == FallenKeyState.DESTROYED) {
-			CommandMessages.warning(player, "这个密钥已作废。")
+		val key = keys[id]
+		if (key == null || (key.state != FallenKeyState.ITEM && key.state != FallenKeyState.SELF_DESTRUCTING)) {
+			CommandMessages.warning(player, "这个密钥不是有效的物品实例，已移除。")
 			item.amount = 0
 			return true
 		}
+		if (key.holder != null && key.holder != player.uniqueId) {
+			CommandMessages.warning(player, "检测到重复密钥物品，已移除副本。")
+			item.amount = 0
+			return true
+		}
+		if (player.inventory.contents.filterNotNull().any { existing ->
+				existing !== item && keyId(existing) == id
+			}) {
+			CommandMessages.warning(player, "你已经持有这个密钥，已移除重复副本。")
+			item.amount = 0
+			return true
+		}
+		item.amount = 1
 		val team = teamOf(player)
 		if (key.type == FallenKeyType.REFRESH && team != key.ownerTeam) {
 			CommandMessages.warning(player, "刷新密钥不能被敌方阵营拾取。")
 			return false
 		}
 		key.holder = player.uniqueId
-		if (key.state != FallenKeyState.SELF_DESTRUCTING) {
-			key.state = FallenKeyState.ITEM
-		}
 		key.worldName = null
 		save()
 		return true
@@ -1207,6 +1431,93 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		return regionsOf(team).randomOrNull()?.randomSpawn()
 	}
 
+	fun beginRespawnWait(player: Player, anchor: Location, delaySeconds: Int) {
+		val world = anchor.world ?: return
+		respawnWaits[player.uniqueId] = RespawnWait(
+			System.currentTimeMillis() + delaySeconds * 1000L,
+			world.name,
+			anchor.x,
+			anchor.y,
+			anchor.z
+		)
+		player.sendMessage(Component.text("复活等待 ${delaySeconds} 秒。等待期间无法移动或参与活动。", NamedTextColor.YELLOW))
+		save()
+	}
+
+	fun isRespawnWaiting(player: Player): Boolean = respawnWaits.containsKey(player.uniqueId)
+
+	fun holdRespawnMovement(player: Player, destination: Location): Location? {
+		val wait = respawnWaits[player.uniqueId] ?: return null
+		val anchor = wait.location() ?: return player.location
+		if (destination.world == anchor.world
+			&& destination.distanceSquared(anchor) < RESPAWN_WAIT_MOVEMENT_EPSILON_SQUARED) {
+			return null
+		}
+		return anchor.apply {
+			yaw = destination.yaw
+			pitch = destination.pitch
+		}
+	}
+
+	fun notifyRespawnWaiting(player: Player) {
+		val wait = respawnWaits[player.uniqueId] ?: return
+		val seconds = ((wait.untilMillis - System.currentTimeMillis()).coerceAtLeast(0L) + 999L) / 1000L
+		player.sendActionBar(Component.text("复活等待中：${seconds}s", NamedTextColor.YELLOW))
+	}
+
+	private fun resumeRespawnWait(player: Player): Boolean {
+		val wait = respawnWaits[player.uniqueId] ?: return false
+		if (wait.untilMillis <= System.currentTimeMillis()) {
+			completeRespawnWait(player)
+			return true
+		}
+		wait.location()?.let(player::teleport)
+		notifyRespawnWaiting(player)
+		return true
+	}
+
+	private fun processRespawnWaits() {
+		for ((playerId, wait) in respawnWaits) {
+			val player = Bukkit.getPlayer(playerId) ?: continue
+			if (wait.untilMillis <= System.currentTimeMillis()) {
+				completeRespawnWait(player)
+			} else {
+				notifyRespawnWaiting(player)
+			}
+		}
+	}
+
+	private fun completeRespawnWait(player: Player) {
+		if (!respawnWaits.containsKey(player.uniqueId)) return
+		if (!FallenAccessPolicy.isEventInProgress(phase)) {
+			respawnWaits.remove(player.uniqueId)
+			save()
+			return
+		}
+		val team = teamOf(player)
+		if (team == null || team in eliminatedTeams) {
+			respawnWaits.remove(player.uniqueId)
+			allowNextGameModeChange(player)
+			player.gameMode = GameMode.SPECTATOR
+			save()
+			return
+		}
+		val destination = respawnLocation(player)
+		if (destination == null) {
+			plugin.logger.warning("No safe respawn location found for ${player.name}; keeping respawn wait active.")
+			return
+		}
+		respawnWaits.remove(player.uniqueId)
+		if (player.gameMode != GameMode.SURVIVAL) {
+			allowNextGameModeChange(player)
+			player.gameMode = GameMode.SURVIVAL
+		}
+		player.teleport(destination)
+		protectRespawn(player)
+		claimPendingPoolKeys(player)
+		save()
+	}
+
 	fun recordMovement(player: Player, from: Location, to: Location) {
 		if (!phase.allowsKeyCapture() || !player.isGliding) {
 			elytraSamples.remove(player.uniqueId)
@@ -1283,24 +1594,40 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun tick() {
 		if (phase != FallenPhase.IDLE && phase != FallenPhase.ENDED) {
-			applyWorldRules()
+			runTickSubsystem("world-rules", ::applyWorldRules)
 		}
-		processTimeline()
-		if (enforceCurfew()) return
-		processCaptures()
-		processSelfDestruct()
-		processRefreshKeys()
-		processRefreshKeyExpiry()
-		processPlacedKeyScore()
-		processCompasses()
-		processPreciseReveals()
-		processActiveTracks()
-		processKeyAlerts()
-		processStations()
-		processTeamBonuses()
-		processEliminations()
-		updateAreaBossBars()
-		updateScoreboard()
+		runTickSubsystem("timeline", ::processTimeline)
+		var curfewEnforced = false
+		runTickSubsystem("curfew") { curfewEnforced = enforceCurfew() }
+		if (curfewEnforced) return
+		runTickSubsystem("respawn-waits", ::processRespawnWaits)
+		runTickSubsystem("captures", ::processCaptures)
+		runTickSubsystem("self-destruct", ::processSelfDestruct)
+		runTickSubsystem("refresh-keys", ::processRefreshKeys)
+		runTickSubsystem("refresh-expiry", ::processRefreshKeyExpiry)
+		runTickSubsystem("placed-key-score", ::processPlacedKeyScore)
+		runTickSubsystem("compasses", ::processCompasses)
+		runTickSubsystem("precise-reveals", ::processPreciseReveals)
+		runTickSubsystem("active-tracks", ::processActiveTracks)
+		runTickSubsystem("key-alerts", ::processKeyAlerts)
+		runTickSubsystem("stations", ::processStations)
+		runTickSubsystem("team-bonuses", ::processTeamBonuses)
+		runTickSubsystem("eliminations", ::processEliminations)
+		runTickSubsystem("area-boss-bars", ::updateAreaBossBars)
+		runTickSubsystem("scoreboard", ::updateScoreboard)
+	}
+
+	private fun runTickSubsystem(name: String, action: () -> Unit) {
+		try {
+			action()
+		} catch (exception: Exception) {
+			val now = System.currentTimeMillis()
+			val lastWarningAt = tickFailureWarningAt[name] ?: 0L
+			if (now - lastWarningAt >= TICK_FAILURE_WARNING_INTERVAL_MILLIS) {
+				tickFailureWarningAt[name] = now
+				plugin.logger.log(Level.SEVERE, "Fallen tick subsystem '$name' failed; other subsystems will continue.", exception)
+			}
+		}
 	}
 
 	private fun enforceCurfew(): Boolean {
@@ -1312,9 +1639,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private fun renderVisuals() {
 		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return
 		visualFrame++
-		renderPlacedKeys(visualFrame)
-		renderStations(visualFrame)
-		renderTrackingDust(visualFrame)
+		runTickSubsystem("visual-keys") { renderPlacedKeys(visualFrame) }
+		runTickSubsystem("visual-stations") { renderStations(visualFrame) }
+		runTickSubsystem("visual-tracking") { renderTrackingDust(visualFrame) }
 	}
 
 	private fun updateScoreboard() {
@@ -1705,7 +2032,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			if (key.state != FallenKeyState.PLACED) continue
 			for (player in Bukkit.getOnlinePlayers()) {
 				val team = teamOf(player)
-				if (team == null || team == key.ownerTeam || team in eliminatedTeams || player.isDead || player.gameMode == GameMode.SPECTATOR) continue
+				if (team == null || team == key.ownerTeam || team in eliminatedTeams || player.isDead
+					|| player.gameMode == GameMode.SPECTATOR || isRespawnWaiting(player)) continue
 				if (hasRespawnProtection(player)) continue
 				if (!key.contains(player.location)) continue
 				val progressKey = "${key.id}:${player.uniqueId}"
@@ -1725,7 +2053,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private fun capture(player: Player, capturingTeam: FallenTeam, key: FallenKey) {
 		val oldOwner = key.ownerTeam
 		key.ownerTeam = capturingTeam
-		key.state = FallenKeyState.ITEM
+		transitionKey(key, FallenKeyState.ITEM)
 		key.type = FallenKeyType.STOLEN
 		key.holder = null
 		key.selfDestructAtMillis = 0L
@@ -1751,7 +2079,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			val holder = key.holder
 			holder?.let(Bukkit::getPlayer)?.let { removeKeyItem(it, key.id) }
 			holder?.let(recentCaptureUntil::remove)
-			key.state = FallenKeyState.DESTROYED
+			transitionKey(key, FallenKeyState.DESTROYED)
 			addScore(key.ownerTeam, 250)
 			addScore(key.originalTeam, -250)
 			destroyedKeys[key.ownerTeam] = (destroyedKeys[key.ownerTeam] ?: 0) + 1
@@ -1793,7 +2121,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		for (key in keys.values) {
 			if (key.type != FallenKeyType.REFRESH || key.state != FallenKeyState.ITEM || key.expiresAtMillis == 0L || key.expiresAtMillis > now) continue
 			key.holder?.let(Bukkit::getPlayer)?.let { removeKeyItem(it, key.id) }
-			key.state = FallenKeyState.DESTROYED
+			transitionKey(key, FallenKeyState.DESTROYED)
 			broadcast(Component.text("${key.ownerTeam.displayName} 的刷新密钥 ${key.shortId()} 超时失效。", NamedTextColor.YELLOW))
 			changed = true
 		}
@@ -1861,8 +2189,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				if (!isFallenCompass(item)) continue
 				val meta = item.itemMeta
 				val pdc = meta.persistentDataContainer
-				val ownerTeam = FallenTeam.parse(pdc.get(compassOwnerTeamKey, PersistentDataType.STRING))
-				val targetTeam = FallenTeam.parse(pdc.get(compassTargetTeamKey, PersistentDataType.STRING))
+				val ownerTeam = runCatching {
+					FallenTeam.parse(pdc.get(compassOwnerTeamKey, PersistentDataType.STRING))
+				}.getOrNull()
+				val targetTeam = runCatching {
+					FallenTeam.parse(pdc.get(compassTargetTeamKey, PersistentDataType.STRING))
+				}.getOrNull()
+				if (ownerTeam == null || targetTeam == null) {
+					item.amount = 0
+					CommandMessages.warning(player, "检测到损坏的陷落指南针，已移除。")
+					continue
+				}
 				val expiresAt = pdc.get(compassExpiresAtKey, PersistentDataType.LONG) ?: 0L
 				if (ownerTeam != playerTeam || expiresAt <= now) {
 					item.amount = 0
@@ -1870,7 +2207,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				}
 				val nextRefreshAt = pdc.get(compassNextRefreshAtKey, PersistentDataType.LONG) ?: 0L
 				if (nextRefreshAt > now) continue
-				val targetKeyId = pdc.get(compassTargetKeyIdKey, PersistentDataType.STRING)?.let(UUID::fromString)
+				val targetKeyId = pdc.get(compassTargetKeyIdKey, PersistentDataType.STRING)
+					?.let { runCatching { UUID.fromString(it) }.getOrNull() }
 				val key = targetKeyId?.let(keys::get)
 				if (key == null || key.state != FallenKeyState.PLACED || key.ownerTeam != targetTeam) {
 					item.amount = 0
@@ -1878,8 +2216,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 					continue
 				}
 				val center = key.center() ?: continue
-				player.compassTarget = center
 				pdc.set(compassNextRefreshAtKey, PersistentDataType.LONG, now + COMPASS_REFRESH_INTERVAL_MILLIS)
+				if (center.world != player.world) {
+					player.sendActionBar(Component.text("指南针目标位于主世界，返回主世界后继续定位。", NamedTextColor.YELLOW))
+					item.itemMeta = meta
+					continue
+				}
+				player.compassTarget = center
 				val distance = player.location.distance(center)
 				if (distance < 20.0) {
 					revealPrecisely(playerTeam, targetTeam, key, center)
@@ -1956,7 +2299,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			}
 			val enemy = Bukkit.getOnlinePlayers().firstOrNull { player ->
 				val team = teamOf(player)
-				team != null && team != key.ownerTeam && team !in eliminatedTeams && player.world == center.world && player.location.distance(center) <= KEY_ALERT_RADIUS
+				team != null && team != key.ownerTeam && team !in eliminatedTeams
+					&& !isRespawnWaiting(player)
+					&& player.world == center.world
+					&& player.location.distance(center) <= KEY_ALERT_RADIUS
 			} ?: continue
 			keyAlertNotifyUntil[keyId] = now + KEY_ALERT_NOTIFY_COOLDOWN_MILLIS
 			alertTeam(key.ownerTeam, Component.text("密钥警戒: ${enemy.name} 接近密钥 ${key.shortId()} 30 格范围。", NamedTextColor.YELLOW))
@@ -1973,7 +2319,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) continue
 			for (player in Bukkit.getOnlinePlayers()) {
 				val team = teamOf(player) ?: continue
-				if (team in eliminatedTeams || player.gameMode == GameMode.SPECTATOR || player.isDead) continue
+				if (team in eliminatedTeams || player.gameMode == GameMode.SPECTATOR || player.isDead || isRespawnWaiting(player)) continue
 				if (station.center()?.world != player.world) continue
 				if (station.team != team && station.center()?.distance(player.location)?.let { it <= 30.0 } == true) {
 					alertStationEnemy(station, team, now)
@@ -2365,6 +2711,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun roughDirection(from: Location, to: Location): String {
+		if (from.world != to.world) {
+			return "位于其他维度（${to.world?.name ?: "未知世界"}）"
+		}
 		val dx = to.x - from.x
 		val dz = to.z - from.z
 		val eastWest = when {
@@ -2419,10 +2768,11 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private fun eliminate(team: FallenTeam, reason: String = "密钥归零") {
 		eliminatedTeams.add(team)
 		dangerSince.remove(team)
+		respawnWaits.keys.removeIf { playerTeams[it] == team }
 		for (key in keys.values) {
 			if (key.ownerTeam == team && key.state != FallenKeyState.DESTROYED) {
 				key.holder?.let(Bukkit::getPlayer)?.let { removeKeyItem(it, key.id) }
-				key.state = FallenKeyState.DESTROYED
+				transitionKey(key, FallenKeyState.DESTROYED)
 				key.holder = null
 				key.selfDestructAtMillis = 0L
 			}
@@ -2484,7 +2834,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun hasKeyItem(player: Player): Boolean {
-		return player.inventory.contents.filterNotNull().any { keyId(it) != null }
+		return player.inventory.contents.filterNotNull().any(::isLiveKeyItem)
 	}
 
 	private fun isForbiddenEventItem(item: ItemStack?): Boolean {
@@ -2519,9 +2869,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun markKeyDropped(keyId: UUID, location: Location) {
 		keys[keyId]?.let {
-			if (it.state != FallenKeyState.SELF_DESTRUCTING) {
-				it.state = FallenKeyState.ITEM
-			}
+			if (it.state != FallenKeyState.ITEM && it.state != FallenKeyState.SELF_DESTRUCTING) return@let
 			it.holder = null
 			it.worldName = location.world?.name
 			it.x = location.blockX
@@ -2531,6 +2879,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun giveKeyOrDrop(player: Player, key: FallenKey): Boolean {
+		removeLoadedPhysicalKeyCopies(key.id)
 		val leftovers = player.inventory.addItem(itemFor(key))
 		if (leftovers.isEmpty()) {
 			key.holder = player.uniqueId
@@ -2543,6 +2892,19 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		markKeyDropped(key.id, player.location)
 		CommandMessages.warning(player, "背包已满，密钥 ${key.shortId()} 已掉落在你脚下。")
 		return false
+	}
+
+	private fun removeLoadedPhysicalKeyCopies(keyId: UUID) {
+		for (online in Bukkit.getOnlinePlayers()) {
+			for (item in online.inventory.contents.filterNotNull()) {
+				if (this.keyId(item) == keyId) item.amount = 0
+			}
+		}
+		for (world in Bukkit.getWorlds()) {
+			for (entity in world.getEntitiesByClass(Item::class.java)) {
+				if (this.keyId(entity.itemStack) == keyId) entity.remove()
+			}
+		}
 	}
 
 	private fun giveOrDrop(player: Player, vararg items: ItemStack) {
@@ -2658,6 +3020,20 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				deathCounts[UUID.fromString(uuid)] = section.getInt(uuid)
 			}
 		}
+		config.getConfigurationSection("respawn-waits")?.let { section ->
+			for (uuid in section.getKeys(false)) {
+				val waitSection = section.getConfigurationSection(uuid) ?: continue
+				val playerId = runCatching { UUID.fromString(uuid) }.getOrNull() ?: continue
+				val worldName = waitSection.getString("world") ?: continue
+				respawnWaits[playerId] = RespawnWait(
+					waitSection.getLong("until"),
+					worldName,
+					waitSection.getDouble("x"),
+					waitSection.getDouble("y"),
+					waitSection.getDouble("z")
+				)
+			}
+		}
 		placedScoringBlocks.addAll(config.getStringList("placed-scoring-blocks"))
 		config.getStringList("eliminated").mapTo(eliminatedTeams) { FallenTeam.parse(it) }
 		config.getConfigurationSection("danger-since")?.let { section ->
@@ -2713,6 +3089,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		for ((team, until) in teamRespawnBoostUntil) config["team-respawn-boost-until.${team.name}"] = until
 		for ((playerId, team) in playerTeams) config["players.$playerId"] = team.name
 		for ((playerId, deaths) in deathCounts) config["deaths.$playerId"] = deaths
+		for ((playerId, wait) in respawnWaits) {
+			config["respawn-waits.$playerId.until"] = wait.untilMillis
+			config["respawn-waits.$playerId.world"] = wait.worldName
+			config["respawn-waits.$playerId.x"] = wait.x
+			config["respawn-waits.$playerId.y"] = wait.y
+			config["respawn-waits.$playerId.z"] = wait.z
+		}
 		config["placed-scoring-blocks"] = placedScoringBlocks.toList()
 		config["eliminated"] = eliminatedTeams.map { it.name }
 		config["announced"] = announcedMilestones.toList()
@@ -2760,6 +3143,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val DROP_CONFIRM_MILLIS = 5_000L
 		private const val SELF_DESTRUCT_MILLIS = 10 * 60 * 1000L
 		private const val RESPAWN_PROTECTION_MILLIS = 8_000L
+		private const val RESPAWN_WAIT_MOVEMENT_EPSILON_SQUARED = 0.0001
+		private const val TICK_FAILURE_WARNING_INTERVAL_MILLIS = 60_000L
 		private const val PLACED_KEY_SCORE_INTERVAL_MILLIS = 10 * 60 * 1000L
 		private const val ELIMINATION_GRACE_MILLIS = 10 * 60 * 1000L
 		private const val DEPLOYMENT_MILLIS = 2 * 60 * 60 * 1000L
@@ -2872,6 +3257,19 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private data class ActiveTrack(val targetId: UUID, val untilMillis: Long)
 
 	private data class ElytraSample(val location: Location, val atMillis: Long, val accumulatedMillis: Long)
+
+	private data class RespawnWait(
+		val untilMillis: Long,
+		val worldName: String,
+		val x: Double,
+		val y: Double,
+		val z: Double
+	) {
+		fun location(): Location? {
+			val world = Bukkit.getWorld(worldName) ?: return null
+			return Location(world, x, y, z)
+		}
+	}
 
 	private data class DamageScoreWindow(val startedAtMillis: Long, var score: Int)
 

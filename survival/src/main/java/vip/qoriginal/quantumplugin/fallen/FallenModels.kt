@@ -54,7 +54,17 @@ enum class FallenKeyState {
 	PLACED,
 	ITEM,
 	SELF_DESTRUCTING,
-	DESTROYED
+	DESTROYED;
+
+	fun canTransitionTo(next: FallenKeyState): Boolean {
+		if (this == next) return true
+		return when (this) {
+			PLACED -> next == ITEM || next == DESTROYED
+			ITEM -> next == PLACED || next == SELF_DESTRUCTING || next == DESTROYED
+			SELF_DESTRUCTING -> next == DESTROYED
+			DESTROYED -> false
+		}
+	}
 }
 
 enum class FallenKeyType {
@@ -185,6 +195,9 @@ data class FallenKey(
 	var conversionScored: Boolean = false
 ) {
 	fun placeAt(location: Location) {
+		require(state.canTransitionTo(FallenKeyState.PLACED)) {
+			"密钥 $id 不能从 $state 转换到 ${FallenKeyState.PLACED}"
+		}
 		val world = location.world ?: throw IllegalArgumentException("密钥位置没有世界。")
 		worldName = world.name
 		x = location.blockX
