@@ -1,73 +1,66 @@
-package vip.qoriginal.quantumplugin.chambers;
+package vip.qoriginal.quantumplugin.chambers
 
-import org.bukkit.command.PluginCommand;
-import org.bukkit.plugin.ServicePriority;
-import org.bukkit.plugin.java.JavaPlugin;
-import vip.qoriginal.quantumplugin.PluginContext;
-import vip.qoriginal.quantumplugin.registration.MinecraftRegistrationTest;
+import org.bukkit.plugin.ServicePriority
+import org.bukkit.plugin.java.JavaPlugin
+import vip.qoriginal.quantumplugin.PluginContext
+import vip.qoriginal.quantumplugin.registration.MinecraftRegistrationTest
+import java.io.File
 
-import java.io.File;
+class ChambersPlugin : JavaPlugin() {
+    private var chamberManager: ChamberManager? = null
+    private var registrationTest: ChambersRegistrationTest? = null
 
-public final class ChambersPlugin extends JavaPlugin {
-    private ChamberManager chamberManager;
-    private ChambersRegistrationTest registrationTest;
+    override fun onEnable() {
+        PluginContext.setPlugin(this)
+        saveBundledConfiguration()
 
-    @Override
-    public void onEnable() {
-        PluginContext.setPlugin(this);
-        saveBundledConfiguration();
-
-        chamberManager = new ChamberManager(this);
+        val manager = ChamberManager(this)
         try {
-            chamberManager.reload();
-        } catch (RuntimeException exception) {
-            getLogger().severe("无法加载 chambers.yml: " + exception.getMessage());
-            getServer().getPluginManager().disablePlugin(this);
-            return;
+            manager.reload()
+        } catch (exception: RuntimeException) {
+            logger.severe("无法加载 chambers.yml: ${exception.message}")
+            server.pluginManager.disablePlugin(this)
+            return
         }
-        chamberManager.start();
-        getServer().getPluginManager().registerEvents(chamberManager, this);
+        chamberManager = manager
+        manager.start()
+        server.pluginManager.registerEvents(manager, this)
 
-        ChambersCommand commandHandler = new ChambersCommand(chamberManager);
-        PluginCommand command = getCommand("chambers");
-        if (command == null) {
-            throw new IllegalStateException("plugin.yml is missing the chambers command");
-        }
-        command.setExecutor(commandHandler);
-        command.setTabCompleter(commandHandler);
+        val commandHandler = ChambersCommand(manager)
+        val command = getCommand("chambers")
+            ?: throw IllegalStateException(
+                "plugin.yml is missing the chambers command",
+            )
+        command.setExecutor(commandHandler)
+        command.tabCompleter = commandHandler
 
-        registrationTest = new ChambersRegistrationTest(this, chamberManager);
-        getServer().getServicesManager().register(
-                MinecraftRegistrationTest.class,
-                registrationTest,
-                this,
-                ServicePriority.Normal
-        );
-        getServer().getPluginManager().registerEvents(
-                new ChambersJoinGate(this, registrationTest),
-                this
-        );
-        getLogger().info("QuantumPlugin chambers target started with "
-                + chamberManager.chamberCount() + " configured chambers.");
+        val test = ChambersRegistrationTest(this, manager)
+        registrationTest = test
+        server.servicesManager.register(
+            MinecraftRegistrationTest::class.java,
+            test,
+            this,
+            ServicePriority.Normal,
+        )
+        server.pluginManager.registerEvents(ChambersJoinGate(this, test), this)
+        logger.info(
+            "QuantumPlugin chambers target started with " +
+                "${manager.chamberCount()} configured chambers.",
+        )
     }
 
-    @Override
-    public void onDisable() {
-        if (registrationTest != null) {
-            getServer().getServicesManager().unregister(
-                    MinecraftRegistrationTest.class,
-                    registrationTest
-            );
+    override fun onDisable() {
+        registrationTest?.let {
+            server.servicesManager.unregister(
+                MinecraftRegistrationTest::class.java,
+                it,
+            )
         }
-        if (chamberManager != null) {
-            chamberManager.shutdown();
-        }
+        chamberManager?.shutdown()
     }
 
-    private void saveBundledConfiguration() {
-        File file = new File(getDataFolder(), "chambers.yml");
-        if (!file.isFile()) {
-            saveResource("chambers.yml", false);
-        }
+    private fun saveBundledConfiguration() {
+        val file = File(dataFolder, "chambers.yml")
+        if (!file.isFile) saveResource("chambers.yml", false)
     }
 }

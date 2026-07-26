@@ -7,7 +7,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.Plugin;
-import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.patch.Utils;
 
 import java.util.Objects;
@@ -34,7 +33,7 @@ public class IPUtils {
                 if (ip.startsWith("127.0.0.1")) {
                     return;
                 }
-                //JSONObject ipLocObj = fetchIpLocationWithRetries(ip, 3); Old ways
+                // The old external IP lookup was removed.
                 fetchIpLocationWithRetriesAsync(ip, 3, result -> {
                     if (result == null) {
                         logger.log("无法获取IP地址信息");

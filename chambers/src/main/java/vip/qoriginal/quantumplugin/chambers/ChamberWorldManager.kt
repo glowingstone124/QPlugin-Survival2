@@ -1,132 +1,115 @@
-package vip.qoriginal.quantumplugin.chambers;
+package vip.qoriginal.quantumplugin.chambers
 
-import org.bukkit.Bukkit;
-import org.bukkit.World;
-import org.bukkit.WorldCreator;
+import org.bukkit.Bukkit
+import org.bukkit.World
+import org.bukkit.WorldCreator
+import vip.qoriginal.quantumplugin.chambers.data.VoidChunkGenerator
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Comparator
+import java.util.UUID
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.UUID;
-import java.util.stream.Stream;
+class ChamberWorldManager(
+    private val plugin: ChambersPlugin,
+    private val templateWorldName: String,
+    private val instancePrefix: String,
+) {
+    private val worldContainer = Bukkit.getWorldContainer().toPath().toAbsolutePath().normalize()
+    private val voidGenerator = VoidChunkGenerator()
+    private var loadedTemplateWorld: World? = null
 
-public final class ChamberWorldManager {
-    private final ChambersPlugin plugin;
-    private final String templateWorldName;
-    private final String instancePrefix;
-    private final Path worldContainer;
-    private final VoidChunkGenerator voidGenerator = new VoidChunkGenerator();
-    private World templateWorld;
-
-    public ChamberWorldManager(ChambersPlugin plugin, String templateWorldName, String instancePrefix) {
-        this.plugin = plugin;
-        this.templateWorldName = templateWorldName;
-        this.instancePrefix = instancePrefix;
-        this.worldContainer = Bukkit.getWorldContainer().toPath().toAbsolutePath().normalize();
+    fun initialize() {
+        cleanupStaleInstances()
+        loadedTemplateWorld = Bukkit.createWorld(
+            WorldCreator(templateWorldName)
+                .generator(voidGenerator)
+                .generateStructures(false),
+        )?.also { it.isAutoSave = true }
+            ?: throw IllegalStateException("unable to create or load template world $templateWorldName")
     }
 
-    public void initialize() {
-        cleanupStaleInstances();
-        templateWorld = Bukkit.createWorld(
-                new WorldCreator(templateWorldName)
-                        .generator(voidGenerator)
-                        .generateStructures(false)
-        );
-        if (templateWorld == null) {
-            throw new IllegalStateException("unable to create or load template world " + templateWorldName);
-        }
-        templateWorld.setAutoSave(true);
-    }
+    fun templateWorld(): World = loadedTemplateWorld
+        ?: throw IllegalStateException("chamber template world is not initialized")
 
-    public World templateWorld() {
-        if (templateWorld == null) {
-            throw new IllegalStateException("chamber template world is not initialized");
-        }
-        return templateWorld;
-    }
-
-    public World createInstance(UUID playerId) {
-        String worldName = instancePrefix + playerId.toString().replace("-", "");
-        Path destination = safeWorldPath(worldName);
+    fun createInstance(playerId: UUID): World {
+        val worldName = instancePrefix + playerId.toString().replace("-", "")
+        val destination = safeWorldPath(worldName)
         try {
-            deleteDirectory(destination);
-        } catch (IOException exception) {
-            throw new IllegalStateException("unable to reset chamber instance directory", exception);
+            deleteDirectory(destination)
+        } catch (exception: IOException) {
+            throw IllegalStateException("unable to reset chamber instance directory", exception)
         }
-        World instance = Bukkit.createWorld(
-                new WorldCreator(worldName)
-                        .generator(voidGenerator)
-                        .generateStructures(false)
-        );
-        if (instance == null) {
-            tryDelete(destination);
-            throw new IllegalStateException("unable to load chamber instance " + worldName);
+        return Bukkit.createWorld(
+            WorldCreator(worldName)
+                .generator(voidGenerator)
+                .generateStructures(false),
+        )?.also { it.isAutoSave = false } ?: run {
+            tryDelete(destination)
+            throw IllegalStateException("unable to load chamber instance $worldName")
         }
-        instance.setAutoSave(false);
-        return instance;
     }
 
-    public void destroyInstance(World world) {
-        if (!isInstanceWorldName(world.getName())) {
-            plugin.getLogger().severe("Refusing to delete non-instance world " + world.getName());
-            return;
+    fun destroyInstance(world: World) {
+        if (!isInstanceWorldName(world.name)) {
+            plugin.logger.severe("Refusing to delete non-instance world ${world.name}")
+            return
         }
-        Path folder = world.getWorldFolder().toPath();
+        val folder = world.worldFolder.toPath()
         if (!Bukkit.unloadWorld(world, false)) {
-            plugin.getLogger().warning("Unable to unload chamber instance " + world.getName());
-            return;
+            plugin.logger.warning("Unable to unload chamber instance ${world.name}")
+            return
         }
-        tryDelete(folder);
+        tryDelete(folder)
     }
 
-    private void cleanupStaleInstances() {
-        for (World world : Bukkit.getWorlds().stream().filter(value -> isInstanceWorldName(value.getName())).toList()) {
-            if (!world.getPlayers().isEmpty() || !Bukkit.unloadWorld(world, false)) {
-                throw new IllegalStateException("stale chamber world is still in use: " + world.getName());
+    private fun cleanupStaleInstances() {
+        Bukkit.getWorlds()
+            .filter { isInstanceWorldName(it.name) }
+            .forEach { world ->
+                if (world.players.isNotEmpty() || !Bukkit.unloadWorld(world, false)) {
+                    throw IllegalStateException("stale chamber world is still in use: ${world.name}")
+                }
             }
-        }
-        try (Stream<Path> children = Files.list(worldContainer)) {
-            children.filter(Files::isDirectory)
-                    .filter(path -> isInstanceWorldName(path.getFileName().toString()))
-                    .forEach(this::tryDelete);
-        } catch (IOException exception) {
-            throw new IllegalStateException("unable to inspect stale chamber instances", exception);
-        }
-    }
-
-    private boolean isInstanceWorldName(String worldName) {
-        if (!worldName.startsWith(instancePrefix)) {
-            return false;
-        }
-        String suffix = worldName.substring(instancePrefix.length());
-        return suffix.matches("[0-9a-f]{32}");
-    }
-
-    private Path safeWorldPath(String worldName) {
-        Path path = worldContainer.resolve(worldName).normalize();
-        if (!path.startsWith(worldContainer) || path.equals(worldContainer)) {
-            throw new IllegalArgumentException("unsafe chamber world path");
-        }
-        return path;
-    }
-
-    private void tryDelete(Path directory) {
         try {
-            deleteDirectory(directory);
-        } catch (IOException exception) {
-            plugin.getLogger().warning("Unable to delete chamber instance " + directory + ": " + exception.getMessage());
+            Files.list(worldContainer).use { children ->
+                children
+                    .filter(Files::isDirectory)
+                    .filter { isInstanceWorldName(it.fileName.toString()) }
+                    .forEach(::tryDelete)
+            }
+        } catch (exception: IOException) {
+            throw IllegalStateException("unable to inspect stale chamber instances", exception)
         }
     }
 
-    private static void deleteDirectory(Path directory) throws IOException {
-        if (!Files.exists(directory)) {
-            return;
+    private fun isInstanceWorldName(worldName: String): Boolean {
+        if (!worldName.startsWith(instancePrefix)) return false
+        return worldName.substring(instancePrefix.length).matches(Regex("[0-9a-f]{32}"))
+    }
+
+    private fun safeWorldPath(worldName: String): Path {
+        val path = worldContainer.resolve(worldName).normalize()
+        require(path.startsWith(worldContainer) && path != worldContainer) {
+            "unsafe chamber world path"
         }
-        try (Stream<Path> paths = Files.walk(directory)) {
-            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(path);
-            }
+        return path
+    }
+
+    private fun tryDelete(directory: Path) {
+        try {
+            deleteDirectory(directory)
+        } catch (exception: IOException) {
+            plugin.logger.warning(
+                "Unable to delete chamber instance $directory: ${exception.message}",
+            )
+        }
+    }
+
+    private fun deleteDirectory(directory: Path) {
+        if (!Files.exists(directory)) return
+        Files.walk(directory).use { paths ->
+            paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
         }
     }
 }

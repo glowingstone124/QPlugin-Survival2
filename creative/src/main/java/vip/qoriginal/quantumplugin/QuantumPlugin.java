@@ -1,6 +1,7 @@
 package vip.qoriginal.quantumplugin;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.TextColor;
@@ -19,7 +20,6 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
-import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.event.Locker;
 import vip.qoriginal.quantumplugin.patch.*;
 import vip.qoriginal.quantumplugin.servux.ServuxEntityDataBridge;
@@ -53,9 +53,9 @@ public final class QuantumPlugin extends JavaPlugin {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        JSONObject stopObj = new JSONObject();
-        stopObj.put("timestamp", System.currentTimeMillis());
-        stopObj.put("stat", 0);
+        JsonObject stopObj = new JsonObject();
+        stopObj.addProperty("timestamp", System.currentTimeMillis());
+        stopObj.addProperty("stat", 0);
         try {
             Request.sendPostRequest(
                     Config.INSTANCE.getAPI_ENDPOINT() + "/qo/alive/upload",
@@ -116,9 +116,9 @@ public final class QuantumPlugin extends JavaPlugin {
         }
         if (webMsgGetterTask != null) webMsgGetterTask.cancel();
         LoggerProvider.INSTANCE.closeAll();
-        JSONObject stopObj = new JSONObject();
-        stopObj.put("timestamp", System.currentTimeMillis());
-        stopObj.put("stat", 1);
+        JsonObject stopObj = new JsonObject();
+        stopObj.addProperty("timestamp", System.currentTimeMillis());
+        stopObj.addProperty("stat", 1);
         try {
             Request.sendPostRequest(
                     Config.INSTANCE.getAPI_ENDPOINT() + "/qo/alive/upload",

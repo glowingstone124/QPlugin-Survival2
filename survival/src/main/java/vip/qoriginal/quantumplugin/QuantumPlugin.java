@@ -24,7 +24,6 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
-import org.json.JSONObject;
 import vip.qoriginal.quantumplugin.adventures.Trigger;
 import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponCmd;
 import vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponListener;
@@ -105,9 +104,9 @@ public final class QuantumPlugin extends JavaPlugin {
             throw new RuntimeException(e);
         }
         int delay = 0;
-        JSONObject stopObj = new JSONObject();
-        stopObj.put("timestamp", System.currentTimeMillis());
-        stopObj.put("stat", 0);
+        JsonObject stopObj = new JsonObject();
+        stopObj.addProperty("timestamp", System.currentTimeMillis());
+        stopObj.addProperty("stat", 0);
         try {
             Request.sendPostRequest(
                     Config.INSTANCE.getAPI_ENDPOINT() + "/qo/alive/upload",
@@ -223,9 +222,9 @@ public final class QuantumPlugin extends JavaPlugin {
         if (webMsgGetterTask != null) {
             webMsgGetterTask.cancel();
         }
-        JSONObject stopObj = new JSONObject();
-        stopObj.put("timestamp", System.currentTimeMillis());
-        stopObj.put("stat", 1);
+        JsonObject stopObj = new JsonObject();
+        stopObj.addProperty("timestamp", System.currentTimeMillis());
+        stopObj.addProperty("stat", 1);
         try {
             Request.sendPostRequest(
                     Config.INSTANCE.getAPI_ENDPOINT() + "/qo/alive/upload",

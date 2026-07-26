@@ -1,208 +1,219 @@
-package vip.qoriginal.quantumplugin.chambers;
+package vip.qoriginal.quantumplugin.chambers
 
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.World;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.structure.Structure;
+import org.bukkit.Bukkit
+import org.bukkit.Location
+import org.bukkit.configuration.ConfigurationSection
+import org.bukkit.configuration.file.YamlConfiguration
+import vip.qoriginal.quantumplugin.chambers.data.ChamberDefinition
+import vip.qoriginal.quantumplugin.chambers.data.ChamberPosition
+import vip.qoriginal.quantumplugin.chambers.data.ChamberRegion
+import java.io.File
+import java.io.IOException
+import java.nio.file.Path
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-public record ChamberCatalog(
-        List<ChamberDefinition> chambers,
-        Location lobby,
-        String templateWorldName,
-        String instanceWorldPrefix,
-        int selectionCount,
-        ChamberPosition placementOrigin,
-        int placementGap
+data class ChamberCatalog(
+    val chambers: List<ChamberDefinition>,
+    val lobby: Location?,
+    val templateWorldName: String,
+    val instanceWorldPrefix: String,
+    val selectionCount: Int,
+    val placementOrigin: ChamberPosition,
+    val placementGap: Int,
 ) {
-    private static final String STRUCTURE_FILE_NAME = "structure.nbt";
-    private static final String GOAL_FILE_NAME = "goal.yml";
-
-    public ChamberCatalog {
-        chambers = List.copyOf(chambers);
-        lobby = lobby == null ? null : lobby.clone();
+    fun selectForRun(): List<ChamberDefinition> {
+        if (chambers.isEmpty()) return emptyList()
+        return chambers.shuffled().take(selectionCount.coerceAtMost(chambers.size))
     }
 
-    public static ChamberCatalog load(File globalConfigFile) {
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(globalConfigFile);
-        String templateWorldName = config.getString("world.template", "chambers_template").trim();
-        String instanceWorldPrefix = config.getString("world.instance-prefix", "qchamber_").trim();
-        validateWorldNames(templateWorldName, instanceWorldPrefix);
+    fun resolveSequence(chamberIds: List<String>): List<ChamberDefinition> {
+        val byId = chambers.associateBy(ChamberDefinition::id)
+        return chamberIds.map { id ->
+            byId[id] ?: throw IllegalStateException(
+                "saved progress references missing chamber $id",
+            )
+        }
+    }
 
-        int selectionCount = config.getInt("selection-count", 1);
-        if (selectionCount <= 0) {
-            throw new IllegalArgumentException("selection-count must be positive");
-        }
-        int placementGap = config.getInt("placement.gap", 32);
-        if (placementGap < 0) {
-            throw new IllegalArgumentException("placement.gap must not be negative");
-        }
-        ChamberPosition placementOrigin = readPosition(
+    companion object {
+        private const val STRUCTURE_FILE_NAME = "structure.nbt"
+        private const val GOAL_FILE_NAME = "goal.yml"
+
+        fun load(globalConfigFile: File): ChamberCatalog {
+            val config = YamlConfiguration.loadConfiguration(globalConfigFile)
+            val templateWorldName =
+                config.getString("world.template", "chambers_template")!!.trim()
+            val instanceWorldPrefix =
+                config.getString("world.instance-prefix", "qchamber_")!!.trim()
+            validateWorldNames(templateWorldName, instanceWorldPrefix)
+
+            val selectionCount = config.getInt("selection-count", 1)
+            require(selectionCount > 0) { "selection-count must be positive" }
+            val placementGap = config.getInt("placement.gap", 32)
+            require(placementGap >= 0) { "placement.gap must not be negative" }
+            val placementOrigin = readPosition(
                 requiredSection(config, "placement.origin", "chambers.yml"),
-                "chambers.yml placement.origin"
-        );
+                "chambers.yml placement.origin",
+            )
 
-        File chambersDirectory = new File(globalConfigFile.getParentFile(), "chambers");
-        if (!chambersDirectory.isDirectory() && !chambersDirectory.mkdirs()) {
-            throw new IllegalArgumentException("unable to create chambers directory " + chambersDirectory);
-        }
-        Path chambersRoot = chambersDirectory.toPath().toAbsolutePath().normalize();
-        Set<String> uniqueIds = new HashSet<>();
-        List<String> pool = config.getStringList("pool");
-        List<ChamberDefinition> chambers = new ArrayList<>(pool.size());
-        for (String id : pool) {
-            if (!id.matches("[A-Za-z0-9_.-]+") || !uniqueIds.add(id)) {
-                throw new IllegalArgumentException("pool contains an unsafe or duplicate chamber id: " + id);
+            val chambersDirectory = File(globalConfigFile.parentFile, "chambers")
+            require(chambersDirectory.isDirectory || chambersDirectory.mkdirs()) {
+                "unable to create chambers directory $chambersDirectory"
             }
-            Path chamberDirectory = chambersRoot.resolve(id).normalize();
-            if (!chamberDirectory.getParent().equals(chambersRoot) || !chamberDirectory.toFile().isDirectory()) {
-                throw new IllegalArgumentException("missing chamber directory: " + chamberDirectory);
+            val chambersRoot = chambersDirectory.toPath().toAbsolutePath().normalize()
+            val uniqueIds = mutableSetOf<String>()
+            val chambers = config.getStringList("pool").map { id ->
+                require(id.matches(Regex("[A-Za-z0-9_.-]+")) && uniqueIds.add(id)) {
+                    "pool contains an unsafe or duplicate chamber id: $id"
+                }
+                val chamberDirectory = chambersRoot.resolve(id).normalize()
+                require(
+                    chamberDirectory.parent == chambersRoot &&
+                        chamberDirectory.toFile().isDirectory,
+                ) {
+                    "missing chamber directory: $chamberDirectory"
+                }
+                loadChamber(id, chamberDirectory)
             }
-            chambers.add(loadChamber(id, chamberDirectory));
+
+            val lobby = config.getConfigurationSection("lobby")?.let {
+                readWorldLocation(it, "chambers.yml lobby")
+            }
+            return ChamberCatalog(
+                chambers = chambers,
+                lobby = lobby,
+                templateWorldName = templateWorldName,
+                instanceWorldPrefix = instanceWorldPrefix,
+                selectionCount = selectionCount,
+                placementOrigin = placementOrigin,
+                placementGap = placementGap,
+            )
         }
 
-        ConfigurationSection lobbySection = config.getConfigurationSection("lobby");
-        Location lobby = lobbySection == null ? null : readWorldLocation(lobbySection, "chambers.yml lobby");
-        return new ChamberCatalog(
-                chambers,
-                lobby,
-                templateWorldName,
-                instanceWorldPrefix,
-                selectionCount,
-                placementOrigin,
-                placementGap
-        );
-    }
+        private fun loadChamber(id: String, directory: Path): ChamberDefinition {
+            val structureFile = directory.resolve(STRUCTURE_FILE_NAME).toFile()
+            val goalFile = directory.resolve(GOAL_FILE_NAME).toFile()
+            require(structureFile.isFile) { "$id is missing $STRUCTURE_FILE_NAME" }
+            require(goalFile.isFile) { "$id is missing $GOAL_FILE_NAME" }
 
-    public List<ChamberDefinition> selectForRun() {
-        if (chambers.isEmpty()) {
-            return List.of();
-        }
-        List<ChamberDefinition> shuffled = new ArrayList<>(chambers);
-        Collections.shuffle(shuffled);
-        return List.copyOf(shuffled.subList(0, Math.min(selectionCount, shuffled.size())));
-    }
+            val structure = try {
+                Bukkit.getStructureManager().loadStructure(structureFile)
+            } catch (exception: IOException) {
+                throw IllegalArgumentException("unable to load structure for $id", exception)
+            }
 
-    private static ChamberDefinition loadChamber(String id, Path directory) {
-        File structureFile = directory.resolve(STRUCTURE_FILE_NAME).toFile();
-        File goalFile = directory.resolve(GOAL_FILE_NAME).toFile();
-        if (!structureFile.isFile()) {
-            throw new IllegalArgumentException(id + " is missing " + STRUCTURE_FILE_NAME);
-        }
-        if (!goalFile.isFile()) {
-            throw new IllegalArgumentException(id + " is missing " + GOAL_FILE_NAME);
-        }
-
-        Structure structure;
-        try {
-            structure = Bukkit.getStructureManager().loadStructure(structureFile);
-        } catch (IOException exception) {
-            throw new IllegalArgumentException("unable to load structure for " + id, exception);
+            val goal = YamlConfiguration.loadConfiguration(goalFile)
+            val spawn = readPosition(requiredSection(goal, "spawn", id), "$id spawn")
+            val goalRegion = readRegion(requiredSection(goal, "goal", id), "$id goal")
+            val timeLimitSeconds = goal.getInt("time-limit-seconds")
+            require(timeLimitSeconds > 0) { "$id time-limit-seconds must be positive" }
+            return ChamberDefinition(
+                id = id,
+                title = nonBlankText(goal.getString("title"), id),
+                objective = nonBlankText(
+                    goal.getString("objective"),
+                    "抵达测试室出口",
+                ),
+                structure = structure,
+                includeEntities = goal.getBoolean("include-entities", true),
+                spawn = spawn,
+                goal = goalRegion,
+                timeLimitSeconds = timeLimitSeconds,
+                scripts = ChamberScripts.load(directory.resolve("scripts")),
+            )
         }
 
-        YamlConfiguration goal = YamlConfiguration.loadConfiguration(goalFile);
-        ChamberPosition spawn = readPosition(requiredSection(goal, "spawn", id), id + " spawn");
-        ChamberRegion goalRegion = readRegion(requiredSection(goal, "goal", id), id + " goal");
-        int timeLimitSeconds = goal.getInt("time-limit-seconds");
-        if (timeLimitSeconds <= 0) {
-            throw new IllegalArgumentException(id + " time-limit-seconds must be positive");
+        private fun nonBlankText(value: String?, fallback: String): String =
+            value?.trim()?.takeIf(String::isNotEmpty) ?: fallback
+
+        private fun validateWorldNames(
+            templateWorldName: String,
+            instanceWorldPrefix: String,
+        ) {
+            require(templateWorldName.matches(Regex("[A-Za-z0-9_.-]+"))) {
+                "world.template contains unsupported characters"
+            }
+            require(
+                instanceWorldPrefix.matches(Regex("[A-Za-z0-9_.-]+")) &&
+                    instanceWorldPrefix.length >= 3,
+            ) {
+                "world.instance-prefix must contain at least three safe characters"
+            }
+            require(!templateWorldName.startsWith(instanceWorldPrefix)) {
+                "world.template must not start with world.instance-prefix"
+            }
         }
-        String title = nonBlankText(goal.getString("title"), id);
-        String objective = nonBlankText(goal.getString("objective"), "抵达测试室出口");
-        return new ChamberDefinition(
-                id,
-                title,
-                objective,
-                structure,
-                goal.getBoolean("include-entities", true),
-                spawn,
-                goalRegion,
-                timeLimitSeconds,
-                ChamberScripts.load(directory.resolve("scripts"))
-        );
-    }
 
-    private static String nonBlankText(String value, String fallback) {
-        return value == null || value.isBlank() ? fallback : value.trim();
-    }
+        private fun requiredSection(
+            parent: ConfigurationSection,
+            path: String,
+            source: String,
+        ): ConfigurationSection = parent.getConfigurationSection(path)
+            ?: throw IllegalArgumentException("$source is missing $path")
 
-    private static void validateWorldNames(String templateWorldName, String instanceWorldPrefix) {
-        if (!templateWorldName.matches("[A-Za-z0-9_.-]+")) {
-            throw new IllegalArgumentException("world.template contains unsupported characters");
+        private fun readWorldLocation(
+            section: ConfigurationSection,
+            path: String,
+        ): Location {
+            val world = section.getString("world")?.let(Bukkit::getWorld)
+                ?: throw IllegalArgumentException("$path references an unloaded world")
+            return readPosition(section, path).inWorld(world)
         }
-        if (!instanceWorldPrefix.matches("[A-Za-z0-9_.-]+") || instanceWorldPrefix.length() < 3) {
-            throw new IllegalArgumentException("world.instance-prefix must contain at least three safe characters");
+
+        private fun readPosition(
+            section: ConfigurationSection,
+            path: String,
+        ): ChamberPosition {
+            requireNumber(section, "x", path)
+            requireNumber(section, "y", path)
+            requireNumber(section, "z", path)
+            return ChamberPosition(
+                x = section.getDouble("x"),
+                y = section.getDouble("y"),
+                z = section.getDouble("z"),
+                yaw = section.getDouble("yaw", 0.0).toFloat(),
+                pitch = section.getDouble("pitch", 0.0).toFloat(),
+            )
         }
-        if (templateWorldName.startsWith(instanceWorldPrefix)) {
-            throw new IllegalArgumentException("world.template must not start with world.instance-prefix");
+
+        private fun readRegion(
+            section: ConfigurationSection,
+            path: String,
+        ): ChamberRegion {
+            val min = requiredSection(section, "min", path)
+            val max = requiredSection(section, "max", path)
+            val firstX = readBlockCoordinate(min, "x", "$path.min")
+            val firstY = readBlockCoordinate(min, "y", "$path.min")
+            val firstZ = readBlockCoordinate(min, "z", "$path.min")
+            val secondX = readBlockCoordinate(max, "x", "$path.max")
+            val secondY = readBlockCoordinate(max, "y", "$path.max")
+            val secondZ = readBlockCoordinate(max, "z", "$path.max")
+            return ChamberRegion(
+                minX = minOf(firstX, secondX),
+                minY = minOf(firstY, secondY),
+                minZ = minOf(firstZ, secondZ),
+                maxX = maxOf(firstX, secondX),
+                maxY = maxOf(firstY, secondY),
+                maxZ = maxOf(firstZ, secondZ),
+            )
         }
-    }
 
-    private static ConfigurationSection requiredSection(
-            ConfigurationSection parent,
-            String path,
-            String source
-    ) {
-        ConfigurationSection section = parent.getConfigurationSection(path);
-        if (section == null) {
-            throw new IllegalArgumentException(source + " is missing " + path);
+        private fun readBlockCoordinate(
+            section: ConfigurationSection,
+            key: String,
+            path: String,
+        ): Int {
+            requireNumber(section, key, path)
+            return section.getInt(key)
         }
-        return section;
-    }
 
-    private static Location readWorldLocation(ConfigurationSection section, String path) {
-        String worldName = section.getString("world");
-        World world = worldName == null ? null : Bukkit.getWorld(worldName);
-        if (world == null) {
-            throw new IllegalArgumentException(path + " references an unloaded world");
-        }
-        ChamberPosition position = readPosition(section, path);
-        return position.in(world);
-    }
-
-    private static ChamberPosition readPosition(ConfigurationSection section, String path) {
-        requireNumber(section, "x", path);
-        requireNumber(section, "y", path);
-        requireNumber(section, "z", path);
-        return new ChamberPosition(
-                section.getDouble("x"),
-                section.getDouble("y"),
-                section.getDouble("z"),
-                (float) section.getDouble("yaw", 0.0),
-                (float) section.getDouble("pitch", 0.0)
-        );
-    }
-
-    private static ChamberRegion readRegion(ConfigurationSection section, String path) {
-        ConfigurationSection min = requiredSection(section, "min", path);
-        ConfigurationSection max = requiredSection(section, "max", path);
-        int minX = Math.min(readBlockCoordinate(min, "x", path + ".min"), readBlockCoordinate(max, "x", path + ".max"));
-        int minY = Math.min(readBlockCoordinate(min, "y", path + ".min"), readBlockCoordinate(max, "y", path + ".max"));
-        int minZ = Math.min(readBlockCoordinate(min, "z", path + ".min"), readBlockCoordinate(max, "z", path + ".max"));
-        int maxX = Math.max(readBlockCoordinate(min, "x", path + ".min"), readBlockCoordinate(max, "x", path + ".max"));
-        int maxY = Math.max(readBlockCoordinate(min, "y", path + ".min"), readBlockCoordinate(max, "y", path + ".max"));
-        int maxZ = Math.max(readBlockCoordinate(min, "z", path + ".min"), readBlockCoordinate(max, "z", path + ".max"));
-        return new ChamberRegion(minX, minY, minZ, maxX, maxY, maxZ);
-    }
-
-    private static int readBlockCoordinate(ConfigurationSection section, String key, String path) {
-        requireNumber(section, key, path);
-        return section.getInt(key);
-    }
-
-    private static void requireNumber(ConfigurationSection section, String key, String path) {
-        if (!section.isInt(key) && !section.isDouble(key)) {
-            throw new IllegalArgumentException(path + " is missing numeric " + key);
+        private fun requireNumber(
+            section: ConfigurationSection,
+            key: String,
+            path: String,
+        ) {
+            require(section.isInt(key) || section.isDouble(key)) {
+                "$path is missing numeric $key"
+            }
         }
     }
 }

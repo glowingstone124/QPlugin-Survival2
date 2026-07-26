@@ -36,7 +36,7 @@ allprojects {
 }
 
 val javaProjects = listOf(project(":common"), project(":survival"), project(":creative"), project(":chambers"))
-val jsonDependency = libs.org.json.json
+val gsonDependency = libs.com.google.code.gson.gson
 val kotlinStdlibDependency = libs.org.jetbrains.kotlin.kotlin.stdlib
 val kotlinReflectDependency = libs.org.jetbrains.kotlin.kotlin.reflect
 val coroutinesDependency = libs.org.jetbrains.kotlinx.kotlinx.coroutines.core
@@ -48,7 +48,7 @@ configure(javaProjects) {
 	apply(plugin = "maven-publish")
 
 	dependencies {
-		"api"(jsonDependency)
+		"implementation"(gsonDependency)
 		"api"(kotlinStdlibDependency)
 		"api"(kotlinReflectDependency)
 		"api"(coroutinesDependency)
@@ -107,6 +107,12 @@ pluginProjects.forEach { (projectName, archiveName) ->
 		tasks.named("build") {
 			dependsOn("shadowJar")
 		}
+	}
+}
+
+project(":chambers") {
+	dependencies {
+		"testImplementation"(kotlin("test"))
 	}
 }
 

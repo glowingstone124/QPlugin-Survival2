@@ -39,6 +39,17 @@ global `pool` only after both required files are present.
 - The chambers server atomically claims that request using its node token; otherwise the player is kicked.
 - Every accepted player receives a separate void world named `qchamber_<player UUID>`.
 - The run randomly selects `selection-count` unique package ids from `pool`.
+- A registration run stores its selected order and completed chamber count in
+  `plugins/QuantumPlugin-Chambers/progress/<sessionId>.json`.
+- Persisted runs use the state machine
+  `READY -> RUNNING -> PAUSED -> RUNNING`, ending in either `PASSED` or `FAILED`.
+  Only a fully completed chamber advances `completedChambers`.
+- A leftover `RUNNING` state after a process or server crash is recovered as `PAUSED`.
+- Disconnecting or restarting the plugin unloads the instance without failing the test. Rejoining
+  the same chambers node rebuilds the instance and resumes at the first unfinished chamber.
+- An unfinished chamber is never resumed mid-state. Reconnecting rebuilds that chamber from its
+  original structure, teleports the player to its spawn, and starts its full time limit again.
+- Progress is removed only after QAPI confirms the final pass/fail result.
 - Selected NBT structures are placed along the X axis with the configured gap.
 - Reaching a package's relative goal cuboid advances to the next selected chamber.
 - Completion, timeout, cancellation, disconnect, and plugin shutdown unload and delete the instance.
