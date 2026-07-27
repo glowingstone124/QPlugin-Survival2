@@ -52,6 +52,7 @@ public final class QuantumPlugin extends JavaPlugin {
     LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
     ChatSync cs = new ChatSync();
+    private EliteWeaponListener eliteWeaponListener;
     private final FallenGameService fallenGameService = new FallenGameService(this);
     public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
@@ -97,12 +98,13 @@ public final class QuantumPlugin extends JavaPlugin {
                 new FallenListener(fallenGameService)
         ));
         if (qoApiEnabled) {
+            eliteWeaponListener = new EliteWeaponListener(this);
             needReg.addAll(List.of(
                     new Login(),
                     new JoinLeaveListener(),
                     cs,
                     new PlayerEventListener(),
-                    new EliteWeaponListener()
+                    eliteWeaponListener
             ));
         }
 
@@ -156,6 +158,9 @@ public final class QuantumPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         fallenGameService.stop();
+        if (eliteWeaponListener != null) {
+            eliteWeaponListener.shutdown();
+        }
         LoggerProvider.INSTANCE.closeAll();
         if (webMsgGetterTask != null) {
             webMsgGetterTask.cancel();
