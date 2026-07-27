@@ -52,6 +52,24 @@ public final class Request {
             Optional<Map<String, String>> headers,
             int timeoutMillis
     ) {
+        return sendPostRequestWithStatus(targetUrl, data, headers, timeoutMillis)
+                .thenApply(response -> response.body);
+    }
+
+    public static CompletableFuture<Response> sendPostRequestWithStatus(
+            String targetUrl,
+            String data,
+            Optional<Map<String, String>> headers
+    ) {
+        return sendPostRequestWithStatus(targetUrl, data, headers, TIMEOUT_MILLIS);
+    }
+
+    public static CompletableFuture<Response> sendPostRequestWithStatus(
+            String targetUrl,
+            String data,
+            Optional<Map<String, String>> headers,
+            int timeoutMillis
+    ) {
         return cj.run(() -> {
             HttpURLConnection connection = null;
             try {
@@ -76,7 +94,7 @@ public final class Request {
                 }
 
                 int code = connection.getResponseCode();
-                return readResponseBody(connection, code);
+                return new Response(code, readResponseBody(connection, code), connection.getHeaderFields());
             } finally {
                 if (connection != null) {
                     connection.disconnect();
