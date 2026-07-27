@@ -58,6 +58,7 @@ public final class QuantumPlugin extends JavaPlugin {
     private final FakePlayerManager fakePlayerManager = new FakePlayerManager();
     private final MinecraftRegistrationTest minecraftRegistrationTest = new ReservedMinecraftRegistrationTest();
     private ServuxEntityDataBridge servuxEntityDataBridge;
+    private EliteWeaponListener eliteWeaponListener;
     public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
 
@@ -117,6 +118,7 @@ public final class QuantumPlugin extends JavaPlugin {
             throw new RuntimeException(e);
         }
         piv.init();
+        eliteWeaponListener = new EliteWeaponListener(this);
         Listener[] needReg = {
                 new Login(),
                 new JoinLeaveListener(),
@@ -135,7 +137,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 new FriendlyTnt(),
                 new Locker(),
                 new Trigger(),
-                new EliteWeaponListener(),
+                eliteWeaponListener,
                 new FlightListener(),
         };
 
@@ -218,6 +220,9 @@ public final class QuantumPlugin extends JavaPlugin {
             servuxEntityDataBridge.close();
         }
         fakePlayerManager.removeAll();
+        if (eliteWeaponListener != null) {
+            eliteWeaponListener.shutdown();
+        }
         LoggerProvider.INSTANCE.closeAll();
         if (webMsgGetterTask != null) {
             webMsgGetterTask.cancel();
