@@ -43,7 +43,7 @@ import vip.qoriginal.quantumplugin.CommandMessages
 class FallenListener(private val service: FallenGameService) : Listener {
 	@EventHandler(priority = EventPriority.HIGHEST)
 	fun onPlayerPreLogin(event: AsyncPlayerPreLoginEvent) {
-		val message = service.curfewDisconnectMessage() ?: return
+		val message = service.loginDisconnectMessage() ?: return
 		event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, message)
 	}
 

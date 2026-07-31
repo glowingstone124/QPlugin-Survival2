@@ -51,9 +51,11 @@ import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
 import java.util.EnumMap
 import java.util.Optional
 import java.util.UUID
@@ -83,6 +85,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val alloyBulletRecipeKey = NamespacedKey(plugin, "fallen_alloy_bullets")
 	private val dataFile = File(plugin.dataFolder, "fallen.yml")
 	private val playerTeams = ConcurrentHashMap<UUID, FallenTeam>()
+	private val deployedPlayers = ConcurrentHashMap.newKeySet<UUID>()
 	private val pendingAdmissions = ConcurrentHashMap.newKeySet<UUID>()
 	private val scores = EnumMap<FallenTeam, Int>(FallenTeam::class.java)
 	private val kills = EnumMap<FallenTeam, Int>(FallenTeam::class.java)
@@ -149,7 +152,16 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private var visualTask: BukkitTask? = null
 	private var teamSyncTask: BukkitTask? = null
 	private var activityStatusUploadTask: BukkitTask? = null
+	private var persistenceTask: BukkitTask? = null
 	private val activityStatusUploadInFlight = AtomicBoolean(false)
+	private val persistenceWriteInFlight = AtomicBoolean(false)
+	private val persistenceWriteLock = Any()
+	@Volatile
+	private var persistenceDirty = false
+	@Volatile
+	private var persistenceVersion = 0L
+	@Volatile
+	private var persistedVersion = 0L
 	private var lastActivityStatusWarningAt = 0L
 	private var lastPlacedKeyScoreAt = 0L
 	private var lastRefreshKeyAt = 0L
@@ -172,10 +184,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		load()
 		registerAlloyBulletRecipe()
 		normalizeScheduledTimeline()
+		enforceLoginAccess()
 		plugin.server.scheduler.runTask(plugin, Runnable { reconcileLoadedKeyItems() })
 		updateScoreboard()
 		tickTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tick() }, 20L, 20L)
 		visualTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { renderVisuals() }, 5L, 5L)
+		persistenceTask = Bukkit.getScheduler().runTaskTimer(
+			plugin,
+			Runnable { flushPersistenceAsync() },
+			PERSISTENCE_INTERVAL_TICKS,
+			PERSISTENCE_INTERVAL_TICKS
+		)
 		if (qoApiEnabled()) {
 			teamSyncTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
 				Bukkit.getOnlinePlayers().forEach { player -> syncSelectedTeam(player) { _ -> } }
@@ -200,10 +219,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		teamSyncTask = null
 		activityStatusUploadTask?.cancel()
 		activityStatusUploadTask = null
+		persistenceTask?.cancel()
+		persistenceTask = null
 		clearAreaBossBars()
 		clearScoreboard()
 		dropConfirmUntil.clear()
 		save()
+		flushPersistenceSynchronously()
 	}
 
 	fun setPhase(next: FallenPhase) {
@@ -223,6 +245,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun startGame() {
+		require(phase == FallenPhase.IDLE) { "活动只能从 IDLE 状态开始。" }
+		require(FallenAccessPolicy.hasEventStarted()) {
+			"活动将在 2026-08-01 14:00（Asia/Shanghai）自动开始。"
+		}
 		startedAtMillis = EVENT_START_MILLIS
 		endedAtMillis = 0L
 		lastPlacedKeyScoreAt = EVENT_START_MILLIS + DEPLOYMENT_MILLIS
@@ -231,6 +257,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		dangerSince.clear()
 		eliminatedTeams.clear()
 		respawnWaits.clear()
+		deployedPlayers.clear()
 		phase = FallenPhase.DEPLOYMENT
 		applyWorldRules()
 		ensureInitialKeys()
@@ -287,7 +314,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun teamOf(player: Player): FallenTeam? = playerTeams[player.uniqueId]
 
-	fun curfewDisconnectMessage(now: Instant = Instant.now()): Component? {
+	fun loginDisconnectMessage(now: Instant = Instant.now()): Component? {
+		if (!FallenAccessPolicy.hasEventStarted(now)) {
+			return Component.text("《陷落》尚未开始", NamedTextColor.RED)
+				.appendNewline()
+				.append(
+					Component.text(
+						"服务器将于 2026-08-01 14:00（Asia/Shanghai）开放。",
+						NamedTextColor.YELLOW
+					)
+				)
+		}
 		if (!FallenAccessPolicy.isCurfew(phase, now)) return null
 		return Component.text("《陷落》活动宵禁中", NamedTextColor.RED)
 			.appendNewline()
@@ -325,7 +362,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			pendingAdmissions.remove(player.uniqueId)
 			return
 		}
-		curfewDisconnectMessage()?.let {
+		loginDisconnectMessage()?.let {
 			pendingAdmissions.remove(player.uniqueId)
 			player.kick(it)
 			return
@@ -369,8 +406,34 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			allowNextGameModeChange(player)
 			player.gameMode = GameMode.SURVIVAL
 		}
+		if (!deployPlayer(player, team)) return
 		claimPendingPoolKeys(player)
 		welcomePlayer(player)
+	}
+
+	private fun deployPlayer(player: Player, team: FallenTeam): Boolean {
+		if (player.uniqueId in deployedPlayers) return true
+		val destination = regionsOf(team).randomOrNull()?.randomSpawn()
+		if (destination == null) {
+			plugin.logger.severe("Unable to deploy ${player.name}: ${team.name} has no usable region.")
+			player.kick(
+				Component.text("阵营出生区域不可用，请联系管理员。", NamedTextColor.RED)
+			)
+			return false
+		}
+		if (!player.teleport(destination)) {
+			plugin.logger.severe("Unable to deploy ${player.name} into ${team.name}.")
+			player.kick(
+				Component.text("无法进入阵营出生区域，请重新连接。", NamedTextColor.RED)
+			)
+			return false
+		}
+		deployedPlayers.add(player.uniqueId)
+		player.sendMessage(
+			Component.text("你已部署至 ${team.displayName} 区域。", team.color)
+		)
+		save()
+		return true
 	}
 
 	fun fireAlloyBullet(player: Player, item: ItemStack?): Boolean {
@@ -1237,6 +1300,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun handleDeath(player: Player) {
+		if (!FallenAccessPolicy.isEventInProgress(phase)) return
 		val team = teamOf(player) ?: return
 		if (team in eliminatedTeams) return
 		deathCounts[player.uniqueId] = (deathCounts[player.uniqueId] ?: 0) + 1
@@ -1597,9 +1661,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			runTickSubsystem("world-rules", ::applyWorldRules)
 		}
 		runTickSubsystem("timeline", ::processTimeline)
-		var curfewEnforced = false
-		runTickSubsystem("curfew") { curfewEnforced = enforceCurfew() }
-		if (curfewEnforced) return
+		var loginAccessEnforced = false
+		runTickSubsystem("login-access") { loginAccessEnforced = enforceLoginAccess() }
+		if (loginAccessEnforced) return
 		runTickSubsystem("respawn-waits", ::processRespawnWaits)
 		runTickSubsystem("captures", ::processCaptures)
 		runTickSubsystem("self-destruct", ::processSelfDestruct)
@@ -1630,8 +1694,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
-	private fun enforceCurfew(): Boolean {
-		val message = curfewDisconnectMessage() ?: return false
+	private fun enforceLoginAccess(): Boolean {
+		val message = loginDisconnectMessage() ?: return false
 		Bukkit.getOnlinePlayers().forEach { it.kick(message) }
 		return true
 	}
@@ -1791,8 +1855,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun processTimeline() {
-		if (startedAtMillis == 0L || phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return
 		val now = System.currentTimeMillis()
+		if (phase == FallenPhase.ENDED) return
+		if (phase == FallenPhase.IDLE) {
+			if (!FallenAccessPolicy.hasEventStarted(Instant.ofEpochMilli(now))) return
+			startGame()
+		}
+		if (startedAtMillis == 0L) return
 		val deploymentEndsAt = startedAtMillis + DEPLOYMENT_MILLIS
 		if (phase == FallenPhase.DEPLOYMENT) {
 			announceRemaining("deployment-30m", deploymentEndsAt - now, 30 * 60 * 1000L, "部署阶段剩余 30 分钟。")
@@ -3015,6 +3084,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				playerTeams[UUID.fromString(uuid)] = FallenTeam.parse(section.getString(uuid))
 			}
 		}
+		config.getStringList("deployed-players")
+			.mapNotNullTo(deployedPlayers) {
+				runCatching { UUID.fromString(it) }.getOrNull()
+			}
 		config.getConfigurationSection("deaths")?.let { section ->
 			for (uuid in section.getKeys(false)) {
 				deathCounts[UUID.fromString(uuid)] = section.getInt(uuid)
@@ -3068,6 +3141,53 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun save() {
+		persistenceVersion++
+		persistenceDirty = true
+	}
+
+	private fun flushPersistenceAsync() {
+		if (!persistenceDirty || !persistenceWriteInFlight.compareAndSet(false, true)) return
+		val version = persistenceVersion
+		persistenceDirty = false
+		val snapshot = try {
+			persistenceSnapshot()
+		} catch (exception: Exception) {
+			persistenceDirty = true
+			persistenceWriteInFlight.set(false)
+			plugin.logger.log(Level.SEVERE, "Failed to snapshot fallen.yml.", exception)
+			return
+		}
+		try {
+			Bukkit.getScheduler().runTaskAsynchronously(plugin, Runnable {
+				try {
+					writePersistenceSnapshot(snapshot.saveToString(), version)
+				} catch (exception: Exception) {
+					persistenceDirty = true
+					plugin.logger.warning("Failed to save fallen.yml: ${exception.message}")
+				} finally {
+					persistenceWriteInFlight.set(false)
+				}
+			})
+		} catch (exception: RuntimeException) {
+			persistenceDirty = true
+			persistenceWriteInFlight.set(false)
+			plugin.logger.log(Level.SEVERE, "Unable to schedule fallen.yml persistence.", exception)
+		}
+	}
+
+	private fun flushPersistenceSynchronously() {
+		if (!persistenceDirty && persistenceVersion <= persistedVersion) return
+		val version = persistenceVersion
+		try {
+			val snapshot = persistenceSnapshot()
+			writePersistenceSnapshot(snapshot.saveToString(), version)
+			persistenceDirty = false
+		} catch (exception: Exception) {
+			plugin.logger.log(Level.SEVERE, "Failed to save fallen.yml during shutdown.", exception)
+		}
+	}
+
+	private fun persistenceSnapshot(): YamlConfiguration {
 		val config = YamlConfiguration()
 		config["phase"] = phase.name
 		config["started-at"] = startedAtMillis
@@ -3088,6 +3208,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		for ((id, until) in keyAlertUntil) config["key-alert-until.$id"] = until
 		for ((team, until) in teamRespawnBoostUntil) config["team-respawn-boost-until.${team.name}"] = until
 		for ((playerId, team) in playerTeams) config["players.$playerId"] = team.name
+		config["deployed-players"] = deployedPlayers.map(UUID::toString)
 		for ((playerId, deaths) in deathCounts) config["deaths.$playerId"] = deaths
 		for ((playerId, wait) in respawnWaits) {
 			config["respawn-waits.$playerId.until"] = wait.untilMillis
@@ -3107,10 +3228,45 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			config["precise-reveals.$id.until"] = reveal.untilMillis
 		}
 		for (key in keys.values) key.save(config.createSection("keys.${key.id}"))
-		try {
-			config.save(dataFile)
-		} catch (exception: IOException) {
-			plugin.logger.warning("Failed to save fallen.yml: ${exception.message}")
+		return config
+	}
+
+	@Throws(IOException::class)
+	private fun writePersistenceSnapshot(content: String, version: Long) {
+		synchronized(persistenceWriteLock) {
+			if (version <= persistedVersion) return
+			val destination = dataFile.toPath().toAbsolutePath().normalize()
+			val parent = destination.parent
+			if (parent != null) Files.createDirectories(parent)
+			val temporary = destination.resolveSibling("${destination.fileName}.tmp")
+			try {
+				Files.writeString(
+					temporary,
+					content,
+					StandardCharsets.UTF_8,
+					StandardOpenOption.CREATE,
+					StandardOpenOption.TRUNCATE_EXISTING,
+					StandardOpenOption.WRITE
+				)
+				try {
+					Files.move(
+						temporary,
+						destination,
+						StandardCopyOption.ATOMIC_MOVE,
+						StandardCopyOption.REPLACE_EXISTING
+					)
+				} catch (_: AtomicMoveNotSupportedException) {
+					Files.move(
+						temporary,
+						destination,
+						StandardCopyOption.REPLACE_EXISTING
+					)
+				}
+				persistedVersion = version
+			} catch (exception: IOException) {
+				runCatching { Files.deleteIfExists(temporary) }
+				throw exception
+			}
 		}
 	}
 
@@ -3118,6 +3274,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val ACCELERATION_HARNESS_COST = 700
 		private const val ACCELERATION_HARNESS_FLYING_SPEED = 0.15
 		private const val ACTIVITY_STATUS_WARNING_INTERVAL_MILLIS = 60_000L
+		private const val PERSISTENCE_INTERVAL_TICKS = 20L
 		private const val ALLOY_BULLET_BASE_DAMAGE = 2.0
 		private const val ALLOY_BULLET_SPEED_BLOCKS_PER_TICK = 5.0
 		private val KEY_SHAPE_PIXELS = listOf(
@@ -3133,10 +3290,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			-1 to 2, -2 to 2, -1 to 1, -2 to 1, -3 to 1, -1 to 0, -2 to 0,
 			1 to -1, 2 to -1, -1 to -2, -2 to -2
 		)
-		private val EVENT_START_MILLIS: Long = LocalDateTime.of(2026, 8, 1, 14, 0)
-			.atZone(ZoneId.of("Asia/Shanghai"))
-			.toInstant()
-			.toEpochMilli()
+		private val EVENT_START_MILLIS: Long = FallenAccessPolicy.eventStartsAt.toEpochMilli()
 		private const val OVERWORLD_NAME = "world"
 		private const val INITIAL_KEYS_PER_TEAM = 5
 		private const val CAPTURE_SECONDS = 6L

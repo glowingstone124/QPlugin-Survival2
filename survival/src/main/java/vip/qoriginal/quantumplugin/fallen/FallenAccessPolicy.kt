@@ -1,14 +1,22 @@
 package vip.qoriginal.quantumplugin.fallen
 
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 
 object FallenAccessPolicy {
 	val eventZone: ZoneId = ZoneId.of("Asia/Shanghai")
+	val eventStartsAt: Instant = LocalDateTime.of(2026, 8, 1, 14, 0)
+		.atZone(eventZone)
+		.toInstant()
 
 	private val curfewStartsAt = LocalTime.of(1, 0)
 	private val curfewEndsAt = LocalTime.of(7, 0)
+
+	fun hasEventStarted(now: Instant = Instant.now()): Boolean {
+		return !now.isBefore(eventStartsAt)
+	}
 
 	fun isEventInProgress(phase: FallenPhase): Boolean {
 		return phase == FallenPhase.DEPLOYMENT

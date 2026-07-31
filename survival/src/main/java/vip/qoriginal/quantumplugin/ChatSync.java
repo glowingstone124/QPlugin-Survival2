@@ -4,8 +4,10 @@ import com.google.gson.*;
 import kotlin.Pair;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -21,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiPredicate;
 import java.net.HttpURLConnection;
+import java.net.URI;
 
 import static vip.qoriginal.quantumplugin.QuantumPlugin.isShutup;
 
@@ -301,8 +304,10 @@ public class ChatSync implements Listener {
                 case WEB_CODE -> {
                     String sender = msg.get("sender").getAsString();
                     content = "<" + sender + ">" + message;
-                    return Component.text(content)
-                            .color(TextColor.color(113, 159, 165));
+                    return appendImageLinks(
+                            Component.text(content).color(TextColor.color(113, 159, 165)),
+                            msg
+                    );
                 }
 
                 case QQ_CODE -> {
@@ -313,26 +318,81 @@ public class ChatSync implements Listener {
                     } else {
                         content = "<" + username + ">" + parseCQ(message);
                     }
-                    return Component.text(content)
-                            .color(TextColor.color(33, 95, 105))
-                            .hoverEvent(HoverEvent.showText(Component.text("Sender ID: " + sender)));
+                    return appendImageLinks(
+                            Component.text(content)
+                                    .color(TextColor.color(33, 95, 105))
+                                    .hoverEvent(HoverEvent.showText(Component.text("Sender ID: " + sender))),
+                            msg
+                    );
                 }
 
                 case SYSTEM_CODE -> {
                     content = "<系统>" + message;
-                    return Component.text(content)
-                            .color(TextColor.color(33, 95, 105))
-                            .hoverEvent(HoverEvent.showText(Component.text("这是Quantum Original官方消息")));
+                    return appendImageLinks(
+                            Component.text(content)
+                                    .color(TextColor.color(33, 95, 105))
+                                    .hoverEvent(HoverEvent.showText(Component.text("这是Quantum Original官方消息"))),
+                            msg
+                    );
                 }
 
                 case QO_CREATIVE_CODE -> {
                     content = "[QO_Creative]<" + msg.get("sender").getAsString() + ">" + message;
-                    return Component.text(content)
-                            .color(TextColor.color(33, 95, 105));
+                    return appendImageLinks(
+                            Component.text(content).color(TextColor.color(33, 95, 105)),
+                            msg
+                    );
                 }
                 default -> {
-                    return Component.text("<unknown source>" + message);
+                    return appendImageLinks(Component.text("<unknown source>" + message), msg);
                 }
+            }
+        }
+
+        private Component appendImageLinks(Component base, JsonObject msg) {
+            if (!msg.has("images") || !msg.get("images").isJsonArray()) {
+                return base;
+            }
+
+            Component result = base;
+            JsonArray images = msg.getAsJsonArray("images");
+            int visibleIndex = 0;
+            for (JsonElement imageElement : images) {
+                if (!imageElement.isJsonPrimitive() || !imageElement.getAsJsonPrimitive().isString()) {
+                    continue;
+                }
+                String imageUrl = imageElement.getAsString().trim();
+                if (!isSafeImageUrl(imageUrl)) {
+                    continue;
+                }
+
+                visibleIndex++;
+                String label = images.size() == 1 ? "[打开图片]" : "[打开图片 " + visibleIndex + "]";
+                Component link = Component.text(label)
+                        .color(TextColor.color(85, 170, 255))
+                        .decorate(TextDecoration.UNDERLINED)
+                        .clickEvent(ClickEvent.openUrl(imageUrl))
+                        .hoverEvent(HoverEvent.showText(Component.text("点击在浏览器中打开图片")));
+                result = result.append(Component.space()).append(link);
+                if (visibleIndex >= 8) {
+                    break;
+                }
+            }
+            return result;
+        }
+
+        private boolean isSafeImageUrl(String value) {
+            if (value.isBlank() || value.length() > 2048) {
+                return false;
+            }
+            try {
+                URI uri = URI.create(value);
+                String scheme = uri.getScheme();
+                return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                        && uri.getHost() != null
+                        && !uri.getHost().isBlank();
+            } catch (IllegalArgumentException ignored) {
+                return false;
             }
         }
 
