@@ -120,7 +120,7 @@ public class ChatSync implements Listener {
             var coord = "x:" + loc.getBlockX() + " y:" + loc.getBlockY() + " z:" + loc.getBlockZ();
             var hp = df.format(player.getHealth());
             String response = Request.sendPostRequest(
-                    Config.INSTANCE.getAPI_ENDPOINT() + "/qo/asking/v1/chat/completions/minecraft",
+                    Config.INSTANCE.getAPI_ENDPOINT() + "/qo/asking/v1/chat/completions/minecraft?model=fast",
                     buildLlmRequest(prompt),
                     Optional.of(Map.of(
                             "Authorization", "Bearer " + Config.INSTANCE.getAPI_SECRET(),
