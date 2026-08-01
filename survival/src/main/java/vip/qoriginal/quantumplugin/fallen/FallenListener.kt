@@ -9,8 +9,11 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockPlaceEvent
+import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
+import org.bukkit.event.entity.EntityChangeBlockEvent
+import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.event.entity.EntityExhaustionEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
 import org.bukkit.event.entity.EntityRemoveEvent
@@ -38,12 +41,34 @@ import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.world.PortalCreateEvent
 import org.bukkit.event.world.ChunkLoadEvent
+import org.bukkit.entity.Entity
 import org.bukkit.entity.Item
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
 import vip.qoriginal.quantumplugin.CommandMessages
 
 class FallenListener(private val service: FallenGameService) : Listener {
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun onDestructiveCreatureSpawn(event: CreatureSpawnEvent) {
+		if (!destructiveEntityRestrictionsActive()) return
+		if (!FallenDestructiveEntityPolicy.isRestricted(event.entityType)) return
+		event.isCancelled = true
+	}
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun onDestructiveEntityExplode(event: EntityExplodeEvent) {
+		if (isRestrictedDestructiveSource(event.entity)) {
+			event.isCancelled = true
+		}
+	}
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun onDestructiveEntityChangeBlock(event: EntityChangeBlockEvent) {
+		if (isRestrictedDestructiveSource(event.entity)) {
+			event.isCancelled = true
+		}
+	}
+
 	@EventHandler(priority = EventPriority.HIGHEST)
 	fun onPlayerPreLogin(event: AsyncPlayerPreLoginEvent) {
 		val message = service.loginDisconnectMessage() ?: return
@@ -383,7 +408,22 @@ class FallenListener(private val service: FallenGameService) : Listener {
 
 	@EventHandler
 	fun onChunkLoad(event: ChunkLoadEvent) {
+		if (destructiveEntityRestrictionsActive()) {
+			event.chunk.entities
+				.filter { FallenDestructiveEntityPolicy.isRestricted(it.type) }
+				.forEach(Entity::remove)
+		}
 		service.reconcileLoadedChunk(event.chunk)
+	}
+
+	private fun destructiveEntityRestrictionsActive(): Boolean =
+		FallenAccessPolicy.isEventInProgress(service.phase)
+
+	private fun isRestrictedDestructiveSource(entity: Entity): Boolean {
+		if (!destructiveEntityRestrictionsActive()) return false
+		if (FallenDestructiveEntityPolicy.isRestricted(entity.type)) return true
+		val shooter = (entity as? Projectile)?.shooter as? Entity ?: return false
+		return FallenDestructiveEntityPolicy.isRestricted(shooter.type)
 	}
 
 	private fun attackingPlayer(event: EntityDamageByEntityEvent): Player? {

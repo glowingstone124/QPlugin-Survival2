@@ -242,6 +242,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		broadcast(Component.text("《陷落》阶段切换为 ${next.name}", NamedTextColor.GOLD))
 		save()
 		if (FallenAccessPolicy.isEventInProgress(next)) {
+			removeRestrictedDestructiveEntities()
 			validateOnlinePlayers()
 		}
 	}
@@ -249,7 +250,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	fun startGame() {
 		require(phase == FallenPhase.IDLE) { "活动只能从 IDLE 状态开始。" }
 		require(FallenAccessPolicy.hasEventStarted()) {
-			"活动将在 2026-08-01 14:00（Asia/Shanghai）自动开始。"
+			"活动将在 ${FallenAccessPolicy.eventStartDisplay} 自动开始。"
 		}
 		startedAtMillis = EVENT_START_MILLIS
 		endedAtMillis = 0L
@@ -262,6 +263,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		deployedPlayers.clear()
 		phase = FallenPhase.DEPLOYMENT
 		applyWorldRules()
+		removeRestrictedDestructiveEntities()
 		ensureInitialKeys()
 		broadcast(Component.text("《陷落》活动开始。部署阶段持续 2 小时。", NamedTextColor.GOLD))
 		doctorBroadcast("欢迎入场，各位受试者。请妥善安置十五枚密钥——我会记录你们的每一次选择。")
@@ -322,7 +324,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				.appendNewline()
 				.append(
 					Component.text(
-						"服务器将于 2026-08-01 14:00（Asia/Shanghai）开放。",
+						"服务器将于 ${FallenAccessPolicy.eventStartDisplay} 开放。",
 						NamedTextColor.YELLOW
 					)
 				)
@@ -1216,9 +1218,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		removeLoadedPhysicalKeyCopies(id)
 		recentCaptureUntil.remove(player.uniqueId)
 		if (key.originalTeam != team && !key.conversionScored) {
-			addScore(team, 500)
+			addScore(team, FallenScoreRules.CONVERSION_SCORE)
 			convertedKeys[team] = (convertedKeys[team] ?: 0) + 1
-			addScore(key.originalTeam, -400)
+			addScore(key.originalTeam, -FallenScoreRules.CONVERSION_LOSS)
 			key.conversionScored = true
 			doctorBroadcast("有趣。${player.name} 已将 ${key.originalTeam.displayName} 的密钥转化为 ${team.displayName} 的新生命线。")
 		}
@@ -1392,9 +1394,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val team = teamOf(player) ?: return
 		if (team in eliminatedTeams) return
 		deathCounts[player.uniqueId] = (deathCounts[player.uniqueId] ?: 0) + 1
-		addScore(team, -50)
+		addScore(team, -FallenScoreRules.DEATH_LOSS)
 		if (hasKeyItem(player)) {
-			addScore(team, -100)
+			addScore(team, -FallenScoreRules.KEY_CARRIER_DEATH_LOSS)
 			markPlayerKeysDropped(player)
 			save()
 		} else {
@@ -1413,7 +1415,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		combatUntil[attacker.uniqueId] = now + COMBAT_TAG_MILLIS
 		combatUntil[target.uniqueId] = now + COMBAT_TAG_MILLIS
 		recentAttackers.computeIfAbsent(target.uniqueId) { ConcurrentHashMap() }[attacker.uniqueId] = now
-		val score = finalDamage.toInt().coerceAtLeast(0)
+		val score = FallenScoreRules.damageScore(finalDamage)
 		if (score <= 0) return
 		val windowKey = "${attacker.uniqueId}:${target.uniqueId}"
 		val window = damageScoreWindows.compute(windowKey) { _, current ->
@@ -1423,7 +1425,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				current
 			}
 		} ?: return
-		val grant = score.coerceAtMost((DAMAGE_SCORE_CAP_PER_WINDOW - window.score).coerceAtLeast(0))
+		val grant = score.coerceAtMost((FallenScoreRules.DAMAGE_SCORE_CAP_PER_WINDOW - window.score).coerceAtLeast(0))
 		if (grant > 0) {
 			window.score += grant
 			addScore(attackerTeam, grant)
@@ -1445,7 +1447,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val victimTeam = teamOf(victim) ?: return
 		val killerTeam = killer?.let(::teamOf)
 		if (killer != null && killerTeam != null && killerTeam != victimTeam && killerTeam !in eliminatedTeams) {
-			addScore(killerTeam, 80)
+			addScore(killerTeam, FallenScoreRules.KILL_SCORE)
 			kills[killerTeam] = (kills[killerTeam] ?: 0) + 1
 		}
 		val now = System.currentTimeMillis()
@@ -1455,7 +1457,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			val attacker = Bukkit.getPlayer(attackerId) ?: continue
 			val attackerTeam = teamOf(attacker) ?: continue
 			if (attackerTeam == victimTeam || attackerTeam in eliminatedTeams) continue
-			addScore(attackerTeam, 30)
+			addScore(attackerTeam, FallenScoreRules.ASSIST_SCORE)
 		}
 		save()
 	}
@@ -1475,11 +1477,11 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val team = teamOf(player) ?: return
 		if (team in eliminatedTeams) return
 		val score = when (material) {
-			Material.DIAMOND_ORE, Material.DEEPSLATE_DIAMOND_ORE -> 15
-			Material.EMERALD_ORE, Material.DEEPSLATE_EMERALD_ORE -> 20
-			Material.REDSTONE_ORE, Material.DEEPSLATE_REDSTONE_ORE -> 5
-			Material.DEEPSLATE_COAL_ORE -> 8
-			Material.ANCIENT_DEBRIS -> 60
+			Material.DIAMOND_ORE, Material.DEEPSLATE_DIAMOND_ORE -> FallenScoreRules.DIAMOND_SCORE
+			Material.EMERALD_ORE, Material.DEEPSLATE_EMERALD_ORE -> FallenScoreRules.EMERALD_SCORE
+			Material.REDSTONE_ORE, Material.DEEPSLATE_REDSTONE_ORE -> FallenScoreRules.REDSTONE_SCORE
+			Material.DEEPSLATE_COAL_ORE -> FallenScoreRules.DEEPSLATE_COAL_SCORE
+			Material.ANCIENT_DEBRIS -> FallenScoreRules.ANCIENT_DEBRIS_SCORE
 			else -> 0
 		}
 		if (score > 0) {
@@ -1499,6 +1501,14 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		for (player in Bukkit.getOnlinePlayers()) {
 			applyTerritorySpeedBonus(player)
 			applyMiningSpeedBonus(player)
+		}
+	}
+
+	private fun removeRestrictedDestructiveEntities() {
+		for (world in Bukkit.getWorlds()) {
+			world.entities
+				.filter { FallenDestructiveEntityPolicy.isRestricted(it.type) }
+				.forEach { it.remove() }
 		}
 	}
 
@@ -1694,7 +1704,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val speed = sample.location.distance(to) / (elapsed / 1000.0)
 		val accumulated = if (speed > ELYTRA_SCORE_SPEED) sample.accumulatedMillis + elapsed else 0L
 		if (accumulated >= ELYTRA_SCORE_INTERVAL_MILLIS) {
-			addScore(team, 10)
+			addScore(team, FallenScoreRules.ELYTRA_SCORE)
 			elytraSamples[player.uniqueId] = ElytraSample(to.clone(), now, accumulated - ELYTRA_SCORE_INTERVAL_MILLIS)
 			save()
 			return
@@ -2216,8 +2226,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		key.holder = null
 		key.selfDestructAtMillis = 0L
 		giveKeyOrDrop(player, key)
-		addScore(capturingTeam, 150)
-		addScore(oldOwner, -100)
+		addScore(capturingTeam, FallenScoreRules.CAPTURE_SCORE)
+		addScore(oldOwner, -FallenScoreRules.CAPTURE_LOSS)
 		captureProgress.clear()
 		recentCaptureUntil[player.uniqueId] = System.currentTimeMillis() + RECENT_CAPTURE_TELEPORT_BLOCK_MILLIS
 		doctorBroadcast("${player.name} 从 ${oldOwner.displayName} 夺走了密钥 ${key.shortId()}。让我们看看它能否活着回到另一座城市。")
@@ -2238,8 +2248,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			holder?.let(Bukkit::getPlayer)?.let { removeKeyItem(it, key.id) }
 			holder?.let(recentCaptureUntil::remove)
 			transitionKey(key, FallenKeyState.DESTROYED)
-			addScore(key.ownerTeam, 250)
-			addScore(key.originalTeam, -250)
+			addScore(key.ownerTeam, FallenScoreRules.SELF_DESTRUCT_SCORE)
+			addScore(key.originalTeam, -FallenScoreRules.SELF_DESTRUCT_LOSS)
 			destroyedKeys[key.ownerTeam] = (destroyedKeys[key.ownerTeam] ?: 0) + 1
 			doctorBroadcast("密钥 ${key.shortId()} 已化为灰烬。${key.ownerTeam.displayName} 完成了这项破坏性实验。")
 			changed = true
@@ -2300,7 +2310,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			if (team in eliminatedTeams) continue
 			val placed = keys.values.count { it.state == FallenKeyState.PLACED && it.ownerTeam == team }
 			if (placed > 0) {
-				addScore(team, placed * 15)
+				addScore(team, placed * FallenScoreRules.PLACED_KEY_SCORE)
 				changed = true
 			}
 		}
@@ -3419,7 +3429,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val REFRESH_KEY_INTERVAL_MILLIS = 24 * 60 * 60 * 1000L
 		private const val REFRESH_KEY_EXPIRY_MILLIS = 2 * 60 * 60 * 1000L
 		private const val DAMAGE_SCORE_WINDOW_MILLIS = 30 * 1000L
-		private const val DAMAGE_SCORE_CAP_PER_WINDOW = 35
 		private const val ASSIST_WINDOW_MILLIS = 30 * 1000L
 		private const val COMPASS_COST = 600
 		private const val MAX_COMPASSES_PER_TEAM = 3

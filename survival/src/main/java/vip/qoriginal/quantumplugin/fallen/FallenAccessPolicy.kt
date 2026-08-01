@@ -6,8 +6,9 @@ import java.time.LocalTime
 import java.time.ZoneId
 
 object FallenAccessPolicy {
+	const val eventStartDisplay = "2026-10-01 14:00（Asia/Shanghai）"
 	val eventZone: ZoneId = ZoneId.of("Asia/Shanghai")
-	val eventStartsAt: Instant = LocalDateTime.of(2026, 8, 1, 14, 0)
+	val eventStartsAt: Instant = LocalDateTime.of(2026, 10, 1, 14, 0)
 		.atZone(eventZone)
 		.toInstant()
 

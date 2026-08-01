@@ -9,20 +9,21 @@ import kotlin.test.assertTrue
 
 class FallenAccessPolicyTest {
 	@Test
-	fun `event opens exactly at 2pm Asia Shanghai on August first`() {
-		val before = LocalDateTime.of(2026, 8, 1, 13, 59, 59)
+	fun `event opens exactly at 2pm Asia Shanghai on October first`() {
+		val before = LocalDateTime.of(2026, 10, 1, 13, 59, 59)
 			.atZone(FallenAccessPolicy.eventZone)
 			.toInstant()
-		val exact = LocalDateTime.of(2026, 8, 1, 14, 0)
+		val exact = LocalDateTime.of(2026, 10, 1, 14, 0)
 			.atZone(FallenAccessPolicy.eventZone)
 			.toInstant()
 
 		assertFalse(FallenAccessPolicy.hasEventStarted(before))
 		assertTrue(FallenAccessPolicy.hasEventStarted(exact))
 		assertEquals(
-			LocalDateTime.of(2026, 8, 1, 6, 0).toInstant(ZoneOffset.UTC),
+			LocalDateTime.of(2026, 10, 1, 6, 0).toInstant(ZoneOffset.UTC),
 			FallenAccessPolicy.eventStartsAt
 		)
+		assertEquals("2026-10-01 14:00（Asia/Shanghai）", FallenAccessPolicy.eventStartDisplay)
 	}
 
 	@Test
@@ -56,7 +57,7 @@ class FallenAccessPolicyTest {
 	}
 
 	private fun isCurfewAt(phase: FallenPhase, hour: Int, minute: Int): Boolean {
-		val instant = LocalDateTime.of(2026, 8, 2, hour, minute)
+		val instant = LocalDateTime.of(2026, 10, 2, hour, minute)
 			.atZone(FallenAccessPolicy.eventZone)
 			.toInstant()
 		return FallenAccessPolicy.isCurfew(phase, instant)
