@@ -97,11 +97,11 @@ data class FallenRegion(
 			val z = Random.nextInt(minZ, maxZ + 1)
 			val highest = world.getHighestBlockYAt(x, z).coerceIn(minY, maxY)
 			val location = Location(world, x + 0.5, highest + 1.0, z + 0.5)
-			if (contains(location) && location.y >= 0 && location.block.isEmpty && location.clone().add(0.0, 1.0, 0.0).block.isEmpty) {
+			if (contains(location) && location.block.isEmpty && location.clone().add(0.0, 1.0, 0.0).block.isEmpty) {
 				return location
 			}
 		}
-		return Location(world, (minX + maxX) / 2.0 + 0.5, minY.coerceAtLeast(1).toDouble(), (minZ + maxZ) / 2.0 + 0.5)
+		return Location(world, (minX + maxX) / 2.0 + 0.5, minY.coerceAtLeast(world.minHeight).toDouble(), (minZ + maxZ) / 2.0 + 0.5)
 	}
 
 	fun center(): Location? {

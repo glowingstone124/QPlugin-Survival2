@@ -13,7 +13,10 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityExhaustionEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
+import org.bukkit.event.entity.EntityRemoveEvent
 import org.bukkit.event.entity.ItemDespawnEvent
+import org.bukkit.event.entity.ItemMergeEvent
+import org.bukkit.event.entity.ItemSpawnEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.entity.ProjectileLaunchEvent
 import org.bukkit.event.block.BlockBreakEvent
@@ -348,6 +351,26 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	fun onItemDespawn(event: ItemDespawnEvent) {
 		if (service.isLiveKeyItem(event.entity.itemStack)) {
 			event.isCancelled = true
+		}
+	}
+
+	@EventHandler(ignoreCancelled = true)
+	fun onItemSpawn(event: ItemSpawnEvent) {
+		service.protectDroppedKeyEntity(event.entity)
+	}
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun onItemMerge(event: ItemMergeEvent) {
+		if (service.isKeyItem(event.entity.itemStack) || service.isKeyItem(event.target.itemStack)) {
+			event.isCancelled = true
+		}
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR)
+	fun onEntityRemove(event: EntityRemoveEvent) {
+		val item = event.entity as? Item ?: return
+		if (event.cause != EntityRemoveEvent.Cause.UNLOAD) {
+			service.handleDroppedKeyEntityRemoval(item)
 		}
 	}
 

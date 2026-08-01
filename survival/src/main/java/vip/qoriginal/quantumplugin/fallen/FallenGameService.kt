@@ -165,6 +165,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private var lastActivityStatusWarningAt = 0L
 	private var lastPlacedKeyScoreAt = 0L
 	private var lastRefreshKeyAt = 0L
+	private var lastDroppedKeyReconcileAt = 0L
+	private var droppedKeyReconcileScheduled = false
 	private var startedAtMillis = 0L
 	private var endedAtMillis = 0L
 	private var visualFrame = 0
@@ -959,15 +961,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		for (world in Bukkit.getWorlds()) {
 			for (entity in world.getEntitiesByClass(Item::class.java)) {
 				val id = keyId(entity.itemStack) ?: continue
-				val key = keys[id]
-				val validState = key != null && (key.state == FallenKeyState.ITEM || key.state == FallenKeyState.SELF_DESTRUCTING)
-				if (!validState || id in accepted || key.holder != null) {
-					entity.remove()
-					continue
-				}
 				accepted.add(id)
-				entity.itemStack.amount = 1
-				markKeyDropped(id, entity.location)
+				protectDroppedKeyEntity(entity)
 			}
 			for (chunk in world.loadedChunks) {
 				for (state in chunk.tileEntities) {
@@ -976,32 +971,15 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				}
 			}
 		}
-		save()
-		plugin.logger.info("Fallen key reconciliation completed: ${accepted.size} unique physical key items accepted.")
+		val physicalKeyCount = reconcileDroppedKeyEntities()
+		plugin.logger.info("Fallen key reconciliation completed: $physicalKeyCount unique physical key items accepted.")
 	}
 
 	fun reconcileLoadedChunk(chunk: Chunk) {
-		val seen = HashSet<UUID>()
 		var changed = false
 		for (entity in chunk.entities.filterIsInstance<Item>()) {
-			val id = keyId(entity.itemStack) ?: continue
-			val key = keys[id]
-			val validState = key != null && (key.state == FallenKeyState.ITEM || key.state == FallenKeyState.SELF_DESTRUCTING)
-			val matchesPersistedDrop = key != null
-				&& key.holder == null
-				&& key.worldName == entity.world.name
-				&& key.x == entity.location.blockX
-				&& key.y == entity.location.blockY
-				&& key.z == entity.location.blockZ
-			if (!validState || key.holder != null || id in seen || (key.worldName != null && !matchesPersistedDrop)) {
-				entity.remove()
-				changed = true
-				continue
-			}
-			seen.add(id)
-			entity.itemStack.amount = 1
-			markKeyDropped(id, entity.location)
-			changed = true
+			if (!isKeyItem(entity.itemStack)) continue
+			protectDroppedKeyEntity(entity)
 		}
 		val accepted = keys.values
 			.asSequence()
@@ -1015,6 +993,115 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			}
 		}
 		if (changed) save()
+		scheduleDroppedKeyReconciliation()
+	}
+
+	fun protectDroppedKeyEntity(entity: Item) {
+		if (!isLiveKeyItem(entity.itemStack)) return
+		entity.itemStack.amount = 1
+		entity.setUnlimitedLifetime(true)
+		entity.setWillAge(false)
+		entity.setCanMobPickup(false)
+		entity.isInvulnerable = true
+		entity.isPersistent = true
+	}
+
+	fun handleDroppedKeyEntityRemoval(entity: Item) {
+		if (!isLiveKeyItem(entity.itemStack)) return
+		scheduleDroppedKeyReconciliation()
+	}
+
+	private fun scheduleDroppedKeyReconciliation() {
+		if (droppedKeyReconcileScheduled || !plugin.isEnabled) return
+		droppedKeyReconcileScheduled = true
+		plugin.server.scheduler.runTask(plugin, Runnable {
+			droppedKeyReconcileScheduled = false
+			reconcileDroppedKeyEntities()
+		})
+	}
+
+	private fun processDroppedKeyEntities() {
+		val now = System.currentTimeMillis()
+		if (now - lastDroppedKeyReconcileAt < DROPPED_KEY_RECONCILE_INTERVAL_MILLIS) return
+		lastDroppedKeyReconcileAt = now
+		reconcileDroppedKeyEntities()
+	}
+
+	/**
+	 * Treats the persisted holder/drop location as the authority and makes sure every
+	 * loaded live key has exactly one physical entity. This also repairs keys removed
+	 * by entity-clear plugins, commands, damage, or an earlier incomplete chunk load.
+	 */
+	private fun reconcileDroppedKeyEntities(): Int {
+		val entitiesByKey = LinkedHashMap<UUID, MutableList<Item>>()
+		for (world in Bukkit.getWorlds()) {
+			for (entity in world.getEntitiesByClass(Item::class.java)) {
+				val id = keyId(entity.itemStack) ?: continue
+				entitiesByKey.computeIfAbsent(id) { ArrayList() }.add(entity)
+			}
+		}
+
+		val present = HashSet<UUID>()
+		var changed = false
+		for ((id, entities) in entitiesByKey) {
+			val key = keys[id]
+			val validDrop = key != null
+				&& (key.state == FallenKeyState.ITEM || key.state == FallenKeyState.SELF_DESTRUCTING)
+				&& key.holder == null
+			if (!validDrop) {
+				entities.forEach(Item::remove)
+				continue
+			}
+
+			val canonical = selectCanonicalDroppedKeyEntity(key, entities)
+			protectDroppedKeyEntity(canonical)
+			present.add(id)
+			changed = markKeyDropped(id, canonical.location) || changed
+			for (duplicate in entities) {
+				if (duplicate.uniqueId != canonical.uniqueId) duplicate.remove()
+			}
+		}
+
+		for (key in keys.values) {
+			if (key.id in present || key.holder != null || key.worldName == null) continue
+			if (key.state != FallenKeyState.ITEM && key.state != FallenKeyState.SELF_DESTRUCTING) continue
+			val location = loadedDropRecoveryLocation(key) ?: continue
+			val entity = spawnKeyDrop(key, location, naturally = false) ?: continue
+			present.add(key.id)
+			changed = true
+			plugin.logger.warning(
+				"Recovered missing Fallen key ${key.shortId()} at " +
+					"${entity.world.name} ${entity.location.blockX},${entity.location.blockY},${entity.location.blockZ}."
+			)
+		}
+
+		if (changed) save()
+		return present.size
+	}
+
+	private fun selectCanonicalDroppedKeyEntity(key: FallenKey, entities: List<Item>): Item {
+		val worldName = key.worldName ?: return entities.first()
+		return entities.minByOrNull { entity ->
+			if (entity.world.name != worldName) {
+				Double.MAX_VALUE
+			} else {
+				val dx = entity.location.x - (key.x + 0.5)
+				val dy = entity.location.y - (key.y + 0.5)
+				val dz = entity.location.z - (key.z + 0.5)
+				dx * dx + dy * dy + dz * dz
+			}
+		} ?: entities.first()
+	}
+
+	private fun loadedDropRecoveryLocation(key: FallenKey): Location? {
+		val world = Bukkit.getWorld(key.worldName ?: return null) ?: return null
+		if (!world.isChunkLoaded(key.x shr 4, key.z shr 4)) return null
+		val y = if (key.y < world.minHeight) {
+			world.getHighestBlockYAt(key.x, key.z) + 1.0
+		} else {
+			key.y.coerceAtMost(world.maxHeight - 1) + 0.25
+		}
+		return Location(world, key.x + 0.5, y, key.z + 0.5)
 	}
 
 	fun evacuateKeyItemsFromContainer(inventory: Inventory, location: Location) {
@@ -1044,7 +1131,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				continue
 			}
 			if (key.holder != null) continue
-			val dropped = location.world?.dropItemNaturally(location, itemFor(key)) ?: continue
+			val dropped = spawnKeyDrop(key, location, naturally = true) ?: continue
 			accepted.add(id)
 			markKeyDropped(id, dropped.location)
 		}
@@ -1215,7 +1302,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				item.amount = 0
 				continue
 			}
-			player.world.dropItem(player.location, item.clone().apply { amount = 1 })
+			val key = keys[id] ?: continue
+			spawnKeyDrop(key, player.location, item.clone().apply { amount = 1 }, naturally = false)
 			item.amount = 0
 			markKeyDropped(id, player.location)
 		}
@@ -1661,6 +1749,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			runTickSubsystem("world-rules", ::applyWorldRules)
 		}
 		runTickSubsystem("timeline", ::processTimeline)
+		runTickSubsystem("dropped-keys", ::processDroppedKeyEntities)
 		var loginAccessEnforced = false
 		runTickSubsystem("login-access") { loginAccessEnforced = enforceLoginAccess() }
 		if (loginAccessEnforced) return
@@ -2612,7 +2701,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun isSafeRespawn(team: FallenTeam, location: Location): Boolean {
-		if (!isInTeamRegion(team, location) || location.y < 0) return false
+		if (!isInTeamRegion(team, location)) return false
 		if (nearEnemyPlacedKey(location, team, 30.0)) return false
 		val feet = location.block
 		val head = location.clone().add(0.0, 1.0, 0.0).block
@@ -2936,15 +3025,38 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
-	private fun markKeyDropped(keyId: UUID, location: Location) {
-		keys[keyId]?.let {
-			if (it.state != FallenKeyState.ITEM && it.state != FallenKeyState.SELF_DESTRUCTING) return@let
-			it.holder = null
-			it.worldName = location.world?.name
-			it.x = location.blockX
-			it.y = location.blockY
-			it.z = location.blockZ
+	private fun markKeyDropped(keyId: UUID, location: Location): Boolean {
+		val key = keys[keyId] ?: return false
+		if (key.state != FallenKeyState.ITEM && key.state != FallenKeyState.SELF_DESTRUCTING) return false
+		val worldName = location.world?.name
+		val changed = key.holder != null
+			|| key.worldName != worldName
+			|| key.x != location.blockX
+			|| key.y != location.blockY
+			|| key.z != location.blockZ
+		key.holder = null
+		key.worldName = worldName
+		key.x = location.blockX
+		key.y = location.blockY
+		key.z = location.blockZ
+		return changed
+	}
+
+	private fun spawnKeyDrop(
+		key: FallenKey,
+		location: Location,
+		item: ItemStack = itemFor(key),
+		naturally: Boolean
+	): Item? {
+		val world = location.world ?: return null
+		val entity = if (naturally) {
+			world.dropItemNaturally(location, item)
+		} else {
+			world.dropItem(location, item)
 		}
+		protectDroppedKeyEntity(entity)
+		markKeyDropped(key.id, entity.location)
+		return entity
 	}
 
 	private fun giveKeyOrDrop(player: Player, key: FallenKey): Boolean {
@@ -2956,9 +3068,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			return true
 		}
 		for (leftover in leftovers.values) {
-			player.world.dropItemNaturally(player.location, leftover)
+			spawnKeyDrop(key, player.location, leftover, naturally = true)
 		}
-		markKeyDropped(key.id, player.location)
 		CommandMessages.warning(player, "背包已满，密钥 ${key.shortId()} 已掉落在你脚下。")
 		return false
 	}
@@ -3295,6 +3406,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val INITIAL_KEYS_PER_TEAM = 5
 		private const val CAPTURE_SECONDS = 6L
 		private const val DROP_CONFIRM_MILLIS = 5_000L
+		private const val DROPPED_KEY_RECONCILE_INTERVAL_MILLIS = 5_000L
 		private const val SELF_DESTRUCT_MILLIS = 10 * 60 * 1000L
 		private const val RESPAWN_PROTECTION_MILLIS = 8_000L
 		private const val RESPAWN_WAIT_MOVEMENT_EPSILON_SQUARED = 0.0001
