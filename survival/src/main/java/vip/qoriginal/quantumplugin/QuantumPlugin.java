@@ -19,6 +19,7 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -32,6 +33,9 @@ import vip.qoriginal.quantumplugin.fallen.FallenListener;
 import vip.qoriginal.quantumplugin.fallen.FallenShopCommand;
 import vip.qoriginal.quantumplugin.metro.SegmentMap;
 import vip.qoriginal.quantumplugin.patch.*;
+import vip.qoriginal.quantumplugin.servux.ServuxEntityDataBridge;
+import vip.qoriginal.quantumplugin.registration.MinecraftRegistrationTest;
+import vip.qoriginal.quantumplugin.registration.ReservedMinecraftRegistrationTest;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
 import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
@@ -52,6 +56,8 @@ public final class QuantumPlugin extends JavaPlugin {
     LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
     ChatSync cs = new ChatSync();
+    private final MinecraftRegistrationTest minecraftRegistrationTest = new ReservedMinecraftRegistrationTest();
+    private ServuxEntityDataBridge servuxEntityDataBridge;
     private EliteWeaponListener eliteWeaponListener;
     private final FallenGameService fallenGameService = new FallenGameService(this);
     public static boolean DEBUG_FLAG;
@@ -64,6 +70,19 @@ public final class QuantumPlugin extends JavaPlugin {
         WORLD_MAIN = Bukkit.getWorld("world");
         instance = this;
         PluginContext.setPlugin(this);
+        getServer().getServicesManager().register(
+                MinecraftRegistrationTest.class,
+                minecraftRegistrationTest,
+                this,
+                ServicePriority.Normal
+        );
+        DailyLoginAdvertisement.init(this);
+        servuxEntityDataBridge = new ServuxEntityDataBridge(this);
+        StatusUpload.setPlayerFilter(player -> !player.getScoreboardTags().contains("visitor_login"));
+        PlayerEventListener.setMessageSink(cs::sendChatMsg);
+        Login.setLoginSuccessHook(name -> new vip.qoriginal.quantumplugin.eliteWeapons.EliteWeaponData()
+                .cacheWeaponsForSpecUser(name));
+        MSPTCalculator.setTickHook(new SurvivalTickWork());
         cs.setChatUploadFilter(fallenGameService::shouldBroadcastChatGlobally);
         CommandSuggester.register(this, List.of(
                 "suicide", "shutup", "myloc", "highlight", "showitem", "querybind",
@@ -72,6 +91,8 @@ public final class QuantumPlugin extends JavaPlugin {
         ));
         System.out.println("1.14.5.5.1 Started.");
         if (DEBUG_FLAG) {
+
+
             System.out.println("QPlugin is running in debug mode. More logs will be written. Set DEBUG=false to disable this feature.");
         }
         boolean qoApiEnabled = !"true".equalsIgnoreCase(System.getenv("DISABLE_QO_API"));
@@ -85,6 +106,20 @@ public final class QuantumPlugin extends JavaPlugin {
             getLogger().info("QO API integrations are disabled by DISABLE_QO_API=true.");
         }
         int delay = 0;
+        if (qoApiEnabled) {
+            JsonObject startObj = new JsonObject();
+            startObj.addProperty("timestamp", System.currentTimeMillis());
+            startObj.addProperty("stat", 0);
+            try {
+                Request.sendPostRequest(
+                        Config.INSTANCE.getAPI_ENDPOINT() + "/qo/alive/upload",
+                        startObj.toString(),
+                        Optional.of(Map.of("Authorization", Config.INSTANCE.getAPI_SECRET()))
+                );
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
         piv.init();
         List<Listener> needReg = new ArrayList<>(List.of(
                 new ChatCommandListener(),
@@ -104,6 +139,7 @@ public final class QuantumPlugin extends JavaPlugin {
                     new JoinLeaveListener(),
                     cs,
                     new PlayerEventListener(),
+                    new SurvivalPlayerEventListener(),
                     eliteWeaponListener
             ));
         }
@@ -116,12 +152,15 @@ public final class QuantumPlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(new Speed(), this);
             getServer().getPluginManager().registerEvents(new LoadChunk(this), this);
         }
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                SegmentMap.refresh();
-            }
-        }.runTaskTimer(this, 0L, 10L);
+        if (qoApiEnabled) {
+            StatusUpload su = new StatusUpload();
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    su.run();
+                }
+            }.runTaskTimer(this, 0L, 10L);
+        }
         new BukkitRunnable() {
             @Override
             public void run() {
@@ -134,6 +173,29 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         }.runTaskTimer(this, 0L, 30L);
 
+        if (qoApiEnabled) {
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    for (Player player : getServer().getOnlinePlayers()) {
+                        if (player.getScoreboardTags().contains("visitor_online")) continue;
+
+                        java.net.InetSocketAddress address = player.getAddress();
+                        if (address == null) continue;
+
+                        String url = (Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName()
+                                + "&ip=" + address.getAddress().getHostAddress()).trim();
+                        Bukkit.getScheduler().runTaskAsynchronously(QuantumPlugin.this, () -> {
+                            try {
+                                Request.sendPostRequest(url, "", Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    }
+                }
+            }.runTaskTimer(this, 0L, 20*20L); // 每20秒
+        }
         Block b = Objects.requireNonNull(Bukkit.getWorld("world")).getBlockAt(-1782, 68, 720);
         if (b.getChunk().load()) {
             if (b.getType() == Material.LEVER) {
@@ -141,7 +203,6 @@ public final class QuantumPlugin extends JavaPlugin {
                 if (data.getAsString().contains("powered=true")) StoneFarm.console_state = 10;
             }
         }
-        SegmentMap.init();
         Objects.requireNonNull(this.getCommand("elite")).setExecutor(new EliteWeaponCmd());
         Objects.requireNonNull(this.getCommand("fallen")).setExecutor(new FallenCommand(fallenGameService));
         Objects.requireNonNull(this.getCommand("shop")).setExecutor(new FallenShopCommand(fallenGameService));
@@ -158,12 +219,29 @@ public final class QuantumPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         fallenGameService.stop();
+        if (servuxEntityDataBridge != null) {
+            servuxEntityDataBridge.close();
+        }
         if (eliteWeaponListener != null) {
             eliteWeaponListener.shutdown();
         }
         LoggerProvider.INSTANCE.closeAll();
         if (webMsgGetterTask != null) {
             webMsgGetterTask.cancel();
+        }
+        if (!"true".equalsIgnoreCase(System.getenv("DISABLE_QO_API"))) {
+            JsonObject stopObj = new JsonObject();
+            stopObj.addProperty("timestamp", System.currentTimeMillis());
+            stopObj.addProperty("stat", 1);
+            try {
+                Request.sendPostRequest(
+                        Config.INSTANCE.getAPI_ENDPOINT() + "/qo/alive/upload",
+                        stopObj.toString(),
+                        Optional.of(Map.of("Authorization", Config.INSTANCE.getAPI_SECRET()))
+                );
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
         System.out.println("Ended.");
     }

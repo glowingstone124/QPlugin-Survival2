@@ -1,0 +1,17 @@
+title: 测试室 01
+objective: 抵达测试室出口
+time-limit-seconds: 180
+include-entities: true
+
+# 相对于 structure.nbt 放置原点。
+spawn:
+  x: 4.5
+  y: 2.0
+  z: 6.5
+  yaw: 90.0
+  pitch: 0.0
+
+# 相对于 structure.nbt 放置原点，边界包含 min/max 方块。
+goal:
+  min: { x: 28, y: 1, z: 8 }
+  max: { x: 30, y: 4, z: 10 }

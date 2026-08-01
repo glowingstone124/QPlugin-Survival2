@@ -35,8 +35,8 @@ allprojects {
 	}
 }
 
-val javaProjects = listOf(project(":common"), project(":survival"), project(":creative"))
-val jsonDependency = libs.org.json.json
+val javaProjects = listOf(project(":common"), project(":survival"), project(":creative"), project(":chambers"))
+val gsonDependency = libs.com.google.code.gson.gson
 val kotlinStdlibDependency = libs.org.jetbrains.kotlin.kotlin.stdlib
 val kotlinReflectDependency = libs.org.jetbrains.kotlin.kotlin.reflect
 val coroutinesDependency = libs.org.jetbrains.kotlinx.kotlinx.coroutines.core
@@ -48,7 +48,7 @@ configure(javaProjects) {
 	apply(plugin = "maven-publish")
 
 	dependencies {
-		"api"(jsonDependency)
+		"implementation"(gsonDependency)
 		"api"(kotlinStdlibDependency)
 		"api"(kotlinReflectDependency)
 		"api"(coroutinesDependency)
@@ -65,7 +65,7 @@ configure(javaProjects) {
 	}
 
 	extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension>("kotlin") {
-		jvmToolchain(21)
+		jvmToolchain(25)
 		sourceSets.named("main") {
 			kotlin.setSrcDirs(listOf("src/main/java"))
 		}
@@ -81,6 +81,7 @@ configure(javaProjects) {
 val pluginProjects = mapOf(
 	"survival" to "QuantumPlugin",
 	"creative" to "QuantumPlugin-Creative",
+	"chambers" to "QuantumPlugin-Chambers",
 )
 
 pluginProjects.forEach { (projectName, archiveName) ->
@@ -109,6 +110,12 @@ pluginProjects.forEach { (projectName, archiveName) ->
 	}
 }
 
+project(":chambers") {
+	dependencies {
+		"testImplementation"(kotlin("test"))
+	}
+}
+
 project(":survival") {
 	apply(plugin = "com.google.devtools.ksp")
 	apply(plugin = "io.papermc.paperweight.userdev")
@@ -122,13 +129,12 @@ project(":survival") {
 		javaLauncher.set(survivalJavaToolchains.launcherFor {
 			languageVersion.set(JavaLanguageVersion.of(25))
 		})
-		reobfArtifactConfiguration.set(io.papermc.paperweight.userdev.ReobfArtifactConfiguration.MOJANG_PRODUCTION)
 	}
 
 	dependencies {
 		"ksp"(project(":processor"))
 		"implementation"("io.github.classgraph:classgraph:4.8.181")
-		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.1.2.build.+")
+		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.2.build.+")
 		"testImplementation"(kotlin("test-junit5"))
 	}
 
@@ -137,6 +143,21 @@ project(":survival") {
 	}
 }
 
+project(":common") {
+	apply(plugin = "io.papermc.paperweight.userdev")
+
+	val commonJavaToolchains = extensions.getByType<org.gradle.jvm.toolchain.JavaToolchainService>()
+	extensions.configure<io.papermc.paperweight.userdev.PaperweightUserExtension>("paperweight") {
+		javaLauncher.set(commonJavaToolchains.launcherFor {
+			languageVersion.set(JavaLanguageVersion.of(25))
+		})
+	}
+
+	dependencies {
+		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.2.build.+")
+	}
+}
+
 tasks.named("build") {
-	dependsOn(":survival:shadowJar", ":creative:shadowJar")
+	dependsOn(":survival:shadowJar", ":creative:shadowJar", ":chambers:shadowJar")
 }

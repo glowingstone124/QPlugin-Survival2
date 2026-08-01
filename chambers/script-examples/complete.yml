@@ -1,0 +1,8 @@
+trigger:
+  type: complete
+  once: true
+
+messages:
+  - delay-ticks: 0
+    channel: action-bar
+    text: "<green>测试室完成（{completed} / {total}）。"
