@@ -49,7 +49,7 @@ public class JoinLeaveListener implements Listener {
 
             java.net.InetSocketAddress address = player.getAddress();
             if (address != null) {
-                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + address.getHostName(), "",
+                Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + address.getAddress().getHostAddress(), "",
                         java.util.Optional.of(java.util.Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
             }
         } else if (relationship.get("affiliated").getAsBoolean()) {

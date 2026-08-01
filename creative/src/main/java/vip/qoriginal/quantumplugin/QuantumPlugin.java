@@ -95,7 +95,7 @@ public final class QuantumPlugin extends JavaPlugin {
             public void run() {
                 getServer().getOnlinePlayers().forEach(player -> {
                     try {
-                        Request.sendPostRequest((Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + Objects.requireNonNull(player.getAddress()).getHostName()).trim(), "",
+                        Request.sendPostRequest((Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + Objects.requireNonNull(player.getAddress()).getAddress().getHostAddress()).trim(), "",
                                 Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
                     } catch (Exception e) {
                         throw new RuntimeException(e);

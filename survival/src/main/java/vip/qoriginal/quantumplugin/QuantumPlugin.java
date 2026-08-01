@@ -177,7 +177,7 @@ public final class QuantumPlugin extends JavaPlugin {
                     if (address == null) continue;
 
                     String url = (Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName()
-                            + "&ip=" + address.getHostName()).trim();
+                            + "&ip=" + address.getAddress().getHostAddress()).trim();
                     Bukkit.getScheduler().runTaskAsynchronously(QuantumPlugin.this, () -> {
                         try {
                             Request.sendPostRequest(url, "", Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
