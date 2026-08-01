@@ -22,7 +22,6 @@ import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import vip.qoriginal.quantumplugin.patch.Utils
 import java.lang.Runnable
-import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 
 
@@ -40,7 +39,6 @@ class Login : Listener {
 
 	companion object {
 		val playerLoginMap = ConcurrentHashMap<Player, Int>()
-		val playerTokenMap = ConcurrentHashMap<Player, String>()
 		val visitorPlayedMap = ConcurrentHashMap<Player, Long>()
 	}
 	val logger = Logger()
@@ -79,22 +77,19 @@ class Login : Listener {
 
 	@OptIn(DelicateCoroutinesApi::class)
 	fun performLogin(player: Player, password: String) {
+		val ip = AutoLoginClient.playerIp(player)
 		scope.launch {
 			val loginResult = withContext(Dispatchers.IO) {
 				JsonParser.parseString(
 					Request.sendPostRequest(
 						Config.API_ENDPOINT + "/qo/game/login",
-						gson.toJson(mapOf("username" to player.name, "password" to password, "ip" to player.address?.hostName, "web" to false))
+						gson.toJson(mapOf("username" to player.name, "password" to password, "ip" to ip, "web" to false))
 					)
 						.get()
 				).asJsonObject
 			}
 			if (loginResult.get("result").asBoolean) {
 				player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
-				val token = loginResult.get("token")?.asString ?: ""
-				if (token.isNotBlank()) {
-					playerTokenMap[player] = token
-				}
 				if (player.scoreboardTags.contains("guest")) {
 					abstractLoginLogic(player)
 					player.removeScoreboardTag("guest")
@@ -119,25 +114,23 @@ class Login : Listener {
 	fun handleJoin(player: Player, visitor: Boolean) {
 		if (!visitor) {
 			player.addScoreboardTag("guest")
-			Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
-				scope.launch {
-					val token = playerTokenMap[player] ?: return@launch
-					val resultJson = JsonParser.parseString(
-						Request.sendGetRequest(
-							Config.API_ENDPOINT + "/qo/authorization/templogin?name=${player.name}",
-							Optional.of(mapOf("Authorization" to "Bearer $token"))
-						).get()
-					).asJsonObject
-					if (resultJson.get("ok").asBoolean && resultJson.get("ip").asString == player.address?.hostName) {
-						player.sendTitlePart(
-							TitlePart.TITLE,
-							Component.text("自动登录成功").color(NamedTextColor.GREEN)
-						)
-						abstractLoginLogic(player)
-						player.removeScoreboardTag("guest")
-					}
+			val username = player.name
+			val ip = AutoLoginClient.playerIp(player)
+			if (ip != null) scope.launch {
+				if (!AutoLoginClient.canAutoLogin(username, ip)) return@launch
+				Utils.runTaskOnMainThread {
+					if (!player.isOnline ||
+						!player.scoreboardTags.contains("guest") ||
+						AutoLoginClient.playerIp(player) != ip
+					) return@runTaskOnMainThread
+					player.sendTitlePart(
+						TitlePart.TITLE,
+						Component.text("自动登录成功").color(NamedTextColor.GREEN)
+					)
+					player.removeScoreboardTag("guest")
+					scope.launch { abstractLoginLogic(player) }
 				}
-			})
+			}
 		} else {
 			player.addScoreboardTag("visitor")
 		}

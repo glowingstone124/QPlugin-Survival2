@@ -121,7 +121,7 @@ public class JoinLeaveListener implements Listener {
         sessionStartTimes.put(player, System.currentTimeMillis());
         java.net.InetSocketAddress address = player.getAddress();
         if (address != null) {
-            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + address.getHostString(), "",
+            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/online?name=" + player.getName() + "&ip=" + address.getAddress().getHostAddress(), "",
                     Optional.of(Map.of("Token", Config.INSTANCE.getAPI_SECRET())));
         }
     }
