@@ -99,6 +99,7 @@ class FallenShopCommand(private val service: FallenGameService) : CommandExecuto
 		BLAST(12, "防爆增益", 900, purchase = { service, player -> service.buyShopItem(player, "blast") }),
 		RESPAWN(13, "复活保护", 900, purchase = { service, player -> service.buyShopItem(player, "respawn") }),
 		KEY_ALERT(14, "密钥警戒", 700, purchase = { service, player -> service.buyShopItem(player, "keyalert") }),
-		ACCELERATION_HARNESS(15, "粉色加速挽具（乐魂用，飞行速度 +0.15）", 700, purchase = { service, player -> service.buyShopItem(player, "harness") });
+		ACCELERATION_HARNESS(15, "粉色加速挽具（乐魂用，飞行速度 +0.15）", 700, purchase = { service, player -> service.buyShopItem(player, "harness") }),
+		ELYTRA_UPGRADE(16, "鞘翅升级（换回胸甲返还 200 分）", FallenLoadoutRules.ELYTRA_COST, purchase = { service, player -> service.switchPlayerGear(player, true) });
 	}
 }

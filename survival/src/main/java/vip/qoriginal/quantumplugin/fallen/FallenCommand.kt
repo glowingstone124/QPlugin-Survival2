@@ -30,6 +30,9 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				"key" -> key(sender, args)
 				"score" -> score(sender, args)
 				"buy" -> buy(sender, args)
+				"gear" -> gear(sender, args)
+				"upgrade" -> upgrade(sender, args)
+				"menu" -> menu(sender)
 				"admin" -> admin(sender, args)
 				else -> {
 					CommandMessages.warning(sender, "未知操作: ${args[0]}")
@@ -62,6 +65,12 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				.append(line("$root key list", "查看密钥"))
 				.appendNewline()
 				.append(line("$root buy <compass|scan|jammer|tracking|supply|advanced|resistance|speed|nightvision|blast|respawn|keyalert|harness> ...", "购买积分物品"))
+				.appendNewline()
+				.append(line("$root gear <elytra|chestplate>", "支付 400 分换鞘翅，或换回胸甲并返还 200 分"))
+				.appendNewline()
+				.append(line("$root upgrade [A|B|C]", "查看或永久选择升级路径"))
+				.appendNewline()
+				.append(line("$root menu", "打开实验室可视化终端"))
 				.appendNewline()
 				.append(line("$root score [add|set] <A|B|C> <amount>", "查看或调整积分"))
 				.appendNewline()
@@ -218,6 +227,39 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 			"jammer", "tracking", "supply", "advanced", "resistance", "speed", "nightvision", "blast", "respawn", "keyalert", "harness" -> service.buyShopItem(player, args[1])
 			else -> throw IllegalArgumentException("未知购买项: ${args[1]}")
 		}
+	}
+
+	private fun gear(sender: CommandSender, args: Array<out String>) {
+		val player = sender as? Player ?: throw IllegalArgumentException("只有玩家可以切换护甲。")
+		if (args.size == 1) {
+			service.openPlayerMenu(player)
+			return
+		}
+		require(args.size == 2) { "用法: /fallen gear [elytra|chestplate]" }
+		when (args[1].lowercase()) {
+			"elytra" -> service.switchPlayerGear(player, true)
+			"chestplate" -> service.switchPlayerGear(player, false)
+			else -> throw IllegalArgumentException("用法: /fallen gear <elytra|chestplate>")
+		}
+	}
+
+	private fun upgrade(sender: CommandSender, args: Array<out String>) {
+		val player = sender as? Player ?: throw IllegalArgumentException("只有玩家可以选择升级路径。")
+		if (args.size == 1) {
+			service.openPlayerMenu(player)
+			return
+		}
+		if (args[1].equals("status", ignoreCase = true)) {
+			CommandMessages.info(player, service.upgradeStatus(player))
+			return
+		}
+		require(args.size == 2) { "用法: /fallen upgrade [A|B|C]" }
+		service.chooseUpgradePath(player, FallenUpgradePath.parse(args[1]))
+	}
+
+	private fun menu(sender: CommandSender) {
+		val player = sender as? Player ?: throw IllegalArgumentException("只有玩家可以打开实验室终端。")
+		service.openPlayerMenu(player)
 	}
 
 	private fun admin(sender: CommandSender, args: Array<out String>) {

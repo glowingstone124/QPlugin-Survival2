@@ -35,10 +35,12 @@ class FallenAccessPolicyTest {
 	}
 
 	@Test
-	fun `curfew covers every gameplay phase`() {
+	fun `curfew covers gameplay phases but not idle or ended`() {
 		assertTrue(isCurfewAt(FallenPhase.DEPLOYMENT, 3, 0))
 		assertTrue(isCurfewAt(FallenPhase.ACTIVE, 3, 0))
 		assertTrue(isCurfewAt(FallenPhase.OVERTIME, 3, 0))
+		assertFalse(isCurfewAt(FallenPhase.IDLE, 3, 0))
+		assertFalse(isCurfewAt(FallenPhase.ENDED, 3, 0))
 	}
 
 	@Test
@@ -48,12 +50,6 @@ class FallenAccessPolicyTest {
 		assertTrue(FallenAccessPolicy.isEventInProgress(FallenPhase.ACTIVE))
 		assertTrue(FallenAccessPolicy.isEventInProgress(FallenPhase.OVERTIME))
 		assertFalse(FallenAccessPolicy.isEventInProgress(FallenPhase.ENDED))
-	}
-
-	@Test
-	fun `curfew does not affect before or after event`() {
-		assertFalse(isCurfewAt(FallenPhase.IDLE, 3, 0))
-		assertFalse(isCurfewAt(FallenPhase.ENDED, 3, 0))
 	}
 
 	private fun isCurfewAt(phase: FallenPhase, hour: Int, minute: Int): Boolean {

@@ -23,9 +23,9 @@ import org.bukkit.boss.BarColor
 import org.bukkit.boss.BarStyle
 import org.bukkit.boss.BossBar
 import org.bukkit.configuration.file.YamlConfiguration
-import org.bukkit.entity.Player
 import org.bukkit.entity.AbstractArrow
 import org.bukkit.entity.Arrow
+import org.bukkit.entity.Player
 import org.bukkit.entity.Item
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.InventoryHolder
@@ -36,6 +36,8 @@ import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
+import org.bukkit.potion.PotionType
+import org.bukkit.inventory.meta.PotionMeta
 import org.bukkit.scheduler.BukkitRunnable
 import org.bukkit.scheduler.BukkitTask
 import org.bukkit.scoreboard.Criteria
@@ -68,6 +70,11 @@ import kotlin.math.ln
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
+private class FallenPlayerMenuHolder(val pendingPath: FallenUpgradePath? = null) : InventoryHolder {
+	lateinit var backingInventory: Inventory
+	override fun getInventory(): Inventory = backingInventory
+}
+
 class FallenGameService(private val plugin: JavaPlugin) {
 	private val keyIdKey = NamespacedKey(plugin, "fallen_key_id")
 	private val compassOwnerTeamKey = NamespacedKey(plugin, "fallen_compass_owner_team")
@@ -79,10 +86,15 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val forbiddenBuffSnowballKey = NamespacedKey(plugin, "buff_snowball")
 	private val territorySpeedBonusKey = NamespacedKey(plugin, "fallen_territory_speed_bonus")
 	private val miningSpeedBonusKey = NamespacedKey(plugin, "fallen_mining_speed_bonus")
+	private val upgradeHealthBonusKey = NamespacedKey(plugin, "fallen_upgrade_health_bonus")
+	private val upgradeMovementBonusKey = NamespacedKey(plugin, "fallen_upgrade_movement_bonus")
+	private val upgradeGlideBonusKey = NamespacedKey(plugin, "fallen_upgrade_glide_bonus")
 	private val accelerationHarnessModifierKey = NamespacedKey(plugin, "fallen_acceleration_harness")
 	private val alloyBulletItemKey = NamespacedKey(plugin, "fallen_alloy_bullet_item")
 	private val alloyBulletProjectileKey = NamespacedKey(plugin, "fallen_alloy_bullet_projectile")
 	private val alloyBulletRecipeKey = NamespacedKey(plugin, "fallen_alloy_bullets")
+	private val loadoutItemKey = NamespacedKey(plugin, "fallen_loadout_item")
+	private val playerMenuActionKey = NamespacedKey(plugin, "fallen_player_menu_action")
 	private val dataFile = File(plugin.dataFolder, "fallen.yml")
 	private val playerTeams = ConcurrentHashMap<UUID, FallenTeam>()
 	private val deployedPlayers = ConcurrentHashMap.newKeySet<UUID>()
@@ -101,7 +113,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val stationRepairProgress = ConcurrentHashMap<String, Long>()
 	private val stationCooldownUntil = ConcurrentHashMap<UUID, Long>()
 	private val combatUntil = ConcurrentHashMap<UUID, Long>()
-	private val recentCaptureUntil = ConcurrentHashMap<UUID, Long>()
+	private val unresolvedCaptures = ConcurrentHashMap<UUID, MutableSet<UUID>>()
 	private val stationAlertUntil = ConcurrentHashMap<String, Long>()
 	private val stationDisruptedUntil = ConcurrentHashMap<String, Long>()
 	private val respawnProtectionUntil = ConcurrentHashMap<UUID, Long>()
@@ -119,6 +131,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val activeTracks = ConcurrentHashMap<UUID, ActiveTrack>()
 	private val jammedRevealNoticeUntil = ConcurrentHashMap<String, Long>()
 	private val elytraSamples = ConcurrentHashMap<UUID, ElytraSample>()
+	private val loadoutInitializedPlayers = ConcurrentHashMap.newKeySet<UUID>()
+	private val loadoutRestorePending = ConcurrentHashMap.newKeySet<UUID>()
+	private val elytraPlayers = ConcurrentHashMap.newKeySet<UUID>()
+	private val gearSwitchAvailableAt = ConcurrentHashMap<UUID, Long>()
+	private val upgradePaths = ConcurrentHashMap<UUID, FallenUpgradePath>()
+	private val upgradeSupplyNextAt = ConcurrentHashMap<String, Long>()
 	private val placedScoringBlocks = ConcurrentHashMap.newKeySet<String>()
 	private val allowedGameModeChanges = ConcurrentHashMap<UUID, Long>()
 	private val dangerSince = EnumMap<FallenTeam, Long>(FallenTeam::class.java)
@@ -307,12 +325,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun assignTeam(playerId: UUID, team: FallenTeam) {
 		if (playerTeams[playerId] == team) return
+		if (playerId in elytraPlayers && elytraPlayers.count { playerTeams[it] == team } >= FallenLoadoutRules.MAX_ELYTRA_PLAYERS_PER_TEAM) {
+			elytraPlayers.remove(playerId)
+		}
 		playerTeams[playerId] = team
 		save()
 	}
 
 	fun clearTeam(playerId: UUID) {
 		playerTeams.remove(playerId)
+		elytraPlayers.remove(playerId)
+		gearSwitchAvailableAt.remove(playerId)
 		save()
 	}
 
@@ -402,6 +425,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			welcomePlayer(player)
 			return
 		}
+		val grantConsumables = loadoutInitializedPlayers.add(player.uniqueId) || loadoutRestorePending.remove(player.uniqueId)
+		restorePlayerLoadout(player, grantConsumables)
 		if (resumeRespawnWait(player)) {
 			welcomePlayer(player)
 			return
@@ -449,6 +474,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val arrow = player.launchProjectile(Arrow::class.java, velocity)
 		arrow.persistentDataContainer.set(alloyBulletProjectileKey, PersistentDataType.BYTE, 1)
 		arrow.damage = ALLOY_BULLET_BASE_DAMAGE
+		arrow.setGravity(false)
 		arrow.pickupStatus = AbstractArrow.PickupStatus.DISALLOWED
 		arrow.isCritical = false
 		player.world.playSound(player.location, Sound.ENTITY_ARROW_SHOOT, 1.0f, 0.7f)
@@ -468,7 +494,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				displayName(Component.text("合金弹头", NamedTextColor.GRAY))
 				lore(listOf(
 					Component.text("右键发射", NamedTextColor.YELLOW),
-					Component.text("初速度: 100 m/s", NamedTextColor.DARK_GRAY),
+					Component.text("初速度: 400 m/s · 无弹道下坠", NamedTextColor.DARK_GRAY),
 					Component.text("近距离伤害约 10，受距离和防具影响", NamedTextColor.DARK_GRAY)
 				))
 				persistentDataContainer.set(alloyBulletItemKey, PersistentDataType.BYTE, 1)
@@ -638,6 +664,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			"密钥 ${key.id} 不能从 ${key.state} 转换到 $next"
 		}
 		key.state = next
+		if (next == FallenKeyState.DESTROYED) resolveCaptureObligation(key.id)
 	}
 
 	fun createKeyItem(owner: FallenTeam, original: FallenTeam = owner, type: FallenKeyType = FallenKeyType.INITIAL): ItemStack {
@@ -737,13 +764,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			addScore(ownerTeam, -COMPASS_COST)
 		}
 		giveOrDrop(player, compassItem(ownerTeam, targetTeam, targetKey))
-		val targetCenter = targetKey.center()
-		val distanceDescription = if (targetCenter == null || targetCenter.world != player.world) {
-			"位于其他维度"
-		} else {
-			"距离约 ${distanceBand(player.location.distance(targetCenter))}"
-		}
-		alertTeam(targetTeam, Component.text("${ownerTeam.displayName} 的 ${player.name} 正在定位你方密钥，$distanceDescription。", NamedTextColor.YELLOW))
 		CommandMessages.success(player, "已购买指向 ${targetTeam.displayName} 的密钥指南针。")
 		save()
 		return true
@@ -830,6 +850,264 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 		save()
 		return true
+	}
+
+	fun switchPlayerGear(player: Player, useElytra: Boolean): Boolean {
+		if (!FallenAccessPolicy.isEventInProgress(phase)) {
+			CommandMessages.warning(player, "当前不在《陷落》活动期间，不能切换护甲。")
+			return false
+		}
+		val team = playerTeamForPurchase(player) ?: return false
+		val currentlyUsingElytra = player.uniqueId in elytraPlayers
+		if (currentlyUsingElytra == useElytra) {
+			CommandMessages.warning(player, if (useElytra) "你当前已经装备鞘翅。" else "你当前已经装备下界合金胸甲。")
+			return false
+		}
+		val now = System.currentTimeMillis()
+		val remaining = FallenLoadoutRules.remainingCooldown(gearSwitchAvailableAt[player.uniqueId] ?: 0L, now)
+		if (remaining > 0L) {
+			CommandMessages.warning(player, "护甲选择冷却中，剩余 ${formatDuration(remaining)}。")
+			return false
+		}
+		if (useElytra) {
+			val teamElytraPlayers = elytraPlayers.count { playerTeams[it] == team }
+			if (!FallenLoadoutRules.canSelectElytra(teamElytraPlayers)) {
+				CommandMessages.warning(player, "同一阵营最多同时拥有 ${FallenLoadoutRules.MAX_ELYTRA_PLAYERS_PER_TEAM} 名鞘翅玩家。")
+				return false
+			}
+			if (!spendScore(player, team, FallenLoadoutRules.ELYTRA_COST)) return false
+			elytraPlayers.add(player.uniqueId)
+			CommandMessages.success(player, "已支付 ${FallenLoadoutRules.ELYTRA_COST} 分并换成鞘翅。")
+		} else {
+			elytraPlayers.remove(player.uniqueId)
+			addScore(team, FallenLoadoutRules.CHESTPLATE_REFUND)
+			CommandMessages.success(player, "已换回下界合金胸甲，并返还 ${FallenLoadoutRules.CHESTPLATE_REFUND} 分。")
+		}
+		gearSwitchAvailableAt[player.uniqueId] = now + FallenLoadoutRules.GEAR_SWITCH_COOLDOWN_MILLIS
+		restorePlayerLoadout(player, grantConsumables = false)
+		save()
+		return true
+	}
+
+	fun chooseUpgradePath(player: Player, path: FallenUpgradePath): Boolean {
+		if (!FallenAccessPolicy.isEventInProgress(phase)) {
+			CommandMessages.warning(player, "活动尚未开始，不能选择升级路径。")
+			return false
+		}
+		val team = teamOf(player)
+		if (team == null || team in eliminatedTeams) {
+			CommandMessages.warning(player, "你当前不能选择升级路径。")
+			return false
+		}
+		val existing = upgradePaths[player.uniqueId]
+		if (existing != null) {
+			CommandMessages.warning(player, "你已经选择 ${existing.displayName}，路径不可更改。")
+			return false
+		}
+		upgradePaths[player.uniqueId] = path
+		restorePlayerLoadout(player, grantConsumables = false)
+		CommandMessages.success(player, "已永久选择 ${path.displayName} 路径，当前解锁节点 ${upgradeNode(player)}。")
+		save()
+		return true
+	}
+
+	fun upgradeStatus(player: Player): String {
+		val path = upgradePaths[player.uniqueId] ?: return "尚未选择升级路径；使用 /fallen upgrade <A|B|C>，选择后不可更改。"
+		val node = upgradeNode(player)
+		val now = System.currentTimeMillis()
+		val nextUnlockAt = when (node) {
+			1 -> startedAtMillis + DEPLOYMENT_MILLIS + FallenUpgradeRules.NODE_TWO_AFTER_DEPLOYMENT_MILLIS
+			2 -> startedAtMillis + DEPLOYMENT_MILLIS + FallenUpgradeRules.NODE_THREE_AFTER_DEPLOYMENT_MILLIS
+			else -> 0L
+		}
+		val next = if (nextUnlockAt > now) "；下一节点 ${formatDuration(nextUnlockAt - now)} 后解锁" else ""
+		return "升级路径：${path.displayName}；当前解锁节点 $node$next。"
+	}
+
+	fun openPlayerMenu(player: Player) {
+		val holder = FallenPlayerMenuHolder()
+		val inventory = Bukkit.createInventory(holder, 27, Component.text("陷落实验室终端", NamedTextColor.DARK_AQUA))
+		holder.backingInventory = inventory
+		inventory.setItem(4, menuItem(Material.CLOCK, "当前状态", listOf(
+			upgradeStatus(player),
+			if (player.uniqueId in elytraPlayers) "当前护甲：鞘翅" else "当前护甲：下界合金胸甲"
+		)))
+		inventory.setItem(10, menuItem(Material.GOLDEN_APPLE, "A · 生存路径", listOf(
+			"I：最大生命值 +4",
+			"II：永久抗性提升 I",
+			"III：最多 3 瓶自动补充的瞬间治疗喷溅药水",
+			"选择后不可更改"
+		), "path_a"))
+		inventory.setItem(12, menuItem(Material.NETHERITE_PICKAXE, "B · 工程路径", listOf(
+			"I：下界合金镐 · 效率 IV",
+			"II：自动补充 TNT 与爆炸抗性 I",
+			"III：夺取 4 秒、干扰 5 秒",
+			"选择后不可更改"
+		), "path_b"))
+		inventory.setItem(14, menuItem(Material.ELYTRA, "C · 机动路径", listOf(
+			"I：移动 +10%，饥饿消耗 -20%",
+			"II：鞘翅速度 +30%，自动补充烟花",
+			"III：精确揭露半径 20 → 35 格",
+			"选择后不可更改"
+		), "path_c"))
+		inventory.setItem(21, menuItem(Material.ELYTRA, "换成鞘翅", listOf(
+			"消耗 400 阵营积分",
+			"同阵营最多 2 名鞘翅玩家",
+			"成功切换后冷却 15 分钟"
+		), "gear_elytra"))
+		inventory.setItem(23, menuItem(Material.NETHERITE_CHESTPLATE, "换回下界合金胸甲", listOf(
+			"返还 200 阵营积分",
+			"成功切换后冷却 15 分钟"
+		), "gear_chestplate"))
+		player.openInventory(inventory)
+	}
+
+	fun handlePlayerMenuClick(player: Player, inventory: Inventory, rawSlot: Int, item: ItemStack?): Boolean {
+		val holder = inventory.holder as? FallenPlayerMenuHolder ?: return false
+		if (rawSlot !in 0 until inventory.size) return true
+		val action = item?.itemMeta?.persistentDataContainer?.get(playerMenuActionKey, PersistentDataType.STRING) ?: return true
+		when (action) {
+			"path_a" -> {
+				openPathConfirmation(player, FallenUpgradePath.A)
+				return true
+			}
+			"path_b" -> {
+				openPathConfirmation(player, FallenUpgradePath.B)
+				return true
+			}
+			"path_c" -> {
+				openPathConfirmation(player, FallenUpgradePath.C)
+				return true
+			}
+			"confirm_path" -> holder.pendingPath?.let { chooseUpgradePath(player, it) }
+			"gear_elytra" -> switchPlayerGear(player, true)
+			"gear_chestplate" -> switchPlayerGear(player, false)
+			"back" -> Unit
+		}
+		openPlayerMenu(player)
+		return true
+	}
+
+	private fun openPathConfirmation(player: Player, path: FallenUpgradePath) {
+		val holder = FallenPlayerMenuHolder(path)
+		val inventory = Bukkit.createInventory(holder, 27, Component.text("确认升级路径", NamedTextColor.RED))
+		holder.backingInventory = inventory
+		inventory.setItem(11, menuItem(Material.LIME_CONCRETE, "确认选择 ${path.displayName}", listOf(
+			"路径一旦选择，将永久锁定且不能更改。",
+			"再次点击确认。"
+		), "confirm_path"))
+		inventory.setItem(15, menuItem(Material.RED_CONCRETE, "返回", listOf("暂不选择路径"), "back"))
+		player.openInventory(inventory)
+	}
+
+	fun isPlayerMenu(inventory: Inventory): Boolean = inventory.holder is FallenPlayerMenuHolder
+
+	private fun menuItem(material: Material, name: String, lines: List<String>, action: String? = null): ItemStack =
+		ItemStack(material).apply {
+			itemMeta = itemMeta.apply {
+				displayName(Component.text(name, NamedTextColor.AQUA))
+				lore(lines.map { Component.text(it, NamedTextColor.GRAY) })
+				if (action != null) persistentDataContainer.set(playerMenuActionKey, PersistentDataType.STRING, action)
+			}
+		}
+
+	private fun upgradeNode(player: Player, now: Long = System.currentTimeMillis()): Int {
+		if (!FallenAccessPolicy.isEventInProgress(phase) || upgradePaths[player.uniqueId] == null) return 0
+		return FallenUpgradeRules.unlockedNode(startedAtMillis, DEPLOYMENT_MILLIS, now)
+	}
+
+	private fun hasUpgrade(player: Player, path: FallenUpgradePath, node: Int): Boolean =
+		upgradePaths[player.uniqueId] == path && upgradeNode(player) >= node
+
+	fun isProtectedLoadoutItem(item: ItemStack?): Boolean {
+		if (item == null || item.type.isAir) return false
+		return item.itemMeta.persistentDataContainer.has(loadoutItemKey, PersistentDataType.STRING)
+	}
+
+	fun isLoadoutProtectionActive(player: Player): Boolean {
+		if (!FallenAccessPolicy.isEventInProgress(phase)) return false
+		val team = teamOf(player) ?: return false
+		return team !in eliminatedTeams && player.gameMode != GameMode.SPECTATOR
+	}
+
+	fun isArmorMaterial(material: Material): Boolean = material == Material.ELYTRA
+		|| material.name.endsWith("_HELMET")
+		|| material.name.endsWith("_CHESTPLATE")
+		|| material.name.endsWith("_LEGGINGS")
+		|| material.name.endsWith("_BOOTS")
+
+	private fun restorePlayerLoadout(player: Player, grantConsumables: Boolean) {
+		if (!isLoadoutProtectionActive(player)) return
+		val inventory = player.inventory
+		val preservedPearls = if (grantConsumables) 0 else inventory.contents.filterNotNull()
+			.filter { loadoutKind(it) == LOADOUT_PEARLS }
+			.sumOf(ItemStack::getAmount)
+			.coerceAtMost(16)
+		for (item in inventory.contents.filterNotNull()) {
+			if (loadoutKind(item) in CORE_LOADOUT_KINDS) item.amount = 0
+		}
+		val pearlCount = if (grantConsumables) 16 else preservedPearls
+		ensureLoadoutStorageSpace(player, 2 + if (pearlCount > 0) 1 else 0)
+		inventory.setHelmet(loadoutItem(Material.NETHERITE_HELMET, LOADOUT_HELMET, "不可变动的下界合金头盔"))
+		inventory.setChestplate(if (player.uniqueId in elytraPlayers) {
+			loadoutItem(Material.ELYTRA, LOADOUT_ELYTRA, "陷落鞘翅")
+		} else {
+			loadoutItem(Material.NETHERITE_CHESTPLATE, LOADOUT_CHESTPLATE, "不可变动的下界合金胸甲")
+		})
+		inventory.setLeggings(loadoutItem(Material.NETHERITE_LEGGINGS, LOADOUT_LEGGINGS, "不可变动的下界合金护腿"))
+		inventory.setBoots(loadoutItem(Material.NETHERITE_BOOTS, LOADOUT_BOOTS, "不可变动的下界合金靴子"))
+		giveLoadoutItem(player, loadoutItem(Material.NETHERITE_SWORD, LOADOUT_SWORD, "陷落下界合金剑") {
+			addEnchant(Enchantment.SHARPNESS, 3, true)
+			addEnchant(Enchantment.KNOCKBACK, 1, true)
+		})
+		val upgradedPickaxe = hasUpgrade(player, FallenUpgradePath.B, 1)
+		giveLoadoutItem(player, loadoutItem(
+			if (upgradedPickaxe) Material.NETHERITE_PICKAXE else Material.DIAMOND_PICKAXE,
+			LOADOUT_PICKAXE,
+			if (upgradedPickaxe) "工程下界合金镐" else "陷落钻石镐"
+		) {
+			addEnchant(Enchantment.EFFICIENCY, if (upgradedPickaxe) 4 else 2, true)
+		})
+		if (pearlCount > 0) {
+			giveLoadoutItem(player, loadoutItem(Material.ENDER_PEARL, LOADOUT_PEARLS, "陷落末影珍珠").apply { amount = pearlCount })
+		}
+	}
+
+	private fun loadoutItem(material: Material, kind: String, name: String, configure: org.bukkit.inventory.meta.ItemMeta.() -> Unit = {}): ItemStack {
+		return ItemStack(material).apply {
+			itemMeta = itemMeta.apply {
+				displayName(Component.text(name, NamedTextColor.GOLD))
+				lore(listOf(Component.text("实验室财产 · 不可丢弃", NamedTextColor.DARK_AQUA)))
+				isUnbreakable = true
+				addItemFlags(ItemFlag.HIDE_UNBREAKABLE)
+				persistentDataContainer.set(loadoutItemKey, PersistentDataType.STRING, kind)
+				configure()
+			}
+		}
+	}
+
+	private fun loadoutKind(item: ItemStack): String? {
+		if (item.type.isAir || !item.hasItemMeta()) return null
+		return item.itemMeta.persistentDataContainer.get(loadoutItemKey, PersistentDataType.STRING)
+	}
+
+	private fun giveLoadoutItem(player: Player, item: ItemStack) {
+		val slot = player.inventory.storageContents.indexOfFirst { it == null || it.type.isAir }
+		check(slot >= 0) { "No inventory slot available for protected Fallen loadout item ${item.type}" }
+		player.inventory.setItem(slot, item)
+	}
+
+	private fun ensureLoadoutStorageSpace(player: Player, requiredSlots: Int) {
+		var freeSlots = player.inventory.storageContents.count { it == null || it.type.isAir }
+		if (freeSlots >= requiredSlots) return
+		for (slot in player.inventory.storageContents.indices) {
+			if (freeSlots >= requiredSlots) break
+			val displaced = player.inventory.getItem(slot) ?: continue
+			if (displaced.type.isAir || isProtectedLoadoutItem(displaced)) continue
+			player.world.dropItemNaturally(player.location, displaced.clone())
+			player.inventory.setItem(slot, null)
+			freeSlots++
+		}
 	}
 
 	private fun accelerationHarnessItem(): ItemStack {
@@ -1177,10 +1455,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			CommandMessages.error(player, "你的阵营已经出局，不能放置密钥。")
 			return true
 		}
-		if (key.type == FallenKeyType.REFRESH && key.ownerTeam != team) {
-			CommandMessages.warning(player, "刷新密钥不能由敌方阵营使用。")
-			return true
-		}
 		if (regionsOf(team).isEmpty()) {
 			CommandMessages.error(player, "你的阵营还没有配置区域。")
 			return true
@@ -1216,7 +1490,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		key.center()?.let { renderKeyPlacementBurst(it, teamDust(team)) }
 		item.amount -= 1
 		removeLoadedPhysicalKeyCopies(id)
-		recentCaptureUntil.remove(player.uniqueId)
+		resolveCaptureObligation(id)
 		if (key.originalTeam != team && !key.conversionScored) {
 			addScore(team, FallenScoreRules.CONVERSION_SCORE)
 			convertedKeys[team] = (convertedKeys[team] ?: 0) + 1
@@ -1264,14 +1538,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val team = teamOf(player)
 		if (team == null) {
 			CommandMessages.error(player, "你还没有分配阵营。")
-			return true
-		}
-		if (key.type == FallenKeyType.REFRESH && key.ownerTeam != team) {
-			CommandMessages.warning(player, "刷新密钥不能由敌方阵营使用。")
-			return true
-		}
-		if (key.type == FallenKeyType.REFRESH) {
-			CommandMessages.warning(player, "刷新密钥不能用于自毁得分，请带回己方区域放置。")
 			return true
 		}
 		if (key.originalTeam == team) {
@@ -1361,11 +1627,6 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			return true
 		}
 		item.amount = 1
-		val team = teamOf(player)
-		if (key.type == FallenKeyType.REFRESH && team != key.ownerTeam) {
-			CommandMessages.warning(player, "刷新密钥不能被敌方阵营拾取。")
-			return false
-		}
 		key.holder = player.uniqueId
 		key.worldName = null
 		save()
@@ -1393,6 +1654,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (!FallenAccessPolicy.isEventInProgress(phase)) return
 		val team = teamOf(player) ?: return
 		if (team in eliminatedTeams) return
+		loadoutRestorePending.add(player.uniqueId)
 		deathCounts[player.uniqueId] = (deathCounts[player.uniqueId] ?: 0) + 1
 		addScore(team, -FallenScoreRules.DEATH_LOSS)
 		if (hasKeyItem(player)) {
@@ -1454,8 +1716,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val assists = recentAttackers.remove(victim.uniqueId).orEmpty()
 		for ((attackerId, lastDamageAt) in assists) {
 			if (now - lastDamageAt > ASSIST_WINDOW_MILLIS || attackerId == killer?.uniqueId) continue
-			val attacker = Bukkit.getPlayer(attackerId) ?: continue
-			val attackerTeam = teamOf(attacker) ?: continue
+			val attackerTeam = playerTeams[attackerId] ?: continue
 			if (attackerTeam == victimTeam || attackerTeam in eliminatedTeams) continue
 			addScore(attackerTeam, FallenScoreRules.ASSIST_SCORE)
 		}
@@ -1493,9 +1754,14 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	fun reduceTeamExhaustion(player: Player, exhaustion: Float): Float {
 		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return exhaustion
 		val team = teamOf(player) ?: return exhaustion
-		if (team != FallenTeam.B || team in eliminatedTeams) return exhaustion
-		return exhaustion * MAIN_CITY_EXHAUSTION_MULTIPLIER
+		if (team in eliminatedTeams) return exhaustion
+		var adjusted = if (team == FallenTeam.B) exhaustion * MAIN_CITY_EXHAUSTION_MULTIPLIER else exhaustion
+		if (hasUpgrade(player, FallenUpgradePath.C, 1)) adjusted *= FallenUpgradeRules.C_EXHAUSTION_MULTIPLIER
+		return adjusted
 	}
+
+	fun explosionDamageMultiplier(player: Player): Double =
+		if (hasUpgrade(player, FallenUpgradePath.B, 2)) 0.80 else 1.0
 
 	private fun processTeamBonuses() {
 		for (player in Bukkit.getOnlinePlayers()) {
@@ -1516,6 +1782,75 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		for (player in Bukkit.getOnlinePlayers()) {
 			setAttributeModifier(player, Attribute.MOVEMENT_SPEED, territorySpeedBonusKey, TERRITORY_MOVEMENT_SPEED_BONUS, false)
 			setAttributeModifier(player, Attribute.BLOCK_BREAK_SPEED, miningSpeedBonusKey, MINING_SPEED_BONUS, false)
+			setAttributeModifier(player, Attribute.MAX_HEALTH, upgradeHealthBonusKey, FallenUpgradeRules.A_BONUS_HEALTH, false)
+			setAttributeModifier(player, Attribute.MOVEMENT_SPEED, upgradeMovementBonusKey, FallenUpgradeRules.C_MOVEMENT_SPEED_BONUS, false)
+			setAttributeModifier(player, Attribute.AIR_DRAG_MODIFIER, upgradeGlideBonusKey, -0.30, false)
+		}
+	}
+
+	private fun processUpgradePaths() {
+		val now = System.currentTimeMillis()
+		for (player in Bukkit.getOnlinePlayers()) {
+			val active = isLoadoutProtectionActive(player)
+			val node = if (active) upgradeNode(player, now) else 0
+			val path = upgradePaths[player.uniqueId]
+			setAttributeModifier(player, Attribute.MAX_HEALTH, upgradeHealthBonusKey, FallenUpgradeRules.A_BONUS_HEALTH, active && path == FallenUpgradePath.A && node >= 1)
+			setAttributeModifier(player, Attribute.MOVEMENT_SPEED, upgradeMovementBonusKey, FallenUpgradeRules.C_MOVEMENT_SPEED_BONUS, active && path == FallenUpgradePath.C && node >= 1)
+			setAttributeModifier(player, Attribute.AIR_DRAG_MODIFIER, upgradeGlideBonusKey, -0.30, active && path == FallenUpgradePath.C && node >= 2 && player.isGliding)
+			if (!active) continue
+			if (path == FallenUpgradePath.A && node >= 2) {
+				player.addPotionEffect(PotionEffect(PotionEffectType.RESISTANCE, 60, 0, true, false, true))
+			}
+			if (path == FallenUpgradePath.A && node >= 3) {
+				refillUpgradeSupply(player, LOADOUT_HEALING, FallenUpgradeRules.HEALING_POTION_CAP, 1, FallenUpgradeRules.HEALING_POTION_REFILL_MILLIS, now, ::healingPotionItem)
+			}
+			if (path == FallenUpgradePath.B && node >= 2) {
+				refillUpgradeSupply(player, LOADOUT_TNT, FallenUpgradeRules.TNT_CAP, FallenUpgradeRules.TNT_REFILL_AMOUNT, FallenUpgradeRules.TNT_REFILL_MILLIS, now) {
+					loadoutItem(Material.TNT, LOADOUT_TNT, "工程 TNT")
+				}
+			}
+			if (path == FallenUpgradePath.C && node >= 2) {
+				refillUpgradeSupply(player, LOADOUT_FIREWORK, FallenUpgradeRules.FIREWORK_CAP, FallenUpgradeRules.FIREWORK_REFILL_AMOUNT, FallenUpgradeRules.FIREWORK_REFILL_MILLIS, now) {
+					loadoutItem(Material.FIREWORK_ROCKET, LOADOUT_FIREWORK, "机动烟花")
+				}
+			}
+		}
+	}
+
+	private fun healingPotionItem(): ItemStack = loadoutItem(Material.SPLASH_POTION, LOADOUT_HEALING, "实验室瞬间治疗药水") {
+		(this as PotionMeta).setBasePotionType(PotionType.HEALING)
+	}
+
+	private fun refillUpgradeSupply(
+		player: Player,
+		kind: String,
+		cap: Int,
+		refillAmount: Int,
+		intervalMillis: Long,
+		now: Long,
+		factory: () -> ItemStack
+	) {
+		val key = "${player.uniqueId}:$kind"
+		val existing = player.inventory.contents.filterNotNull().filter { loadoutKind(it) == kind }
+		val count = existing.sumOf(ItemStack::getAmount)
+		val nextAt = upgradeSupplyNextAt[key]
+		val amount = when {
+			nextAt == null -> (cap - count).coerceAtLeast(0)
+			now >= nextAt && count < cap -> refillAmount.coerceAtMost(cap - count)
+			else -> 0
+		}
+		if (amount > 0) {
+			val target = existing.firstOrNull()
+			if (target != null) {
+				target.amount += amount
+			} else {
+				ensureLoadoutStorageSpace(player, 1)
+				giveLoadoutItem(player, factory().apply { this.amount = amount })
+			}
+		}
+		if (nextAt == null || now >= nextAt) {
+			upgradeSupplyNextAt[key] = now + intervalMillis
+			if (amount > 0) save()
 		}
 	}
 
@@ -1567,12 +1902,14 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
-	fun handleStationCoreBreak(player: Player, location: Location): Boolean {
-		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return false
-		val team = teamOf(player) ?: return false
-		if (team in eliminatedTeams) return false
-		val station = fixedStations.firstOrNull { it.team != team && it.containsCore(location) } ?: return false
-		CommandMessages.warning(player, "传送站核心不可直接破坏，请在核心区域连续停留 8 秒进行干扰。")
+	fun isFixedStationBlock(location: Location): Boolean {
+		if (!FallenAccessPolicy.isEventInProgress(phase)) return false
+		return fixedStations.any { it.contains(location) }
+	}
+
+	fun rejectStationBlockEdit(player: Player, location: Location): Boolean {
+		if (!isFixedStationBlock(location)) return false
+		CommandMessages.warning(player, "固定传送站不能建造、移动或破坏；请在站点区域内完成使用、干扰或修复。")
 		return true
 	}
 
@@ -1590,7 +1927,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (bedSpawn != null && isSafeRespawn(team, bedSpawn)) {
 			return bedSpawn
 		}
-		return regionsOf(team).randomOrNull()?.randomSpawn()
+		val teamRegions = regionsOf(team)
+		repeat(SAFE_RESPAWN_SEARCH_ATTEMPTS) {
+			val candidate = teamRegions.randomOrNull()?.randomSpawn() ?: return@repeat
+			if (isSafeRespawn(team, candidate)) return candidate
+		}
+		return null
 	}
 
 	fun beginRespawnWait(player: Player, anchor: Location, delaySeconds: Int) {
@@ -1603,6 +1945,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			anchor.z
 		)
 		player.sendMessage(Component.text("复活等待 ${delaySeconds} 秒。等待期间无法移动或参与活动。", NamedTextColor.YELLOW))
+		loadoutRestorePending.remove(player.uniqueId)
+		restorePlayerLoadout(player, grantConsumables = true)
 		save()
 	}
 
@@ -1717,6 +2061,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (team in eliminatedTeams) return
 		val now = System.currentTimeMillis()
 		val duration = if ((teamRespawnBoostUntil[team] ?: 0L) > now) TEAM_RESPAWN_PROTECTION_MILLIS else RESPAWN_PROTECTION_MILLIS
+		loadoutRestorePending.remove(player.uniqueId)
+		restorePlayerLoadout(player, grantConsumables = true)
 		respawnProtectionUntil[player.uniqueId] = now + duration
 		player.sendMessage(Component.text("你获得了 ${duration / 1000L} 秒复活保护。", NamedTextColor.AQUA))
 	}
@@ -1775,9 +2121,35 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		runTickSubsystem("key-alerts", ::processKeyAlerts)
 		runTickSubsystem("stations", ::processStations)
 		runTickSubsystem("team-bonuses", ::processTeamBonuses)
+		runTickSubsystem("player-loadouts", ::enforcePlayerArmor)
+		runTickSubsystem("upgrade-paths", ::processUpgradePaths)
 		runTickSubsystem("eliminations", ::processEliminations)
 		runTickSubsystem("area-boss-bars", ::updateAreaBossBars)
 		runTickSubsystem("scoreboard", ::updateScoreboard)
+	}
+
+	private fun enforcePlayerArmor() {
+		for (player in Bukkit.getOnlinePlayers()) {
+			if (!isLoadoutProtectionActive(player)) continue
+			val inventory = player.inventory
+			val expectedChestKind = if (player.uniqueId in elytraPlayers) LOADOUT_ELYTRA else LOADOUT_CHESTPLATE
+			if (loadoutKind(inventory.helmet) != LOADOUT_HELMET) {
+				inventory.setHelmet(loadoutItem(Material.NETHERITE_HELMET, LOADOUT_HELMET, "不可变动的下界合金头盔"))
+			}
+			if (loadoutKind(inventory.chestplate) != expectedChestKind) {
+				inventory.setChestplate(if (expectedChestKind == LOADOUT_ELYTRA) {
+					loadoutItem(Material.ELYTRA, LOADOUT_ELYTRA, "陷落鞘翅")
+				} else {
+					loadoutItem(Material.NETHERITE_CHESTPLATE, LOADOUT_CHESTPLATE, "不可变动的下界合金胸甲")
+				})
+			}
+			if (loadoutKind(inventory.leggings) != LOADOUT_LEGGINGS) {
+				inventory.setLeggings(loadoutItem(Material.NETHERITE_LEGGINGS, LOADOUT_LEGGINGS, "不可变动的下界合金护腿"))
+			}
+			if (loadoutKind(inventory.boots) != LOADOUT_BOOTS) {
+				inventory.setBoots(loadoutItem(Material.NETHERITE_BOOTS, LOADOUT_BOOTS, "不可变动的下界合金靴子"))
+			}
+		}
 	}
 
 	private fun runTickSubsystem(name: String, action: () -> Unit) {
@@ -2195,6 +2567,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun processCaptures() {
 		if (!phase.allowsKeyCapture()) return
+		val now = System.currentTimeMillis()
 		val seen = HashSet<String>()
 		for (key in keys.values) {
 			if (key.state != FallenKeyState.PLACED) continue
@@ -2205,11 +2578,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				if (hasRespawnProtection(player)) continue
 				if (!key.contains(player.location)) continue
 				val progressKey = "${key.id}:${player.uniqueId}"
-				val seconds = (captureProgress[progressKey] ?: 0L) + 1L
-				captureProgress[progressKey] = seconds
+				val startedAt = captureProgress.computeIfAbsent(progressKey) { now }
+				val elapsed = now - startedAt
+				val requiredMillis = if (hasUpgrade(player, FallenUpgradePath.B, 3)) FallenUpgradeRules.B_CAPTURE_MILLIS else CAPTURE_MILLIS
 				seen.add(progressKey)
-				player.sendActionBar(progressBar("夺取密钥", seconds.toDouble() / CAPTURE_SECONDS, key.ownerTeam.color))
-				if (seconds >= CAPTURE_SECONDS) {
+				player.sendActionBar(progressBar("夺取密钥", elapsed.toDouble() / requiredMillis, key.ownerTeam.color))
+				if (elapsed >= requiredMillis) {
 					capture(player, team, key)
 					return
 				}
@@ -2222,14 +2596,14 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val oldOwner = key.ownerTeam
 		key.ownerTeam = capturingTeam
 		transitionKey(key, FallenKeyState.ITEM)
-		key.type = FallenKeyType.STOLEN
+		if (key.type != FallenKeyType.REFRESH) key.type = FallenKeyType.STOLEN
 		key.holder = null
 		key.selfDestructAtMillis = 0L
 		giveKeyOrDrop(player, key)
 		addScore(capturingTeam, FallenScoreRules.CAPTURE_SCORE)
 		addScore(oldOwner, -FallenScoreRules.CAPTURE_LOSS)
 		captureProgress.clear()
-		recentCaptureUntil[player.uniqueId] = System.currentTimeMillis() + RECENT_CAPTURE_TELEPORT_BLOCK_MILLIS
+		unresolvedCaptures.computeIfAbsent(player.uniqueId) { ConcurrentHashMap.newKeySet() }.add(key.id)
 		doctorBroadcast("${player.name} 从 ${oldOwner.displayName} 夺走了密钥 ${key.shortId()}。让我们看看它能否活着回到另一座城市。")
 		save()
 	}
@@ -2246,7 +2620,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			if (key.selfDestructAtMillis > now) continue
 			val holder = key.holder
 			holder?.let(Bukkit::getPlayer)?.let { removeKeyItem(it, key.id) }
-			holder?.let(recentCaptureUntil::remove)
+			resolveCaptureObligation(key.id)
 			transitionKey(key, FallenKeyState.DESTROYED)
 			addScore(key.ownerTeam, FallenScoreRules.SELF_DESTRUCT_SCORE)
 			addScore(key.originalTeam, -FallenScoreRules.SELF_DESTRUCT_LOSS)
@@ -2261,35 +2635,44 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (startedAtMillis == 0L || phase == FallenPhase.IDLE || phase == FallenPhase.DEPLOYMENT || phase == FallenPhase.ENDED) return
 		val now = System.currentTimeMillis()
 		if (lastRefreshKeyAt == 0L) lastRefreshKeyAt = startedAtMillis
-		if (now - lastRefreshKeyAt < REFRESH_KEY_INTERVAL_MILLIS) return
-		lastRefreshKeyAt += REFRESH_KEY_INTERVAL_MILLIS
-		for (team in FallenTeam.entries) {
-			if (team in eliminatedTeams) continue
-			val key = FallenKey(UUID.randomUUID(), team, team, FallenKeyState.ITEM, FallenKeyType.REFRESH)
-			key.expiresAtMillis = now + REFRESH_KEY_EXPIRY_MILLIS
-			keys[key.id] = key
-			deliverTeamKey(team, key)
-			if (key.holder == null) {
-				if (key.worldName == null) {
-					broadcast(Component.text("${team.displayName} 获得刷新密钥，等待成员上线领取。", team.color))
-				} else {
-					broadcast(Component.text("${team.displayName} 的刷新密钥因成员背包已满掉落在地。", team.color))
+		var changed = false
+		while (now - lastRefreshKeyAt >= REFRESH_KEY_INTERVAL_MILLIS) {
+			val issuedAt = lastRefreshKeyAt + REFRESH_KEY_INTERVAL_MILLIS
+			lastRefreshKeyAt = issuedAt
+			changed = true
+			if (issuedAt + REFRESH_KEY_EXPIRY_MILLIS <= now) continue
+			for (team in FallenTeam.entries) {
+				if (team in eliminatedTeams) continue
+				val key = FallenKey(UUID.randomUUID(), team, team, FallenKeyState.ITEM, FallenKeyType.REFRESH)
+				key.expiresAtMillis = issuedAt + REFRESH_KEY_EXPIRY_MILLIS
+				keys[key.id] = key
+				deliverTeamKey(team, key)
+				if (key.holder == null) {
+					if (key.worldName == null) {
+						broadcast(Component.text("${team.displayName} 获得刷新密钥，等待成员上线领取。", team.color))
+					} else {
+						broadcast(Component.text("${team.displayName} 的刷新密钥因成员背包已满掉落在地。", team.color))
+					}
+					continue
 				}
-				continue
+				key.holder?.let(Bukkit::getPlayer)?.sendMessage(Component.text("这是阵营刷新密钥，将在 2 小时后失效。", NamedTextColor.GOLD))
+				broadcast(Component.text("${team.displayName} 获得了 1 个刷新密钥。", team.color))
 			}
-			key.holder?.let(Bukkit::getPlayer)?.sendMessage(Component.text("这是阵营刷新密钥，请在 2 小时内放置。", NamedTextColor.GOLD))
-			broadcast(Component.text("${team.displayName} 获得了 1 个刷新密钥。", team.color))
 		}
-		save()
+		if (changed) save()
 	}
 
 	private fun processRefreshKeyExpiry() {
 		val now = System.currentTimeMillis()
 		var changed = false
 		for (key in keys.values) {
-			if (key.type != FallenKeyType.REFRESH || key.state != FallenKeyState.ITEM || key.expiresAtMillis == 0L || key.expiresAtMillis > now) continue
+			if (key.state == FallenKeyState.DESTROYED || !key.isExpired(now)) continue
 			key.holder?.let(Bukkit::getPlayer)?.let { removeKeyItem(it, key.id) }
+			removeLoadedPhysicalKeyCopies(key.id)
 			transitionKey(key, FallenKeyState.DESTROYED)
+			key.holder = null
+			key.selfDestructAtMillis = 0L
+			resolveCaptureObligation(key.id)
 			broadcast(Component.text("${key.ownerTeam.displayName} 的刷新密钥 ${key.shortId()} 超时失效。", NamedTextColor.YELLOW))
 			changed = true
 		}
@@ -2392,7 +2775,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				}
 				player.compassTarget = center
 				val distance = player.location.distance(center)
-				if (distance < 20.0) {
+				val revealRadius = if (hasUpgrade(player, FallenUpgradePath.C, 3)) {
+					FallenUpgradeRules.C_PRECISE_REVEAL_RADIUS
+				} else {
+					FallenUpgradeRules.DEFAULT_PRECISE_REVEAL_RADIUS
+				}
+				if (distance < revealRadius) {
 					revealPrecisely(playerTeam, targetTeam, key, center)
 				}
 				item.itemMeta = meta
@@ -2468,6 +2856,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			val enemy = Bukkit.getOnlinePlayers().firstOrNull { player ->
 				val team = teamOf(player)
 				team != null && team != key.ownerTeam && team !in eliminatedTeams
+					&& player.gameMode != GameMode.SPECTATOR && !player.isDead
 					&& !isRespawnWaiting(player)
 					&& player.world == center.world
 					&& player.location.distance(center) <= KEY_ALERT_RADIUS
@@ -2493,29 +2882,27 @@ class FallenGameService(private val plugin: JavaPlugin) {
 					alertStationEnemy(station, team, now)
 				}
 				if (team == station.team) {
-					if (isStationDisrupted(station, now) && station.containsCore(player.location)) {
+					if (isStationDisrupted(station, now) && station.contains(player.location)) {
 						val progressKey = "${station.id}:${player.uniqueId}"
 						seenRepair.add(progressKey)
-						if (!isCombatTagged(player, now)) {
-							val seconds = (stationRepairProgress[progressKey] ?: 0L) + 1L
-							stationRepairProgress[progressKey] = seconds
-							player.sendActionBar(progressBar("修复传送站", seconds.toDouble() / STATION_REPAIR_SECONDS, NamedTextColor.GREEN))
-							if (seconds >= STATION_REPAIR_SECONDS) {
-								stationDisruptedUntil.remove(station.id)
-								stationRepairProgress.remove(progressKey)
-								alertTeam(station.team, Component.text("传送站 ${station.id} 已修复。", NamedTextColor.GREEN))
-								save()
-							}
+						val startedAt = stationRepairProgress.computeIfAbsent(progressKey) { now }
+						val elapsed = now - startedAt
+						player.sendActionBar(progressBar("修复传送站", elapsed.toDouble() / STATION_REPAIR_MILLIS, NamedTextColor.GREEN))
+						if (elapsed >= STATION_REPAIR_MILLIS) {
+							stationDisruptedUntil.remove(station.id)
+							stationRepairProgress.remove(progressKey)
+							alertTeam(station.team, Component.text("传送站 ${station.id} 已修复。", NamedTextColor.GREEN))
+							save()
 						}
 					} else if (!isStationDisrupted(station, now) && station.contains(player.location)) {
 						val progressKey = "${station.id}:${player.uniqueId}"
 						seenUse.add(progressKey)
 						val denyReason = stationDenyReason(player, station, now)
 						if (denyReason == null) {
-							val seconds = (stationUseProgress[progressKey] ?: 0L) + 1L
-							stationUseProgress[progressKey] = seconds
-							player.sendActionBar(progressBar("传送准备", seconds.toDouble() / STATION_USE_SECONDS, station.team.color))
-							if (seconds >= STATION_USE_SECONDS) {
+							val startedAt = stationUseProgress.computeIfAbsent(progressKey) { now }
+							val elapsed = now - startedAt
+							player.sendActionBar(progressBar("传送准备", elapsed.toDouble() / STATION_USE_MILLIS, station.team.color))
+							if (elapsed >= STATION_USE_MILLIS) {
 								stationUseProgress.remove(progressKey)
 								teleportByStation(player, station, now)
 							}
@@ -2524,22 +2911,21 @@ class FallenGameService(private val plugin: JavaPlugin) {
 							notifyStationDenied(player, station, denyReason, now)
 						}
 					}
-				} else if (station.containsCore(player.location) && !isStationDisrupted(station, now)) {
+				} else if (station.contains(player.location) && !isStationDisrupted(station, now)) {
 					val progressKey = "${station.id}:${player.uniqueId}"
 					seenDisrupt.add(progressKey)
-					if (!isCombatTagged(player, now)) {
-						val seconds = (stationDisruptProgress[progressKey] ?: 0L) + 1L
-						stationDisruptProgress[progressKey] = seconds
-						player.sendActionBar(progressBar("干扰传送站", seconds.toDouble() / STATION_DISRUPT_SECONDS, NamedTextColor.RED))
-						if (seconds == 1L) {
-							alertTeam(station.team, Component.text("${team.displayName} 的 ${player.name} 正在干扰传送站 ${station.id}。", NamedTextColor.YELLOW))
-						}
-						if (seconds >= STATION_DISRUPT_SECONDS) {
-							stationDisruptedUntil[station.id] = now + STATION_DISRUPT_MILLIS
-							stationDisruptProgress.remove(progressKey)
-							alertTeam(station.team, Component.text("传送站 ${station.id} 已被干扰 10 分钟。", NamedTextColor.RED))
-							save()
-						}
+					val startedAt = stationDisruptProgress.computeIfAbsent(progressKey) { now }
+					val elapsed = now - startedAt
+					val requiredMillis = if (hasUpgrade(player, FallenUpgradePath.B, 3)) FallenUpgradeRules.B_STATION_DISRUPT_MILLIS else STATION_DISRUPT_MILLIS_REQUIRED
+					player.sendActionBar(progressBar("干扰传送站", elapsed.toDouble() / requiredMillis, NamedTextColor.RED))
+					if (startedAt == now) {
+						alertTeam(station.team, Component.text("${team.displayName} 的 ${player.name} 正在干扰传送站 ${station.id}。", NamedTextColor.YELLOW))
+					}
+					if (elapsed >= requiredMillis) {
+						stationDisruptedUntil[station.id] = now + STATION_DISRUPT_MILLIS
+						stationDisruptProgress.remove(progressKey)
+						alertTeam(station.team, Component.text("传送站 ${station.id} 已被干扰 10 分钟。", NamedTextColor.RED))
+						save()
 					}
 				}
 			}
@@ -2651,8 +3037,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (cooldown > now) return "传送站冷却中，剩余 ${formatDuration(cooldown - now)}。"
 		if (isCombatTagged(player, now)) return "战斗状态下不能使用传送站。"
 		if (hasKeyItem(player)) return "携带密钥时不能使用传送站。"
-		val capturedUntil = recentCaptureUntil[player.uniqueId] ?: 0L
-		if (capturedUntil > now) return "刚夺取密钥后的 10 分钟内不能使用传送站。"
+		if (hasUnresolvedCapture(player.uniqueId)) return "夺取的密钥尚未放置或销毁，不能使用传送站。"
 		if (nearEnemyPlacedKey(player, station.team, 50.0)) return "距离敌方密钥过近，不能使用传送站。"
 		if (station.links.none { linkedStation(it)?.let { target -> target.team == station.team && !isStationDisrupted(target, now) } == true }) {
 			return "传送站没有可用的连接目标。"
@@ -2760,10 +3145,28 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private fun shouldDropKeysOnQuit(player: Player): Boolean {
 		val now = System.currentTimeMillis()
 		if (isCombatTagged(player, now)) return true
-		if ((recentCaptureUntil[player.uniqueId] ?: 0L) > now) return true
+		if (hasUnresolvedCapture(player.uniqueId)) return true
 		return player.inventory.contents.filterNotNull()
 			.mapNotNull { keyId(it)?.let(keys::get) }
 			.any { it.type == FallenKeyType.STOLEN || it.state == FallenKeyState.SELF_DESTRUCTING }
+	}
+
+	private fun resolveCaptureObligation(keyId: UUID) {
+		for ((playerId, keyIds) in unresolvedCaptures) {
+			keyIds.remove(keyId)
+			if (keyIds.isEmpty()) unresolvedCaptures.remove(playerId, keyIds)
+		}
+	}
+
+	private fun hasUnresolvedCapture(playerId: UUID): Boolean {
+		val keyIds = unresolvedCaptures[playerId] ?: return false
+		keyIds.removeIf { keyId ->
+			val state = keys[keyId]?.state
+			state == null || state == FallenKeyState.PLACED || state == FallenKeyState.DESTROYED
+		}
+		if (keyIds.isNotEmpty()) return true
+		unresolvedCaptures.remove(playerId, keyIds)
+		return false
 	}
 
 	private fun nearEnemyPlacedKey(player: Player, team: FallenTeam, radius: Double): Boolean {
@@ -2956,9 +3359,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun isEffectiveKeyForSurvival(key: FallenKey): Boolean {
-		if (key.state != FallenKeyState.PLACED && key.state != FallenKeyState.ITEM && key.state != FallenKeyState.SELF_DESTRUCTING) return false
-		if (key.type == FallenKeyType.REFRESH && remainingMillis() <= 10 * 60 * 1000L) return false
-		return true
+		return key.isEffectiveForSurvival(System.currentTimeMillis())
 	}
 
 	private fun winnerTeams(): List<FallenTeam> {
@@ -3214,6 +3615,31 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				deathCounts[UUID.fromString(uuid)] = section.getInt(uuid)
 			}
 		}
+		config.getStringList("loadout-initialized-players").mapNotNullTo(loadoutInitializedPlayers) {
+			runCatching { UUID.fromString(it) }.getOrNull()
+		}
+		config.getStringList("loadout-restore-pending").mapNotNullTo(loadoutRestorePending) {
+			runCatching { UUID.fromString(it) }.getOrNull()
+		}
+		config.getStringList("elytra-players").mapNotNullTo(elytraPlayers) {
+			runCatching { UUID.fromString(it) }.getOrNull()
+		}
+		config.getConfigurationSection("gear-switch-available-at")?.let { section ->
+			for (uuid in section.getKeys(false)) {
+				val playerId = runCatching { UUID.fromString(uuid) }.getOrNull() ?: continue
+				gearSwitchAvailableAt[playerId] = section.getLong(uuid)
+			}
+		}
+		config.getConfigurationSection("upgrade-paths")?.let { section ->
+			for (uuid in section.getKeys(false)) {
+				val playerId = runCatching { UUID.fromString(uuid) }.getOrNull() ?: continue
+				val path = runCatching { FallenUpgradePath.parse(section.getString(uuid).orEmpty()) }.getOrNull() ?: continue
+				upgradePaths[playerId] = path
+			}
+		}
+		config.getConfigurationSection("upgrade-supply-next-at")?.let { section ->
+			for (key in section.getKeys(false)) upgradeSupplyNextAt[key] = section.getLong(key)
+		}
 		config.getConfigurationSection("respawn-waits")?.let { section ->
 			for (uuid in section.getKeys(false)) {
 				val waitSection = section.getConfigurationSection(uuid) ?: continue
@@ -3226,6 +3652,15 @@ class FallenGameService(private val plugin: JavaPlugin) {
 					waitSection.getDouble("y"),
 					waitSection.getDouble("z")
 				)
+			}
+		}
+		config.getConfigurationSection("unresolved-captures")?.let { section ->
+			for (uuid in section.getKeys(false)) {
+				val playerId = runCatching { UUID.fromString(uuid) }.getOrNull() ?: continue
+				section.getStringList(uuid)
+					.mapNotNullTo(unresolvedCaptures.computeIfAbsent(playerId) { ConcurrentHashMap.newKeySet() }) {
+						runCatching { UUID.fromString(it) }.getOrNull()
+					}
 			}
 		}
 		placedScoringBlocks.addAll(config.getStringList("placed-scoring-blocks"))
@@ -3331,12 +3766,21 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		for ((playerId, team) in playerTeams) config["players.$playerId"] = team.name
 		config["deployed-players"] = deployedPlayers.map(UUID::toString)
 		for ((playerId, deaths) in deathCounts) config["deaths.$playerId"] = deaths
+		config["loadout-initialized-players"] = loadoutInitializedPlayers.map(UUID::toString)
+		config["loadout-restore-pending"] = loadoutRestorePending.map(UUID::toString)
+		config["elytra-players"] = elytraPlayers.map(UUID::toString)
+		for ((playerId, availableAt) in gearSwitchAvailableAt) config["gear-switch-available-at.$playerId"] = availableAt
+		for ((playerId, path) in upgradePaths) config["upgrade-paths.$playerId"] = path.name
+		for ((key, nextAt) in upgradeSupplyNextAt) config["upgrade-supply-next-at.$key"] = nextAt
 		for ((playerId, wait) in respawnWaits) {
 			config["respawn-waits.$playerId.until"] = wait.untilMillis
 			config["respawn-waits.$playerId.world"] = wait.worldName
 			config["respawn-waits.$playerId.x"] = wait.x
 			config["respawn-waits.$playerId.y"] = wait.y
 			config["respawn-waits.$playerId.z"] = wait.z
+		}
+		for ((playerId, keyIds) in unresolvedCaptures) {
+			config["unresolved-captures.$playerId"] = keyIds.map(UUID::toString)
 		}
 		config["placed-scoring-blocks"] = placedScoringBlocks.toList()
 		config["eliminated"] = eliminatedTeams.map { it.name }
@@ -3392,12 +3836,33 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	companion object {
+		private const val LOADOUT_HELMET = "helmet"
+		private const val LOADOUT_CHESTPLATE = "chestplate"
+		private const val LOADOUT_LEGGINGS = "leggings"
+		private const val LOADOUT_BOOTS = "boots"
+		private const val LOADOUT_ELYTRA = "elytra"
+		private const val LOADOUT_SWORD = "sword"
+		private const val LOADOUT_PICKAXE = "pickaxe"
+		private const val LOADOUT_PEARLS = "pearls"
+		private const val LOADOUT_HEALING = "upgrade_healing"
+		private const val LOADOUT_TNT = "upgrade_tnt"
+		private const val LOADOUT_FIREWORK = "upgrade_firework"
+		private val CORE_LOADOUT_KINDS = setOf(
+			LOADOUT_HELMET,
+			LOADOUT_CHESTPLATE,
+			LOADOUT_LEGGINGS,
+			LOADOUT_BOOTS,
+			LOADOUT_ELYTRA,
+			LOADOUT_SWORD,
+			LOADOUT_PICKAXE,
+			LOADOUT_PEARLS
+		)
 		private const val ACCELERATION_HARNESS_COST = 700
 		private const val ACCELERATION_HARNESS_FLYING_SPEED = 0.15
 		private const val ACTIVITY_STATUS_WARNING_INTERVAL_MILLIS = 60_000L
 		private const val PERSISTENCE_INTERVAL_TICKS = 20L
 		private const val ALLOY_BULLET_BASE_DAMAGE = 2.0
-		private const val ALLOY_BULLET_SPEED_BLOCKS_PER_TICK = 5.0
+		private const val ALLOY_BULLET_SPEED_BLOCKS_PER_TICK = 20.0
 		private val KEY_SHAPE_PIXELS = listOf(
 			-4 to 1, -4 to 2, -3 to 3, -2 to 3, -1 to 2, -1 to 1, -2 to 0, -3 to 0,
 			-1 to 1, 0 to 1, 1 to 1, 2 to 1, 3 to 1, 4 to 1, 5 to 1,
@@ -3414,11 +3879,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private val EVENT_START_MILLIS: Long = FallenAccessPolicy.eventStartsAt.toEpochMilli()
 		private const val OVERWORLD_NAME = "world"
 		private const val INITIAL_KEYS_PER_TEAM = 5
-		private const val CAPTURE_SECONDS = 6L
+		private const val CAPTURE_MILLIS = 6 * 1000L
 		private const val DROP_CONFIRM_MILLIS = 5_000L
 		private const val DROPPED_KEY_RECONCILE_INTERVAL_MILLIS = 5_000L
 		private const val SELF_DESTRUCT_MILLIS = 10 * 60 * 1000L
 		private const val RESPAWN_PROTECTION_MILLIS = 8_000L
+		private const val SAFE_RESPAWN_SEARCH_ATTEMPTS = 16
 		private const val RESPAWN_WAIT_MOVEMENT_EPSILON_SQUARED = 0.0001
 		private const val TICK_FAILURE_WARNING_INTERVAL_MILLIS = 60_000L
 		private const val PLACED_KEY_SCORE_INTERVAL_MILLIS = 10 * 60 * 1000L
@@ -3451,16 +3917,15 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val INTERNAL_GAME_MODE_CHANGE_WINDOW_MILLIS = 2 * 1000L
 		private const val JAMMED_REVEAL_NOTICE_COOLDOWN_MILLIS = 30 * 1000L
 		private const val SCOREBOARD_OBJECTIVE = "fallen_status"
-		private const val STATION_USE_SECONDS = 3L
-		private const val STATION_DISRUPT_SECONDS = 8L
-		private const val STATION_REPAIR_SECONDS = 15L
+		private const val STATION_USE_MILLIS = 3 * 1000L
+		private const val STATION_DISRUPT_MILLIS_REQUIRED = 8 * 1000L
+		private const val STATION_REPAIR_MILLIS = 15 * 1000L
 		private const val STATION_DISRUPT_MILLIS = 10 * 60 * 1000L
 		private const val STATION_COOLDOWN_MILLIS = 60 * 1000L
 		private const val STATION_PROTECTION_MILLIS = 3 * 1000L
 		private const val STATION_ALERT_COOLDOWN_MILLIS = 60 * 1000L
 		private const val STATION_DENY_COOLDOWN_MILLIS = 5 * 1000L
 		private const val COMBAT_TAG_MILLIS = 10 * 1000L
-		private const val RECENT_CAPTURE_TELEPORT_BLOCK_MILLIS = 10 * 60 * 1000L
 		private const val KEY_VISUAL_RADIUS = 80.0
 		private const val STATION_VISUAL_RADIUS = 80.0
 		private const val TRACKING_VISUAL_RADIUS = 96.0

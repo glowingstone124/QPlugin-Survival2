@@ -11,7 +11,6 @@ object FallenAccessPolicy {
 	val eventStartsAt: Instant = LocalDateTime.of(2026, 10, 1, 14, 0)
 		.atZone(eventZone)
 		.toInstant()
-
 	private val curfewStartsAt = LocalTime.of(1, 0)
 	private val curfewEndsAt = LocalTime.of(7, 0)
 
@@ -25,10 +24,7 @@ object FallenAccessPolicy {
 			|| phase == FallenPhase.OVERTIME
 	}
 
-	fun isCurfew(
-		phase: FallenPhase,
-		now: Instant = Instant.now()
-	): Boolean {
+	fun isCurfew(phase: FallenPhase, now: Instant = Instant.now()): Boolean {
 		if (!isEventInProgress(phase)) return false
 		val localTime = now.atZone(eventZone).toLocalTime()
 		return !localTime.isBefore(curfewStartsAt) && localTime.isBefore(curfewEndsAt)

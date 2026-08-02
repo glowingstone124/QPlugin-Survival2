@@ -8,6 +8,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
+import org.bukkit.event.block.BlockExplodeEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
@@ -27,6 +28,7 @@ import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.inventory.InventoryMoveItemEvent
 import org.bukkit.event.inventory.InventoryPickupItemEvent
+import org.bukkit.event.inventory.InventoryType
 import org.bukkit.event.inventory.ClickType
 import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent
@@ -35,6 +37,7 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent
 import org.bukkit.event.player.PlayerGameModeChangeEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
+import org.bukkit.event.player.PlayerItemDamageEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
@@ -59,7 +62,14 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	fun onDestructiveEntityExplode(event: EntityExplodeEvent) {
 		if (isRestrictedDestructiveSource(event.entity)) {
 			event.isCancelled = true
+			return
 		}
+		event.blockList().removeIf { service.isFixedStationBlock(it.location) }
+	}
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun onBlockExplode(event: BlockExplodeEvent) {
+		event.blockList().removeIf { service.isFixedStationBlock(it.location) }
 	}
 
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -102,6 +112,10 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			event.isCancelled = true
 			return
 		}
+		if (service.isLoadoutProtectionActive(event.player) && event.item?.let { service.isArmorMaterial(it.type) } == true) {
+			event.isCancelled = true
+			return
+		}
 		if ((event.action == Action.RIGHT_CLICK_AIR || event.action == Action.RIGHT_CLICK_BLOCK)
 			&& service.fireAlloyBullet(event.player, event.item)) {
 			event.isCancelled = true
@@ -126,6 +140,11 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			return
 		}
 		val item = event.itemDrop.itemStack
+		if (service.isProtectedLoadoutItem(item)) {
+			event.isCancelled = true
+			CommandMessages.warning(event.player, "初始装备不可丢弃。")
+			return
+		}
 		if (service.requestSelfDestruct(event.player, item)) {
 			event.isCancelled = true
 		}
@@ -151,8 +170,16 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	@EventHandler
 	fun onPlayerDeath(event: PlayerDeathEvent) {
 		event.drops.removeIf { service.isFallenCompass(it) }
+		val protectedItems = event.drops.filter { service.isProtectedLoadoutItem(it) }
+		event.itemsToKeep.addAll(protectedItems)
+		event.drops.removeAll(protectedItems.toSet())
 		service.handleDeath(event.player)
 		service.recordKill(event.player, event.player.killer)
+	}
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun onPlayerItemDamage(event: PlayerItemDamageEvent) {
+		if (service.isProtectedLoadoutItem(event.item)) event.isCancelled = true
 	}
 
 	@EventHandler
@@ -182,7 +209,7 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	@EventHandler(ignoreCancelled = true)
 	fun onEntityDamage(event: EntityDamageEvent) {
 		val item = event.entity as? Item
-		if (item != null && service.isLiveKeyItem(item.itemStack)) {
+		if (item != null && (service.isLiveKeyItem(item.itemStack) || service.isProtectedLoadoutItem(item.itemStack))) {
 			event.isCancelled = true
 			return
 		}
@@ -197,6 +224,9 @@ class FallenListener(private val service: FallenGameService) : Listener {
 		}
 		if (isExplosionDamage(event) && service.applyBlastProtection(player)) {
 			event.damage = event.damage * 0.4
+		}
+		if (isExplosionDamage(event)) {
+			event.damage = event.damage * service.explosionDamageMultiplier(player)
 		}
 	}
 
@@ -218,7 +248,8 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			return
 		}
 		service.cancelRespawnProtection(attacker)
-		service.recordDamage(attacker, target, event.finalDamage)
+		val actualDamage = minOf(event.finalDamage, target.health + target.absorptionAmount)
+		service.recordDamage(attacker, target, actualDamage)
 	}
 
 	@EventHandler(ignoreCancelled = true)
@@ -237,6 +268,10 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			event.isCancelled = true
 			return
 		}
+		if (service.rejectStationBlockEdit(event.player, event.block.location)) {
+			event.isCancelled = true
+			return
+		}
 		service.recordBlockPlace(event.block.location, event.block.type)
 	}
 
@@ -246,7 +281,7 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			event.isCancelled = true
 			return
 		}
-		if (service.handleStationCoreBreak(event.player, event.block.location)) {
+		if (service.rejectStationBlockEdit(event.player, event.block.location)) {
 			event.isCancelled = true
 			return
 		}
@@ -279,6 +314,11 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	@EventHandler(ignoreCancelled = true)
 	fun onEntityPickupItem(event: EntityPickupItemEvent) {
 		val isKey = service.isKeyItem(event.item.itemStack)
+		if (service.isProtectedLoadoutItem(event.item.itemStack)) {
+			event.isCancelled = true
+			event.item.remove()
+			return
+		}
 		val player = event.entity as? Player
 		if (player == null) {
 			if (isKey) event.isCancelled = true
@@ -309,7 +349,8 @@ class FallenListener(private val service: FallenGameService) : Listener {
 
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	fun onArmorStandManipulate(event: PlayerArmorStandManipulateEvent) {
-		if (service.isKeyItem(event.playerItem) || service.isKeyItem(event.armorStandItem)) {
+		if (service.isKeyItem(event.playerItem) || service.isKeyItem(event.armorStandItem)
+			|| service.isProtectedLoadoutItem(event.playerItem) || service.isProtectedLoadoutItem(event.armorStandItem)) {
 			event.isCancelled = true
 			CommandMessages.warning(event.player, "陷落密钥不能交给其他实体。")
 		}
@@ -318,28 +359,42 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	fun onInventoryClick(event: InventoryClickEvent) {
 		val player = event.whoClicked as? Player ?: return
+		if (service.handlePlayerMenuClick(player, event.view.topInventory, event.rawSlot, event.currentItem)) {
+			event.isCancelled = true
+			return
+		}
 		if (denyRespawnWaitAction(player)) {
 			event.isCancelled = true
 			return
 		}
+		val armorLocked = service.isLoadoutProtectionActive(player) && (
+			event.slotType == InventoryType.SlotType.ARMOR
+				|| (event.isShiftClick && event.currentItem?.let { service.isArmorMaterial(it.type) } == true)
+		)
+		if (armorLocked) {
+			event.isCancelled = true
+			CommandMessages.warning(player, "活动护甲不可手动卸下或替换；请使用 /fallen gear 切换胸甲。")
+			return
+		}
 		val top = event.view.topInventory
 		val clickedTop = event.rawSlot in 0 until top.size
-		val keyInTop = clickedTop && service.isKeyItem(event.currentItem)
-		val cursorIntoTop = clickedTop && service.isKeyItem(event.cursor)
-		val shiftIntoTop = event.isShiftClick && !clickedTop && service.isKeyItem(event.currentItem)
+		val protected: (org.bukkit.inventory.ItemStack?) -> Boolean = { service.isKeyItem(it) || service.isProtectedLoadoutItem(it) }
+		val keyInTop = clickedTop && protected(event.currentItem)
+		val cursorIntoTop = clickedTop && protected(event.cursor)
+		val shiftIntoTop = event.isShiftClick && !clickedTop && protected(event.currentItem)
 		val hotbarIntoTop = clickedTop
 			&& event.hotbarButton >= 0
-			&& service.isKeyItem(player.inventory.getItem(event.hotbarButton))
+			&& protected(player.inventory.getItem(event.hotbarButton))
 		val offhandIntoTop = clickedTop
 			&& event.click == ClickType.SWAP_OFFHAND
-			&& service.isKeyItem(player.inventory.itemInOffHand)
+			&& protected(player.inventory.itemInOffHand)
 		val keyIntoPortableContainer = !clickedTop && (
-			(service.isKeyItem(event.cursor) && isPortableContainer(event.currentItem))
-				|| (service.isKeyItem(event.currentItem) && isPortableContainer(event.cursor))
+			(protected(event.cursor) && isPortableContainer(event.currentItem))
+				|| (protected(event.currentItem) && isPortableContainer(event.cursor))
 			)
 		if (!keyInTop && !cursorIntoTop && !shiftIntoTop && !hotbarIntoTop && !offhandIntoTop && !keyIntoPortableContainer) return
 		event.isCancelled = true
-		CommandMessages.warning(player, "陷落密钥不能进入任何容器。")
+		CommandMessages.warning(player, "陷落密钥和初始装备不能进入任何容器。")
 		if (keyInTop) {
 			player.server.scheduler.runTask(vip.qoriginal.quantumplugin.QuantumPlugin.getInstance(), Runnable {
 				service.evacuateKeyItemsFromContainer(top, top.location ?: player.location)
@@ -349,7 +404,17 @@ class FallenListener(private val service: FallenGameService) : Listener {
 
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	fun onInventoryDrag(event: InventoryDragEvent) {
-		if (!service.isKeyItem(event.oldCursor)) return
+		val player = event.whoClicked as? Player ?: return
+		if (service.isPlayerMenu(event.view.topInventory)) {
+			event.isCancelled = true
+			return
+		}
+		if (service.isLoadoutProtectionActive(player)
+			&& event.rawSlots.any { event.view.getSlotType(it) == InventoryType.SlotType.ARMOR }) {
+			event.isCancelled = true
+			return
+		}
+		if (!service.isKeyItem(event.oldCursor) && !service.isProtectedLoadoutItem(event.oldCursor)) return
 		val topSize = event.view.topInventory.size
 		if (event.rawSlots.none { it < topSize }) return
 		event.isCancelled = true
@@ -360,21 +425,21 @@ class FallenListener(private val service: FallenGameService) : Listener {
 
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	fun onInventoryMoveItem(event: InventoryMoveItemEvent) {
-		if (service.isKeyItem(event.item)) {
+		if (service.isKeyItem(event.item) || service.isProtectedLoadoutItem(event.item)) {
 			event.isCancelled = true
 		}
 	}
 
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	fun onInventoryPickupItem(event: InventoryPickupItemEvent) {
-		if (service.isKeyItem(event.item.itemStack)) {
+		if (service.isKeyItem(event.item.itemStack) || service.isProtectedLoadoutItem(event.item.itemStack)) {
 			event.isCancelled = true
 		}
 	}
 
 	@EventHandler(ignoreCancelled = true)
 	fun onItemDespawn(event: ItemDespawnEvent) {
-		if (service.isLiveKeyItem(event.entity.itemStack)) {
+		if (service.isLiveKeyItem(event.entity.itemStack) || service.isProtectedLoadoutItem(event.entity.itemStack)) {
 			event.isCancelled = true
 		}
 	}

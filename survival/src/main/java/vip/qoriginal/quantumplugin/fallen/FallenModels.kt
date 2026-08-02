@@ -14,6 +14,7 @@ const val FALLEN_KEY_DEPTH = 5
 const val FALLEN_STATION_WIDTH = 6
 const val FALLEN_STATION_HEIGHT = 3
 const val FALLEN_STATION_DEPTH = 6
+const val FALLEN_REFRESH_KEY_EXPIRY_WARNING_MILLIS = 10 * 60 * 1000L
 
 enum class FallenTeam(val displayName: String, val color: NamedTextColor) {
 	A("A 阵营", NamedTextColor.DARK_RED),
@@ -205,8 +206,22 @@ data class FallenKey(
 		z = location.blockZ
 		holder = null
 		selfDestructAtMillis = 0L
-		expiresAtMillis = 0L
+		if (type != FallenKeyType.REFRESH) expiresAtMillis = 0L
 		state = FallenKeyState.PLACED
+	}
+
+	fun isExpired(nowMillis: Long): Boolean {
+		return type == FallenKeyType.REFRESH
+			&& expiresAtMillis > 0L
+			&& expiresAtMillis <= nowMillis
+	}
+
+	fun isEffectiveForSurvival(nowMillis: Long): Boolean {
+		if (state != FallenKeyState.PLACED && state != FallenKeyState.ITEM && state != FallenKeyState.SELF_DESTRUCTING) {
+			return false
+		}
+		if (type != FallenKeyType.REFRESH || expiresAtMillis == 0L) return true
+		return expiresAtMillis - nowMillis > FALLEN_REFRESH_KEY_EXPIRY_WARNING_MILLIS
 	}
 
 	fun minLocation(): Location? {
