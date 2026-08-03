@@ -33,6 +33,7 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				"gear" -> gear(sender, args)
 				"upgrade" -> upgrade(sender, args)
 				"menu" -> menu(sender)
+				"finale" -> finale(sender, args)
 				"admin" -> admin(sender, args)
 				else -> {
 					CommandMessages.warning(sender, "未知操作: ${args[0]}")
@@ -73,6 +74,8 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				.append(line("$root menu", "打开实验室可视化终端"))
 				.appendNewline()
 				.append(line("$root score [add|set] <A|B|C> <amount>", "查看或调整积分"))
+				.appendNewline()
+				.append(line("$root finale <test <A|B|C>|cancel>", "预览或取消胜利终幕动画"))
 				.appendNewline()
 				.append(line("$root admin <eliminate|voidkey> ...", "管理员裁定工具"))
 		)
@@ -260,6 +263,32 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 	private fun menu(sender: CommandSender) {
 		val player = sender as? Player ?: throw IllegalArgumentException("只有玩家可以打开实验室终端。")
 		service.openPlayerMenu(player)
+	}
+
+	private fun finale(sender: CommandSender, args: Array<out String>) {
+		requireAdmin(sender)
+		require(args.size >= 2) { "用法: /fallen finale <test A|B|C|cancel>" }
+		when (args[1].lowercase()) {
+			"test" -> {
+				require(args.size == 3) { "用法: /fallen finale test <A|B|C>" }
+				val winner = FallenTeam.parse(args[2])
+				require(service.previewVictoryFinale(winner)) { "终幕已经在播放，或当前没有在线玩家。" }
+				val winnerCount = Bukkit.getOnlinePlayers().count { service.teamOf(it) == winner }
+				CommandMessages.success(sender, "正在以 ${winner.displayName} 为胜方预览终幕；不会结算或修改活动阶段。")
+				if (winnerCount == 0) {
+					CommandMessages.warning(sender, "当前没有在线的 ${winner.displayName} 玩家，因此本次预览无人获得胜方失明效果。")
+				}
+			}
+			"cancel" -> {
+				require(args.size == 2) { "用法: /fallen finale cancel" }
+				if (service.cancelVictoryFinale()) {
+					CommandMessages.success(sender, "终幕预览已取消；若区块已开始消失，参与者会断开一次以在重连时恢复地形。")
+				} else {
+					CommandMessages.warning(sender, "当前没有正在播放的终幕。")
+				}
+			}
+			else -> throw IllegalArgumentException("用法: /fallen finale <test A|B|C|cancel>")
+		}
 	}
 
 	private fun admin(sender: CommandSender, args: Array<out String>) {

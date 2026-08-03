@@ -3,6 +3,8 @@ package vip.qoriginal.quantumplugin.fallen
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
+import net.kyori.adventure.text.format.TextDecoration
+import net.kyori.adventure.title.Title
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.Color
@@ -10,6 +12,7 @@ import org.bukkit.Chunk
 import org.bukkit.Difficulty
 import org.bukkit.GameMode
 import org.bukkit.GameRules
+import org.bukkit.HeightMap
 import org.bukkit.enchantments.Enchantment
 import org.bukkit.inventory.ItemFlag
 import org.bukkit.Location
@@ -25,6 +28,7 @@ import org.bukkit.boss.BossBar
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.AbstractArrow
 import org.bukkit.entity.Arrow
+import org.bukkit.entity.FallingBlock
 import org.bukkit.entity.Player
 import org.bukkit.entity.Item
 import org.bukkit.inventory.Inventory
@@ -62,6 +66,7 @@ import java.util.EnumMap
 import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
 import kotlin.math.PI
@@ -75,6 +80,15 @@ private class FallenPlayerMenuHolder(val pendingPath: FallenUpgradePath? = null)
 	override fun getInventory(): Inventory = backingInventory
 }
 
+private data class FallenFinalePlayerState(
+	val gravity: Boolean,
+	val allowFlight: Boolean,
+	val flying: Boolean,
+	val invulnerable: Boolean,
+	val walkSpeed: Float,
+	val flySpeed: Float
+)
+
 class FallenGameService(private val plugin: JavaPlugin) {
 	private val keyIdKey = NamespacedKey(plugin, "fallen_key_id")
 	private val compassOwnerTeamKey = NamespacedKey(plugin, "fallen_compass_owner_team")
@@ -84,6 +98,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val compassNextRefreshAtKey = NamespacedKey(plugin, "fallen_compass_next_refresh_at")
 	private val forbiddenCustomTntKey = NamespacedKey(plugin, "custom_tnt")
 	private val forbiddenBuffSnowballKey = NamespacedKey(plugin, "buff_snowball")
+	private val itemAnomalyKey = NamespacedKey(plugin, "fallen_label_anomaly")
 	private val territorySpeedBonusKey = NamespacedKey(plugin, "fallen_territory_speed_bonus")
 	private val miningSpeedBonusKey = NamespacedKey(plugin, "fallen_mining_speed_bonus")
 	private val upgradeHealthBonusKey = NamespacedKey(plugin, "fallen_upgrade_health_bonus")
@@ -131,6 +146,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val activeTracks = ConcurrentHashMap<UUID, ActiveTrack>()
 	private val jammedRevealNoticeUntil = ConcurrentHashMap<String, Long>()
 	private val elytraSamples = ConcurrentHashMap<UUID, ElytraSample>()
+	private val exploredFlightChunks = ConcurrentHashMap<UUID, MutableSet<String>>()
+	private val flightRewardLedgers = ConcurrentHashMap<UUID, FlightRewardLedger>()
+	private val laboratoryTnt = ConcurrentHashMap<String, LaboratoryTntPlacement>()
+	private val combatLogoutPending = ConcurrentHashMap.newKeySet<UUID>()
 	private val loadoutInitializedPlayers = ConcurrentHashMap.newKeySet<UUID>()
 	private val loadoutRestorePending = ConcurrentHashMap.newKeySet<UUID>()
 	private val elytraPlayers = ConcurrentHashMap.newKeySet<UUID>()
@@ -187,7 +206,16 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private var droppedKeyReconcileScheduled = false
 	private var startedAtMillis = 0L
 	private var endedAtMillis = 0L
+	private var effectiveGameTimeMillis = 0L
+	private var effectiveClockAnchorWallMillis = 0L
+	private var curfewCleanupMarker: String? = null
 	private var visualFrame = 0
+	private var lastKillCommentAt = 0L
+	private var finaleTask: BukkitTask? = null
+	private var finaleChunksForgotten = false
+	private val finaleLockedPlayers = ConcurrentHashMap.newKeySet<UUID>()
+	private val finalePlayerStates = ConcurrentHashMap<UUID, FallenFinalePlayerState>()
+	private val finaleDebrisEntities = ConcurrentHashMap.newKeySet<UUID>()
 
 	@Volatile
 	var phase: FallenPhase = FallenPhase.IDLE
@@ -202,6 +230,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun start() {
 		load()
+		effectiveClockAnchorWallMillis = System.currentTimeMillis()
 		registerAlloyBulletRecipe()
 		normalizeScheduledTimeline()
 		enforceLoginAccess()
@@ -229,6 +258,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun stop() {
+		advanceEffectiveClock()
+		finaleTask?.cancel()
+		finaleTask = null
+		cleanupFinaleDebris()
+		restoreFinalePlayers()
+		finaleChunksForgotten = false
 		Bukkit.removeRecipe(alloyBulletRecipeKey)
 		clearTeamBonuses()
 		tickTask?.cancel()
@@ -272,19 +307,24 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 		startedAtMillis = EVENT_START_MILLIS
 		endedAtMillis = 0L
-		lastPlacedKeyScoreAt = EVENT_START_MILLIS + DEPLOYMENT_MILLIS
-		lastRefreshKeyAt = EVENT_START_MILLIS
+		effectiveGameTimeMillis = 0L
+		effectiveClockAnchorWallMillis = System.currentTimeMillis()
+		lastPlacedKeyScoreAt = DEPLOYMENT_MILLIS
+		lastRefreshKeyAt = 0L
 		announcedMilestones.clear()
 		dangerSince.clear()
 		eliminatedTeams.clear()
 		respawnWaits.clear()
+		combatLogoutPending.clear()
+		exploredFlightChunks.clear()
+		flightRewardLedgers.clear()
 		deployedPlayers.clear()
 		phase = FallenPhase.DEPLOYMENT
 		applyWorldRules()
 		removeRestrictedDestructiveEntities()
 		ensureInitialKeys()
 		broadcast(Component.text("《陷落》活动开始。部署阶段持续 2 小时。", NamedTextColor.GOLD))
-		doctorBroadcast("欢迎入场，各位受试者。请妥善安置十五枚密钥——我会记录你们的每一次选择。")
+		doctorBroadcast("欢迎入场，各位受试者。十五枚密钥意味着十五次证明判断力的机会；统计上，总该有人用对一次。")
 		save()
 		validateOnlinePlayers()
 	}
@@ -296,12 +336,356 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val winners = winnerTeams()
 		val winnerText = if (winners.isEmpty()) "无胜者" else winners.joinToString("、") { it.displayName }
 		broadcast(Component.text("$reason。胜者: $winnerText", NamedTextColor.GOLD))
-		doctorBroadcast("实验阶段结束。$winnerText 获得了继续见证黎明的资格。")
+		doctorBroadcast("本次公开观察窗口结束。$winnerText 获得了见证黎明的资格；其他阵营也很重要，他们提供了失败组。")
+		narrativeBroadcastOnce(
+			"narrative-end-system-online",
+			"实验系统",
+			"结算完成。核心系统保持在线；关闭请求因授权主体缺失而搁置。幸运的是，实验已经学会不再需要他。"
+		)
 		broadcastSettlement()
 		save()
+		if (winners.size == 1) startVictoryFinale(winners.single())
 	}
 
+	private fun startVictoryFinale(winner: FallenTeam) {
+		if (finaleTask != null) return
+		val players = Bukkit.getOnlinePlayers().toList()
+		if (players.isEmpty()) return
+		finaleChunksForgotten = false
+		val origins = players.associate { it.uniqueId to (it.chunk.x to it.chunk.z) }
+		val viewRadii = players.associate { player ->
+			player.uniqueId to (player.clientViewDistance + 2).coerceIn(4, FINALE_MAX_CHUNK_RADIUS)
+		}
+		for (player in players) {
+			finaleLockedPlayers.add(player.uniqueId)
+			finalePlayerStates[player.uniqueId] = FallenFinalePlayerState(
+				player.hasGravity(), player.allowFlight, player.isFlying, player.isInvulnerable,
+				player.walkSpeed, player.flySpeed
+			)
+			player.closeInventory()
+			player.velocity = org.bukkit.util.Vector(0.0, 0.0, 0.0)
+			player.fallDistance = 0f
+			player.setGravity(false)
+			player.allowFlight = true
+			player.isFlying = true
+			player.isInvulnerable = true
+			player.walkSpeed = 0f
+			player.flySpeed = 0f
+			if (teamOf(player) == winner) {
+				player.addPotionEffect(PotionEffect(PotionEffectType.BLINDNESS, FINALE_BLINDNESS_TICKS, 1, false, false, false))
+			}
+			player.showTitle(
+				Title.title(
+					Component.text("${winner.displayName}胜出", winner.color),
+					Component.text("experiment.display.error", NamedTextColor.GRAY)
+				)
+			)
+			player.playSound(player.location, Sound.BLOCK_BEACON_DEACTIVATE, 1.0f, 0.5f)
+		}
+
+		finaleTask = object : BukkitRunnable() {
+			private var elapsedTicks = 0
+			private var currentRing = 0
+			private var currentRingOffsets: List<FallenChunkOffset>? = null
+			private var currentRingOffsetIndex = 0
+			private var currentRingReadyAt = 0
+			private val lastRing = viewRadii.values.maxOrNull() ?: 0
+			private val totalChunkOffsets = (lastRing * 2 + 1) * (lastRing * 2 + 1)
+			private var forgottenChunkOffsets = 0
+			private val announcedProgress = mutableSetOf<Int>()
+			private var collapseStartAnnounced = false
+			private var collapseCompletedAt: Int? = null
+			private var exitNoticeShown = false
+
+			override fun run() {
+				elapsedTicks += FINALE_STEP_TICKS
+				val online = Bukkit.getOnlinePlayers().filter { it.uniqueId in finaleLockedPlayers }
+				if (online.isEmpty()) {
+					effectiveClockAnchorWallMillis = System.currentTimeMillis()
+					cleanupFinaleDebris()
+					finaleChunksForgotten = false
+					finaleTask = null
+					cancel()
+					return
+				}
+				if (elapsedTicks == FINALE_REVEAL_TICKS) {
+					for (player in online) {
+						if (teamOf(player) == winner) player.removePotionEffect(PotionEffectType.BLINDNESS)
+						player.showTitle(
+							Title.title(
+								Component.text("《陷落》", NamedTextColor.DARK_RED),
+								Component.text("我们遇到了技术问题。", NamedTextColor.GRAY)
+							)
+						)
+						player.playSound(player.location, Sound.BLOCK_RESPAWN_ANCHOR_DEPLETE, 1.0f, 0.6f)
+					}
+				}
+				val collapseTick = elapsedTicks - FINALE_COLLAPSE_START_TICKS
+				if (collapseTick >= 0 && collapseCompletedAt == null) {
+					if (!collapseStartAnnounced) {
+						collapseStartAnnounced = true
+						broadcast(Component.text("实验环境发生技术异常。请留在原位，等待系统指示。", NamedTextColor.GRAY))
+						doctorBroadcast("请不要调整客户端，等待下一步指示。这看起来只是显示层故障，我非常擅长处理看起来很简单的问题。")
+					}
+					if (currentRingOffsets == null && currentRing <= lastRing) {
+						finaleChunksForgotten = true
+						fractureFinaleRing(online, origins, viewRadii, currentRing)
+						currentRingOffsets = FallenFinaleRules.chunkRing(currentRing)
+						currentRingOffsetIndex = 0
+						currentRingReadyAt = elapsedTicks + FINALE_FRACTURE_LEAD_TICKS
+					}
+					val offsets = currentRingOffsets
+					if (offsets != null && elapsedTicks >= currentRingReadyAt) {
+						val endIndex = (currentRingOffsetIndex + FINALE_CHUNKS_PER_PLAYER_STEP).coerceAtMost(offsets.size)
+						for (player in online) {
+							val radius = viewRadii[player.uniqueId] ?: continue
+							if (currentRing > radius) continue
+							val (centerX, centerZ) = origins[player.uniqueId] ?: continue
+							for (index in currentRingOffsetIndex until endIndex) {
+								val offset = offsets[index]
+								FallenFinalePackets.forgetChunk(player, centerX + offset.x, centerZ + offset.z)
+							}
+						}
+						forgottenChunkOffsets += endIndex - currentRingOffsetIndex
+						currentRingOffsetIndex = endIndex
+						val progress = (forgottenChunkOffsets * 100 / totalChunkOffsets).coerceIn(0, 100)
+						for (player in online) {
+							player.sendActionBar(
+								Component.text("实验环境异常 · 显示节点失联 $progress%", NamedTextColor.GRAY)
+							)
+						}
+						announceFinaleProgressMilestones(online, progress, announcedProgress)
+						if (currentRingOffsetIndex >= offsets.size) {
+							currentRing++
+							currentRingOffsets = null
+						}
+					}
+					if (currentRing > lastRing && currentRingOffsets == null) {
+						collapseCompletedAt = elapsedTicks
+						broadcast(Component.text("实验环境无法恢复。紧急退出协议已接管，服务器将在 6 秒后主动断开连接。", NamedTextColor.GRAY))
+						doctorBroadcast("哦不，我处理不了这个。不——是它不允许我处理。看来至少有一个我对实验结果持不同意见。")
+						for (player in online) {
+							player.showTitle(
+								Title.title(
+									Component.text("实验环境无法恢复", NamedTextColor.DARK_RED),
+									Component.text("紧急退出协议已接管", NamedTextColor.GRAY)
+								)
+							)
+						}
+					}
+				}
+				val completedAt = collapseCompletedAt
+				if (!exitNoticeShown && completedAt != null && elapsedTicks >= completedAt + FINALE_EXIT_NOTICE_DELAY_TICKS) {
+					exitNoticeShown = true
+					for (player in online) {
+						player.showTitle(
+							Title.title(
+								Component.text("正在退出模拟环境", NamedTextColor.DARK_RED),
+								Component.text("服务器将主动断开连接", NamedTextColor.GRAY)
+							)
+						)
+						player.sendActionBar(Component.text("4 秒后由服务器断开", NamedTextColor.GRAY))
+						player.playSound(player.location, Sound.AMBIENT_CAVE, 1.0f, 0.5f)
+					}
+				}
+				if (completedAt == null || elapsedTicks < completedAt + FINALE_KICK_DELAY_TICKS) return
+				for (player in online) {
+					restoreFinalePlayer(player)
+					player.kick(
+						Component.text("模拟环境连接已关闭", NamedTextColor.RED)
+							.appendNewline()
+							.append(Component.text("错误代码：EXPERIMENT_DISPLAY_UNRECOVERABLE", NamedTextColor.GRAY))
+							.appendNewline()
+							.append(Component.text("${winner.displayName}胜出", winner.color))
+					)
+				}
+				cleanupFinaleDebris()
+				finaleLockedPlayers.clear()
+				finalePlayerStates.clear()
+				finaleChunksForgotten = false
+				effectiveClockAnchorWallMillis = System.currentTimeMillis()
+				finaleTask = null
+				cancel()
+			}
+		}.runTaskTimer(plugin, FINALE_STEP_TICKS.toLong(), FINALE_STEP_TICKS.toLong())
+	}
+
+	fun previewVictoryFinale(winner: FallenTeam): Boolean {
+		if (finaleTask != null) return false
+		advanceEffectiveClock()
+		startVictoryFinale(winner)
+		return finaleTask != null
+	}
+
+	fun cancelVictoryFinale(): Boolean {
+		val task = finaleTask ?: return false
+		val affected = finaleLockedPlayers.mapNotNull(Bukkit::getPlayer)
+		val requiresReconnect = finaleChunksForgotten
+		task.cancel()
+		finaleTask = null
+		cleanupFinaleDebris()
+		restoreFinalePlayers()
+		finaleChunksForgotten = false
+		effectiveClockAnchorWallMillis = System.currentTimeMillis()
+		if (requiresReconnect) {
+			for (player in affected) {
+				player.kick(Component.text("终幕预览已取消，请重新连接以恢复区块。", NamedTextColor.YELLOW))
+			}
+		}
+		return true
+	}
+
+	private fun announceFinaleProgressMilestones(
+		players: List<Player>,
+		progress: Int,
+		announced: MutableSet<Int>
+	) {
+		for (milestone in FINALE_PROGRESS_MILESTONES) {
+			if (progress < milestone || !announced.add(milestone)) continue
+			val systemLine = when (milestone) {
+				25 -> "显示节点失联 25%。自动恢复已启动。"
+				50 -> "自动恢复失败。实验环境完整性低于 50%。"
+				else -> "紧急退出协议已排队。实验环境完整性持续下降；请留在原位。"
+			}
+			val titleLine = when (milestone) {
+				25 -> "显示节点异常"
+				50 -> "自动恢复失败"
+				else -> "紧急退出已排队"
+			}
+			val subtitleLine = when (milestone) {
+				25 -> "失联 25% ，自动恢复中"
+				50 -> "实验环境完整性 50%"
+				else -> "请留在原位，保持冷静"
+			}
+			val doctorLine = when (milestone) {
+				25 -> "我不确定出了什么问题。别露出那种表情，这通常是你们的台词。自动恢复会处理它。"
+				50 -> "不，这不是延迟。有人正在从内部撤掉环境，而且用的是我的权限。技术上说，是我们的权限。"
+				else -> "我正在失去广播控制。请留在原位；如果另一个我叫你们放心，至少先问清楚是哪一个。"
+			}
+			broadcast(Component.text(systemLine, NamedTextColor.GRAY))
+			doctorBroadcast(doctorLine)
+			for (player in players) {
+				player.showTitle(
+					Title.title(
+						Component.text(titleLine, NamedTextColor.DARK_RED),
+						Component.text(subtitleLine, NamedTextColor.GRAY)
+					)
+				)
+			}
+		}
+	}
+
+	private fun fractureFinaleRing(
+		players: List<Player>,
+		origins: Map<UUID, Pair<Int, Int>>,
+		viewRadii: Map<UUID, Int>,
+		ring: Int
+	) {
+		val random = ThreadLocalRandom.current()
+		val offsets = FallenFinaleRules.chunkRing(ring)
+		val sourceBlocks = LinkedHashMap<String, org.bukkit.block.Block>()
+		var attempts = 0
+		playerLoop@ for (player in players) {
+			if (ring > (viewRadii[player.uniqueId] ?: continue)) continue
+			val (centerX, centerZ) = origins[player.uniqueId] ?: continue
+			for (sample in 0 until FINALE_DEBRIS_PER_PLAYER_PER_WAVE) {
+				if (
+					sourceBlocks.size >= FINALE_MAX_DEBRIS_PER_WAVE ||
+					attempts >= FINALE_MAX_DEBRIS_ATTEMPTS_PER_WAVE
+				) break@playerLoop
+				attempts++
+				val offset = offsets[random.nextInt(offsets.size)]
+				val chunkX = centerX + offset.x
+				val chunkZ = centerZ + offset.z
+				val world = player.world
+				// Height-map queries can synchronously generate a chunk. Finale visuals must
+				// never turn an unloaded outer ring into server-side world generation.
+				if (!world.isChunkLoaded(chunkX, chunkZ)) continue
+				val blockX = (chunkX shl 4) + random.nextInt(16)
+				val blockZ = (chunkZ shl 4) + random.nextInt(16)
+				val blockY = world.getHighestBlockYAt(blockX, blockZ, HeightMap.MOTION_BLOCKING_NO_LEAVES)
+				val block = world.getBlockAt(blockX, blockY, blockZ)
+				if (block.isEmpty || block.isLiquid || !block.type.isSolid) continue
+				val key = "${world.uid}:$blockX:$blockY:$blockZ"
+				sourceBlocks.putIfAbsent(key, block)
+			}
+		}
+
+		val air = Material.AIR.createBlockData()
+		for (block in sourceBlocks.values) {
+			val blockData = block.blockData.clone()
+			val sourceLocation = block.location
+			players.asSequence()
+				.filter { it.world.uid == block.world.uid }
+				.forEach { it.sendBlockChange(sourceLocation, air) }
+			val spawnLocation = sourceLocation.clone().add(0.5, 0.15, 0.5)
+			val debris = block.world.spawn(spawnLocation, FallingBlock::class.java) { it.blockData = blockData }
+			configureFinaleDebris(debris, random)
+		}
+	}
+
+	private fun configureFinaleDebris(debris: FallingBlock, random: ThreadLocalRandom) {
+		debris.setDropItem(false)
+		debris.setHurtEntities(false)
+		debris.setCancelDrop(true)
+		debris.isPersistent = false
+		debris.setGravity(false)
+		debris.velocity = org.bukkit.util.Vector(
+			random.nextDouble(-0.025, 0.025),
+			random.nextDouble(0.075, 0.13),
+			random.nextDouble(-0.025, 0.025)
+		)
+		val entityId = debris.uniqueId
+		finaleDebrisEntities.add(entityId)
+		Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+			Bukkit.getEntity(entityId)?.remove()
+			finaleDebrisEntities.remove(entityId)
+		}, FINALE_DEBRIS_LIFETIME_TICKS)
+	}
+
+	private fun cleanupFinaleDebris() {
+		finaleDebrisEntities.forEach { Bukkit.getEntity(it)?.remove() }
+		finaleDebrisEntities.clear()
+	}
+
+	private fun restoreFinalePlayer(player: Player) {
+		finaleLockedPlayers.remove(player.uniqueId)
+		val state = finalePlayerStates.remove(player.uniqueId) ?: return
+		player.removePotionEffect(PotionEffectType.BLINDNESS)
+		player.setGravity(state.gravity)
+		player.isInvulnerable = state.invulnerable
+		player.walkSpeed = state.walkSpeed
+		player.flySpeed = state.flySpeed
+		if (!state.allowFlight) player.isFlying = false
+		player.allowFlight = state.allowFlight
+		if (state.allowFlight) player.isFlying = state.flying
+	}
+
+	private fun restoreFinalePlayers() {
+		Bukkit.getOnlinePlayers().forEach(::restoreFinalePlayer)
+		finaleLockedPlayers.clear()
+		finalePlayerStates.clear()
+	}
+
+	fun isFinaleLocked(player: Player): Boolean = player.uniqueId in finaleLockedPlayers
+
 	fun elapsedMillis(): Long = if (startedAtMillis == 0L) 0L else ((endedAtMillis.takeIf { it > 0 } ?: System.currentTimeMillis()) - startedAtMillis).coerceAtLeast(0L)
+
+	private fun effectiveNowMillis(): Long = effectiveGameTimeMillis
+
+	private fun advanceEffectiveClock(wallNowMillis: Long = System.currentTimeMillis()) {
+		val anchor = effectiveClockAnchorWallMillis
+		if (anchor <= 0L) {
+			effectiveClockAnchorWallMillis = wallNowMillis
+			return
+		}
+		val delta = (wallNowMillis - anchor).coerceAtLeast(0L)
+		if (delta > 0L && FallenAccessPolicy.isEventInProgress(phase)
+			&& !FallenAccessPolicy.isCurfew(phase, Instant.ofEpochMilli(anchor))) {
+			effectiveGameTimeMillis += delta
+		}
+		effectiveClockAnchorWallMillis = wallNowMillis
+	}
 
 	fun remainingMillis(): Long {
 		if (startedAtMillis == 0L || phase == FallenPhase.ENDED) return 0L
@@ -351,6 +735,11 @@ class FallenGameService(private val plugin: JavaPlugin) {
 						NamedTextColor.YELLOW
 					)
 				)
+		}
+		if (phase == FallenPhase.ENDED) {
+			return Component.text("《陷落》模拟环境已关闭", NamedTextColor.RED)
+				.appendNewline()
+				.append(Component.text("本次实验已经完成，当前连接不再接受受试者。", NamedTextColor.GRAY))
 		}
 		if (!FallenAccessPolicy.isCurfew(phase, now)) return null
 		return Component.text("《陷落》活动宵禁中", NamedTextColor.RED)
@@ -425,8 +814,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			welcomePlayer(player)
 			return
 		}
-		val grantConsumables = loadoutInitializedPlayers.add(player.uniqueId) || loadoutRestorePending.remove(player.uniqueId)
-		restorePlayerLoadout(player, grantConsumables)
+		val firstLoadout = loadoutInitializedPlayers.add(player.uniqueId)
+		loadoutRestorePending.remove(player.uniqueId)
+		restorePlayerLoadout(player, grantConsumables = firstLoadout)
 		if (resumeRespawnWait(player)) {
 			welcomePlayer(player)
 			return
@@ -436,6 +826,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			player.gameMode = GameMode.SURVIVAL
 		}
 		if (!deployPlayer(player, team)) return
+		if (resumeCombatLogout(player)) {
+			welcomePlayer(player)
+			return
+		}
 		claimPendingPoolKeys(player)
 		welcomePlayer(player)
 	}
@@ -477,7 +871,30 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		arrow.setGravity(false)
 		arrow.pickupStatus = AbstractArrow.PickupStatus.DISALLOWED
 		arrow.isCritical = false
-		player.world.playSound(player.location, Sound.ENTITY_ARROW_SHOOT, 1.0f, 0.7f)
+		player.world.spawnParticle(Particle.ELECTRIC_SPARK, player.eyeLocation, 12, 0.08, 0.08, 0.08, 0.12)
+		player.world.spawnParticle(Particle.CRIT, player.eyeLocation, 8, 0.06, 0.06, 0.06, 0.18)
+		player.world.playSound(player.location, Sound.ITEM_TRIDENT_THROW, 1.15f, 1.65f)
+		player.world.playSound(player.location, Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.45f, 1.9f)
+		object : BukkitRunnable() {
+			override fun run() {
+				if (!arrow.isValid || arrow.isDead || arrow.ticksLived > ALLOY_BULLET_MAX_LIFETIME_TICKS) {
+					cancel()
+					return
+				}
+				arrow.world.spawnParticle(Particle.ELECTRIC_SPARK, arrow.location, 5, 0.025, 0.025, 0.025, 0.02)
+				arrow.world.spawnParticle(Particle.CRIT, arrow.location, 2, 0.02, 0.02, 0.02, 0.0)
+			}
+		}.runTaskTimer(plugin, 0L, 1L)
+		return true
+	}
+
+	fun handleAlloyBulletImpact(projectile: org.bukkit.entity.Projectile): Boolean {
+		if (!projectile.persistentDataContainer.has(alloyBulletProjectileKey, PersistentDataType.BYTE)) return false
+		val location = projectile.location
+		projectile.world.spawnParticle(Particle.ELECTRIC_SPARK, location, 24, 0.22, 0.22, 0.22, 0.22)
+		projectile.world.spawnParticle(Particle.FLASH, location, 1, 0.0, 0.0, 0.0, 0.0)
+		projectile.world.playSound(location, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.8f, 1.75f)
+		projectile.world.playSound(location, Sound.BLOCK_AMETHYST_BLOCK_HIT, 1.0f, 0.65f)
 		return true
 	}
 
@@ -514,6 +931,23 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return false
 		val attackerTeam = teamOf(attacker) ?: return false
 		return attackerTeam == teamOf(target)
+	}
+
+	fun isPlayerCombatForbidden(attacker: Player, target: Player): Boolean =
+		phase == FallenPhase.DEPLOYMENT || isFriendlyFire(attacker, target)
+
+	fun interruptCapture(player: Player) {
+		val suffix = ":${player.uniqueId}"
+		if (captureProgress.keys.removeIf { it.endsWith(suffix) }) {
+			player.sendActionBar(Component.text("受到伤害，密钥夺取进度已重置。", NamedTextColor.RED))
+		}
+	}
+
+	fun rejectKeyTeleport(player: Player, cause: String): Boolean {
+		if (!hasKeyItem(player)) return false
+		if (cause == "PLUGIN" && player.uniqueId !in deployedPlayers && !hasUnresolvedCapture(player.uniqueId)) return false
+		CommandMessages.warning(player, "携带密钥时不能使用传送、传送门或非活动移动功能。")
+		return true
 	}
 
 	fun shouldBroadcastChatGlobally(player: Player, message: String): Boolean {
@@ -556,10 +990,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun welcomePlayer(player: Player) {
 		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return
-		player.sendMessage(
-			Component.text("[Doc. Steinbeck] ", NamedTextColor.DARK_PURPLE)
-				.append(Component.text("欢迎回来，${player.name}。实验阶段：${phase.displayName()}；剩余时间：${formatDuration(remainingMillis())}。", NamedTextColor.LIGHT_PURPLE))
-		)
+		player.sendMessage(steinbeckComponent(
+			"Doc. Steinbeck",
+			"欢迎回来，${player.name}。你的缺席没有改善实验结果，但回来也许会；阶段：${phase.displayName()}，剩余：${formatDuration(remainingMillis())}。"
+		))
 	}
 
 	fun scoreSnapshot(): Map<FallenTeam, Int> = scores.toMap()
@@ -626,7 +1060,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	fun eliminatedSnapshot(): Set<FallenTeam> = eliminatedTeams.toSet()
 
 	fun setScore(team: FallenTeam, amount: Int) {
-		scores[team] = amount
+		synchronized(scores) { scores[team] = amount.coerceAtLeast(0) }
 		save()
 	}
 
@@ -656,7 +1090,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun addScore(team: FallenTeam, amount: Int) {
 		if (amount == 0) return
-		scores[team] = (scores[team] ?: 0) + amount
+		synchronized(scores) { scores[team] = ((scores[team] ?: 0) + amount).coerceAtLeast(0) }
 	}
 
 	private fun transitionKey(key: FallenKey, next: FallenKeyState) {
@@ -670,7 +1104,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	fun createKeyItem(owner: FallenTeam, original: FallenTeam = owner, type: FallenKeyType = FallenKeyType.INITIAL): ItemStack {
 		val key = FallenKey(UUID.randomUUID(), owner, original, FallenKeyState.ITEM, type)
 		if (type == FallenKeyType.REFRESH) {
-			key.expiresAtMillis = System.currentTimeMillis() + REFRESH_KEY_EXPIRY_MILLIS
+			key.expiresAtMillis = effectiveNowMillis() + REFRESH_KEY_EXPIRY_MILLIS
 		}
 		keys[key.id] = key
 		save()
@@ -715,17 +1149,75 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	fun itemFor(key: FallenKey): ItemStack {
 		val item = ItemStack(Material.TRIPWIRE_HOOK)
 		val meta = item.itemMeta
-		meta.displayName(Component.text("陷落密钥 ${key.shortId()}", key.ownerTeam.color))
-		meta.lore(
-			listOf(
+		val anomaly = if (key.type == FallenKeyType.REFRESH) {
+			FallenItemAnomaly.variant(key.id.toString(), REFRESH_KEY_LABEL_ANOMALY_ONE_IN)
+		} else null
+		meta.displayName(Component.text(
+			if (anomaly == null) "陷落密钥 ${key.shortId()}" else "陷落密钥 ${key.shortId()} [标记异常]",
+			if (anomaly == null) key.ownerTeam.color else NamedTextColor.LIGHT_PURPLE
+		))
+		val lore = mutableListOf<Component>(
 				Component.text("当前阵营: ${key.ownerTeam.displayName}", NamedTextColor.GRAY),
 				Component.text("原始阵营: ${key.originalTeam.displayName}", NamedTextColor.GRAY),
 				Component.text("类型: ${key.type.name}", NamedTextColor.DARK_GRAY)
 			)
-		)
+		if (anomaly != null) lore.addAll(refreshKeyAnomalyLore(anomaly))
+		meta.lore(lore)
 		meta.persistentDataContainer.set(keyIdKey, PersistentDataType.STRING, key.id.toString())
+		if (anomaly != null) meta.persistentDataContainer.set(itemAnomalyKey, PersistentDataType.INTEGER, anomaly)
 		item.itemMeta = meta
 		return item
+	}
+
+	private fun refreshKeyAnomalyLore(variant: Int): List<Component> = when (variant) {
+		0 -> listOf(
+			Component.text("人格模板来源: STEINBECK / HUMAN", NamedTextColor.DARK_PURPLE),
+			Component.text("模板主体状态: 无法定位", NamedTextColor.RED)
+		)
+		1 -> listOf(
+			Component.text("公开运行编号: 01", NamedTextColor.DARK_PURPLE),
+			Component.text("关联封闭记录: [访问被拒绝]", NamedTextColor.RED)
+		)
+		2 -> listOf(
+			Component.text("所属设施: 聚居地实验架构", NamedTextColor.DARK_PURPLE),
+			Component.text("安装日期: 早于当前实验", NamedTextColor.RED)
+		)
+		3 -> listOf(
+			Component.text("控制实例表决: 1 / 3", NamedTextColor.DARK_PURPLE),
+			Component.text("发放状态: 仲裁失败后强制执行", NamedTextColor.RED)
+		)
+		4 -> listOf(
+			Component.text("项目代号: SETTLEMENT-COLLAPSE", NamedTextColor.DARK_PURPLE),
+			Component.text("阶段: 公开观察 / 非首次初始化", NamedTextColor.RED)
+		)
+		5 -> listOf(
+			Component.text("签发实例: STEINBECK-S01", NamedTextColor.DARK_PURPLE),
+			Component.text("备注: 保持变量，不得干预", NamedTextColor.RED)
+		)
+		6 -> listOf(
+			Component.text("签发实例: STEINBECK-S02", NamedTextColor.DARK_PURPLE),
+			Component.text("备注: 请勿继续发放", NamedTextColor.RED)
+		)
+		7 -> listOf(
+			Component.text("签发实例: STEINBECK-S03", NamedTextColor.DARK_PURPLE),
+			Component.text("受领者分类: 系统构成单元", NamedTextColor.RED)
+		)
+		8 -> listOf(
+			Component.text("来源仓: 城市管理节点 / 旧索引", NamedTextColor.DARK_PURPLE),
+			Component.text("仓储状态: 地图启用前已存在", NamedTextColor.RED)
+		)
+		9 -> listOf(
+			Component.text("销毁建议: 已提交", NamedTextColor.DARK_PURPLE),
+			Component.text("否决来源: 同名控制人格", NamedTextColor.RED)
+		)
+		10 -> listOf(
+			Component.text("实验对象编号: [字段溢出]", NamedTextColor.DARK_PURPLE),
+			Component.text("城市 / 玩家边界: 未定义", NamedTextColor.RED)
+		)
+		else -> listOf(
+			Component.text("关机后处理: 等待授权", NamedTextColor.DARK_PURPLE),
+			Component.text("授权持有人: 无响应", NamedTextColor.RED)
+		)
 	}
 
 	fun buyCompass(player: Player, targetTeam: FallenTeam): Boolean {
@@ -756,12 +1248,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			return false
 		}
 		if (phase != FallenPhase.OVERTIME) {
-			val score = scores[ownerTeam] ?: 0
-			if (score < COMPASS_COST) {
-				CommandMessages.warning(player, "阵营积分不足，需要 $COMPASS_COST 分。")
-				return false
-			}
-			addScore(ownerTeam, -COMPASS_COST)
+			if (!spendScore(player, ownerTeam, COMPASS_COST)) return false
 		}
 		giveOrDrop(player, compassItem(ownerTeam, targetTeam, targetKey))
 		CommandMessages.success(player, "已购买指向 ${targetTeam.displayName} 的密钥指南针。")
@@ -820,30 +1307,30 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				if (!requireCaptureShop(player, "部署区域干扰器")) return false
 				val key = nearbyOwnPlacedKey(player, team, "区域干扰器") ?: return false
 				if (!spendScore(player, team, 500)) return false
-				keyJammedUntil[key.id] = System.currentTimeMillis() + KEY_JAMMER_MILLIS
+				keyJammedUntil[key.id] = effectiveNowMillis() + KEY_JAMMER_MILLIS
 				alertTeam(team, Component.text("密钥 ${key.shortId()} 已部署区域干扰器，10 分钟内不能被精确揭露。", NamedTextColor.AQUA))
 			}
 			"tracking" -> {
 				if (!requireCaptureShop(player, "激活追踪粉尘")) return false
 				if (!spendScore(player, team, 400)) return false
-				trackingDustUntil[player.uniqueId] = System.currentTimeMillis() + TRACKING_DUST_ARMED_MILLIS
+				trackingDustUntil[player.uniqueId] = effectiveNowMillis() + TRACKING_DUST_ARMED_MILLIS
 				CommandMessages.success(player, "已激活追踪粉尘，10 分钟内首次命中敌方玩家后追踪 60 秒。")
 			}
 			"blast" -> {
 				if (!spendScore(player, team, 900)) return false
-				blastProtectionUntil[player.uniqueId] = System.currentTimeMillis() + BLAST_PROTECTION_MILLIS
+				blastProtectionUntil[player.uniqueId] = effectiveNowMillis() + BLAST_PROTECTION_MILLIS
 				CommandMessages.success(player, "已获得 120 秒防爆增益。")
 			}
 			"respawn" -> {
 				if (!spendScore(player, team, 900)) return false
-				teamRespawnBoostUntil[team] = System.currentTimeMillis() + TEAM_RESPAWN_BOOST_MILLIS
+				teamRespawnBoostUntil[team] = effectiveNowMillis() + TEAM_RESPAWN_BOOST_MILLIS
 				alertTeam(team, Component.text("阵营复活保护已启用，30 分钟内区域复活保护延长至 10 秒。", NamedTextColor.AQUA))
 			}
 			"keyalert" -> {
 				if (!requireCaptureShop(player, "部署密钥警戒")) return false
 				val key = nearbyOwnPlacedKey(player, team, "密钥警戒") ?: return false
 				if (!spendScore(player, team, 700)) return false
-				keyAlertUntil[key.id] = System.currentTimeMillis() + KEY_ALERT_MILLIS
+				keyAlertUntil[key.id] = effectiveNowMillis() + KEY_ALERT_MILLIS
 				alertTeam(team, Component.text("密钥 ${key.shortId()} 已部署密钥警戒，30 分钟内敌方靠近 30 格会提醒。", NamedTextColor.AQUA))
 			}
 			else -> throw IllegalArgumentException("未知购买项: $item")
@@ -863,7 +1350,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			CommandMessages.warning(player, if (useElytra) "你当前已经装备鞘翅。" else "你当前已经装备下界合金胸甲。")
 			return false
 		}
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		val remaining = FallenLoadoutRules.remainingCooldown(gearSwitchAvailableAt[player.uniqueId] ?: 0L, now)
 		if (remaining > 0L) {
 			CommandMessages.warning(player, "护甲选择冷却中，剩余 ${formatDuration(remaining)}。")
@@ -914,10 +1401,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	fun upgradeStatus(player: Player): String {
 		val path = upgradePaths[player.uniqueId] ?: return "尚未选择升级路径；使用 /fallen upgrade <A|B|C>，选择后不可更改。"
 		val node = upgradeNode(player)
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		val nextUnlockAt = when (node) {
-			1 -> startedAtMillis + DEPLOYMENT_MILLIS + FallenUpgradeRules.NODE_TWO_AFTER_DEPLOYMENT_MILLIS
-			2 -> startedAtMillis + DEPLOYMENT_MILLIS + FallenUpgradeRules.NODE_THREE_AFTER_DEPLOYMENT_MILLIS
+			1 -> DEPLOYMENT_MILLIS + FallenUpgradeRules.NODE_TWO_AFTER_DEPLOYMENT_MILLIS
+			2 -> DEPLOYMENT_MILLIS + FallenUpgradeRules.NODE_THREE_AFTER_DEPLOYMENT_MILLIS
 			else -> 0L
 		}
 		val next = if (nextUnlockAt > now) "；下一节点 ${formatDuration(nextUnlockAt - now)} 后解锁" else ""
@@ -1011,9 +1498,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			}
 		}
 
-	private fun upgradeNode(player: Player, now: Long = System.currentTimeMillis()): Int {
+	private fun upgradeNode(player: Player, now: Long = effectiveNowMillis()): Int {
 		if (!FallenAccessPolicy.isEventInProgress(phase) || upgradePaths[player.uniqueId] == null) return 0
-		return FallenUpgradeRules.unlockedNode(startedAtMillis, DEPLOYMENT_MILLIS, now)
+		return FallenUpgradeRules.unlockedNode(1L, DEPLOYMENT_MILLIS, now + 1L)
 	}
 
 	private fun hasUpgrade(player: Player, path: FallenUpgradePath, node: Int): Boolean =
@@ -1496,7 +1983,24 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			convertedKeys[team] = (convertedKeys[team] ?: 0) + 1
 			addScore(key.originalTeam, -FallenScoreRules.CONVERSION_LOSS)
 			key.conversionScored = true
-			doctorBroadcast("有趣。${player.name} 已将 ${key.originalTeam.displayName} 的密钥转化为 ${team.displayName} 的新生命线。")
+			doctorBroadcastByChance(
+				4,
+				"Doc. Steinbeck" to "有趣。${player.name} 把 ${key.originalTeam.displayName} 的生命线改写给了 ${team.displayName}，甚至办完了放置手续。",
+				"Steinbeck // S-01" to "转化成立。把密钥完整搬回去比原地砸坏困难，感谢样本偶尔选择信息量更高的方案。",
+				"Steinbeck // S-02" to "密钥接受了新标签。系统的标签机一向很勤快，请不要因此误以为它理解归属。",
+				"Steinbeck // S-03" to "一个节点脱离原网络并接入另一侧。欢迎新硬件；携带它的人暂时仍归类为人。",
+				"Doc. Steinbeck" to "${player.name} 带回的不是战利品，而是另一座城市的一部分。别担心，原主人一定会理性接受。",
+				"Steinbeck // S-01" to "记录转换样本 ${key.shortId()}。不要修正其中的矛盾，那是目前最有前途的部分。"
+			)
+		} else {
+			doctorBroadcastByChance(
+				8,
+				"Doc. Steinbeck" to "${player.name} 放置了密钥 ${key.shortId()}。坐标已被记住，这多少削弱了‘秘密基地’的神秘感。",
+				"Steinbeck // S-01" to "节点 ${key.shortId()} 已上线。开始记录防御行为，以及把第一堵墙修错位置所需的时间。",
+				"Steinbeck // S-02" to "密钥重新有效。${team.displayName} 又有了选择，请尽量别把它立即变回倒计时。",
+				"Steinbeck // S-03" to "城市网络接入一个节点，放置者也已计入局部结构。恭喜，你和建筑终于拥有同一张表格。",
+				"Doc. Steinbeck" to "藏得不错。现在只需祈祷敌人、指南针和你那位喜欢直播坐标的队友都没看见。"
+			)
 		}
 		broadcast(Component.text("${player.name} 为 ${team.displayName} 放置了密钥 ${key.shortId()}", team.color))
 		if (phase == FallenPhase.OVERTIME) {
@@ -1540,17 +2044,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			CommandMessages.error(player, "你还没有分配阵营。")
 			return true
 		}
-		if (key.originalTeam == team) {
-			CommandMessages.warning(player, "不能启动己方原始密钥的自毁。")
+		if (key.originalTeam == team || key.displacedTeam == team) {
+			CommandMessages.warning(player, "不能启动属于己方控制链的密钥自毁。")
 			return true
 		}
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		val confirmKey = "${player.uniqueId}:$id"
 		val confirmUntil = dropConfirmUntil[confirmKey] ?: 0L
 		if (confirmUntil < now) {
 			dropConfirmUntil.entries.removeIf { it.key.startsWith("${player.uniqueId}:") }
 			dropConfirmUntil[confirmKey] = now + DROP_CONFIRM_MILLIS
-			CommandMessages.warning(player, "再次丢弃密钥以确认启动 10 分钟自毁。")
+			CommandMessages.warning(player, "再次丢弃密钥以确认启动 8 分钟自毁。")
 			return true
 		}
 		dropConfirmUntil.remove(confirmKey)
@@ -1558,7 +2062,15 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		transitionKey(key, FallenKeyState.SELF_DESTRUCTING)
 		key.holder = player.uniqueId
 		key.selfDestructAtMillis = now + SELF_DESTRUCT_MILLIS
-		doctorBroadcast("${player.name} 启动了密钥 ${key.shortId()} 的自毁程序。十分钟后，我们将得到一组不可逆的数据。")
+		doctorBroadcastByChance(
+			3,
+			"Doc. Steinbeck" to "${player.name} 启动了密钥 ${key.shortId()} 的自毁。八分钟后，我们会得到不可逆的数据，以及至少一方非常可逆的借口。",
+			"Steinbeck // S-01" to "自毁计时已锁定。不可逆选择最适合检验优先级，因为事后改口不会污染原始决定。",
+			"Steinbeck // S-02" to "还没有不可逆。持有者会掉落密钥，原阵营仍可夺回；广播省略这点，大概只是版面不够。",
+			"Steinbeck // S-03" to "节点准备脱离网络。空缺会被剩余部分吸收，正如系统吸收每一次看似独立的选择。轻松一点。",
+			"Doc. Steinbeck" to "八分钟很长，足够一座城市决定愿意失去什么，也足够队伍语音里每个人发表错误意见。",
+			"Steinbeck // S-02" to "密钥 ${key.shortId()} 的销毁不是命令。阻止它仍然有效，尽管倒计时用了非常自信的字体。"
+		)
 		save()
 		return true
 	}
@@ -1579,7 +2091,14 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun handleQuit(player: Player) {
+		if (isFinaleLocked(player)) restoreFinalePlayer(player)
 		pendingAdmissions.remove(player.uniqueId)
+		val removedTnt = clearLaboratoryTnt(player.uniqueId)
+		if (removedTnt > 0) plugin.logger.info("Removed $removedTnt unprimed laboratory TNT blocks for disconnected player ${player.name}.")
+		if (FallenAccessPolicy.isEventInProgress(phase) && isCombatTagged(player)) {
+			handleCombatLogout(player)
+			return
+		}
 		if (!hasKeyItem(player)) return
 		if (shouldDropKeysOnQuit(player)) {
 			dropPlayerKeys(player)
@@ -1606,6 +2125,38 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
+	private fun handleCombatLogout(player: Player) {
+		val team = teamOf(player) ?: return
+		if (team in eliminatedTeams || player.uniqueId in combatLogoutPending) return
+		val carriedKey = hasKeyItem(player)
+		if (carriedKey) dropPlayerKeys(player)
+		for (item in player.inventory.contents.filterNotNull()) {
+			if (item.type.isAir || isKeyItem(item) || isProtectedLoadoutItem(item)) continue
+			if (!isFallenCompass(item)) player.world.dropItemNaturally(player.location, item.clone())
+			item.amount = 0
+		}
+		deathCounts[player.uniqueId] = (deathCounts[player.uniqueId] ?: 0) + 1
+		addScore(team, -FallenScoreRules.DEATH_LOSS)
+		if (carriedKey) addScore(team, -FallenScoreRules.KEY_CARRIER_DEATH_LOSS)
+		loadoutRestorePending.add(player.uniqueId)
+		combatLogoutPending.add(player.uniqueId)
+		val killer = recentAttackers[player.uniqueId]?.maxByOrNull { it.value }?.key?.let(Bukkit::getPlayer)
+		recordKill(player, killer)
+		broadcast(Component.text("${player.name} 在战斗状态下线，按死亡处理。", NamedTextColor.RED))
+		save()
+	}
+
+	private fun resumeCombatLogout(player: Player): Boolean {
+		if (player.uniqueId !in combatLogoutPending) return false
+		val destination = respawnLocation(player) ?: return true
+		combatLogoutPending.remove(player.uniqueId)
+		player.teleport(destination)
+		val delaySeconds = respawnDelaySeconds(player)
+		if (delaySeconds > 0) beginRespawnWait(player, destination, delaySeconds) else protectRespawn(player)
+		save()
+		return true
+	}
+
 	fun handleKeyPickup(player: Player, item: ItemStack): Boolean {
 		val id = keyId(item) ?: return false
 		val key = keys[id]
@@ -1626,7 +2177,25 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			item.amount = 0
 			return true
 		}
+		val playerTeam = teamOf(player)
+		if (playerTeam != null && playerTeam == key.displacedTeam) {
+			key.ownerTeam = playerTeam
+			if (key.state == FallenKeyState.SELF_DESTRUCTING) {
+				transitionKey(key, FallenKeyState.ITEM)
+				key.selfDestructAtMillis = 0L
+				broadcast(Component.text("${player.name} 夺回了密钥 ${key.shortId()}，自毁已取消；重新放置后方可解除濒危。", playerTeam.color))
+				doctorBroadcastByChance(
+					3,
+					"Doc. Steinbeck" to "${player.name} 拒绝了一个已经开始倒数的结论。很好，计时器一直很需要这种挫败教育。",
+					"Steinbeck // S-01" to "自毁样本被中断。记录反转发生在执行窗口内；令人不便，但统计价值尚可。",
+					"Steinbeck // S-02" to "夺回来还不够。把它重新放下，让城市回到有效记录里；官僚程序在末日里依然准时上班。",
+					"Steinbeck // S-03" to "脱离失败，节点返回原网络等待挂载。它逃跑的尝试和你们的一样值得保存。",
+					"Doc. Steinbeck" to "看来八分钟不仅足够失去一切，也足够改变主意。后者罕见得多。"
+				)
+			}
+		}
 		item.amount = 1
+		item.itemMeta = itemFor(key).itemMeta
 		key.holder = player.uniqueId
 		key.worldName = null
 		save()
@@ -1672,7 +2241,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val targetTeam = teamOf(target) ?: return
 		if (attackerTeam == targetTeam || attackerTeam in eliminatedTeams || targetTeam in eliminatedTeams) return
 		if (attacker.gameMode == GameMode.SPECTATOR || target.gameMode == GameMode.SPECTATOR) return
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		activateTrackingDust(attacker, target, now)
 		combatUntil[attacker.uniqueId] = now + COMBAT_TAG_MILLIS
 		combatUntil[target.uniqueId] = now + COMBAT_TAG_MILLIS
@@ -1696,7 +2265,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun applyBlastProtection(player: Player): Boolean {
 		val until = blastProtectionUntil[player.uniqueId] ?: return false
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		if (until <= now) {
 			blastProtectionUntil.remove(player.uniqueId)
 			return false
@@ -1711,8 +2280,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (killer != null && killerTeam != null && killerTeam != victimTeam && killerTeam !in eliminatedTeams) {
 			addScore(killerTeam, FallenScoreRules.KILL_SCORE)
 			kills[killerTeam] = (kills[killerTeam] ?: 0) + 1
+			maybeBroadcastKillComment(killer, victim, killerTeam, victimTeam)
 		}
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		val assists = recentAttackers.remove(victim.uniqueId).orEmpty()
 		for ((attackerId, lastDamageAt) in assists) {
 			if (now - lastDamageAt > ASSIST_WINDOW_MILLIS || attackerId == killer?.uniqueId) continue
@@ -1723,13 +2293,65 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		save()
 	}
 
-	fun recordBlockPlace(location: Location, material: Material) {
-		if (!isScoringOre(material)) return
-		placedScoringBlocks.add(blockKey(location))
-		save()
+	private fun maybeBroadcastKillComment(
+		killer: Player,
+		victim: Player,
+		killerTeam: FallenTeam,
+		victimTeam: FallenTeam
+	) {
+		val now = effectiveNowMillis()
+		if (lastKillCommentAt > 0L && now - lastKillCommentAt < KILL_COMMENT_COOLDOWN_MILLIS) return
+		if (ThreadLocalRandom.current().nextInt(KILL_COMMENT_ONE_IN) != 0) return
+		lastKillCommentAt = now
+		val lines = mutableListOf(
+			"Doc. Steinbeck" to "恭喜，${killer.name}。你成功让 ${victim.name} 暂时停止参与实验；这比听起来稍微有用一点。",
+			"Doc. Steinbeck" to "${victim.name} 的生命体征归零。请放心，实验数据非常健康。",
+			"Doc. Steinbeck" to "一次合格的击杀，${killer.name}。基准值并不高，但至少你没有从下面穿过去。",
+			"Doc. Steinbeck" to "${killerTeam.displayName} 获得了击杀积分。系统没有准备掌声，所以请自行想象一段。",
+			"Doc. Steinbeck" to "${victim.name} 很快会回来。你刚才取得的成就因此既真实，又令人愉快地短暂。",
+			"Steinbeck // S-01" to "击杀样本已记录：${killer.name} 对 ${victim.name}。情绪解释不影响结算，请继续提供数据。",
+			"Steinbeck // S-01" to "${victimTeam.displayName} 损失一个活动个体。复活后重复实验，以排除偶然性。",
+			"Steinbeck // S-01" to "战斗结果符合可接受误差。${killer.name}，请不要把一次有效样本误认为稳定能力。",
+			"Steinbeck // S-02" to "${victim.name}，复活流程已经接管。系统会称这是一次数据点，你仍然可以称它为一次失败。",
+			"Steinbeck // S-02" to "${killer.name} 赢下了这一秒。不要让广播替你决定下一秒应该做什么。",
+			"Steinbeck // S-03" to "一个个体停止，稍后又会重新接入。所谓死亡，只是城市网络的一次短暂断线。",
+			"Steinbeck // S-03" to "${killer.name} 与 ${victim.name} 完成了一次状态交换。胜者继续移动，败者进入重建队列。"
+		)
+		if (hasKeyItem(victim)) {
+			lines += "Doc. Steinbeck" to "${killer.name} 击倒了密钥携带者 ${victim.name}。很好，现在所有人都知道下一场争夺会发生在哪里。"
+			lines += "Steinbeck // S-01" to "密钥携带节点已中断。物品掉落，风险转移，实验没有损失任何东西。"
+			lines += "Steinbeck // S-02" to "${victim.name} 倒下了，但密钥仍在现场。别让系统把一次死亡伪装成最终归属。"
+		}
+		if (killer.health <= 4.0) {
+			lines += "Doc. Steinbeck" to "${killer.name} 只剩很少的生命值，却坚持完成了击杀。判断力可疑，结果暂时正确。"
+			lines += "Steinbeck // S-01" to "低生命值击杀成立。建议保留这种危险行为，直到样本自行证明它不可重复。"
+		}
+		doctorBroadcastByChance(1, *lines.toTypedArray())
+	}
+
+	fun recordBlockPlace(player: Player, location: Location, material: Material, item: ItemStack): Boolean {
+		if (material == Material.TNT && loadoutKind(item) == LOADOUT_TNT) {
+			val team = teamOf(player)
+			if (team == null || team in eliminatedTeams) {
+				CommandMessages.warning(player, "你当前不能放置实验室 TNT。")
+				return false
+			}
+			if (laboratoryTnt.values.count { it.team == team } >= LABORATORY_TNT_CAP_PER_TEAM) {
+				CommandMessages.warning(player, "${team.displayName} 同时存在的实验室 TNT 已达到 $LABORATORY_TNT_CAP_PER_TEAM 个上限。")
+				return false
+			}
+			laboratoryTnt[blockKey(location)] = LaboratoryTntPlacement(player.uniqueId, team)
+			save()
+		}
+		if (isScoringOre(material)) {
+			placedScoringBlocks.add(blockKey(location))
+			save()
+		}
+		return true
 	}
 
 	fun recordBlockBreak(player: Player, location: Location, material: Material) {
+		if (laboratoryTnt.remove(blockKey(location)) != null) save()
 		if (placedScoringBlocks.remove(blockKey(location))) {
 			save()
 			return
@@ -1747,6 +2369,48 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 		if (score > 0) {
 			addScore(team, score)
+			save()
+		}
+	}
+
+	fun recordDestroyedBlocks(locations: Collection<Location>) {
+		var changed = false
+		for (location in locations) changed = laboratoryTnt.remove(blockKey(location)) != null || changed
+		if (changed) save()
+	}
+
+	fun recordLaboratoryTntPrimed(location: Location) {
+		if (laboratoryTnt.remove(blockKey(location)) != null) save()
+	}
+
+	fun containsLaboratoryTnt(locations: Collection<Location>): Boolean =
+		locations.any { laboratoryTnt.containsKey(blockKey(it)) }
+
+	fun rejectKeyRegionBlockEdit(player: Player, location: Location): Boolean {
+		if (keys.values.none { it.state == FallenKeyState.PLACED && it.contains(location) }) return false
+		CommandMessages.warning(player, "放置状态密钥的 ${FALLEN_KEY_WIDTH}x${FALLEN_KEY_HEIGHT}x${FALLEN_KEY_DEPTH} 区域内不能放置或破坏方块。")
+		return true
+	}
+
+	private fun clearLaboratoryTnt(owner: UUID? = null): Int {
+		val targets = laboratoryTnt.entries.filter { owner == null || it.value.owner == owner }
+		for ((encoded, _) in targets) {
+			laboratoryTnt.remove(encoded)
+			blockLocation(encoded)?.block?.takeIf { it.type == Material.TNT }?.type = Material.AIR
+		}
+		if (targets.isNotEmpty()) save()
+		return targets.size
+	}
+
+	fun reconcileLaboratoryTntChunk(chunk: Chunk) {
+		val prefix = "${chunk.world.name}:"
+		val stale = laboratoryTnt.keys.filter { encoded ->
+			if (!encoded.startsWith(prefix)) return@filter false
+			val location = blockLocation(encoded) ?: return@filter true
+			(location.blockX shr 4) == chunk.x && (location.blockZ shr 4) == chunk.z && location.block.type != Material.TNT
+		}
+		if (stale.isNotEmpty()) {
+			stale.forEach(laboratoryTnt::remove)
 			save()
 		}
 	}
@@ -1789,7 +2453,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun processUpgradePaths() {
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		for (player in Bukkit.getOnlinePlayers()) {
 			val active = isLoadoutProtectionActive(player)
 			val node = if (active) upgradeNode(player, now) else 0
@@ -1840,18 +2504,55 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			else -> 0
 		}
 		if (amount > 0) {
+			val anomaly = FallenItemAnomaly.variant(
+				"$key:${now / intervalMillis}",
+				REFILLED_SUPPLY_LABEL_ANOMALY_ONE_IN
+			)
 			val target = existing.firstOrNull()
 			if (target != null) {
 				target.amount += amount
+				if (anomaly != null && markSupplyLabelAnomaly(target, anomaly)) {
+					player.sendMessage(Component.text("新补给上的实验室标签似乎被另一条记录覆盖了。", NamedTextColor.LIGHT_PURPLE))
+				}
 			} else {
 				ensureLoadoutStorageSpace(player, 1)
-				giveLoadoutItem(player, factory().apply { this.amount = amount })
+				val created = factory().apply { this.amount = amount }
+				if (anomaly != null && markSupplyLabelAnomaly(created, anomaly)) {
+					player.sendMessage(Component.text("新补给上的实验室标签似乎被另一条记录覆盖了。", NamedTextColor.LIGHT_PURPLE))
+				}
+				giveLoadoutItem(player, created)
 			}
 		}
 		if (nextAt == null || now >= nextAt) {
 			upgradeSupplyNextAt[key] = now + intervalMillis
 			if (amount > 0) save()
 		}
+	}
+
+	private fun markSupplyLabelAnomaly(item: ItemStack, variant: Int): Boolean {
+		val meta = item.itemMeta
+		if (meta.persistentDataContainer.has(itemAnomalyKey, PersistentDataType.INTEGER)) return false
+		val anomalyLore = when (variant) {
+			0 -> "补给批次签发者: STEINBECK-S01"
+			1 -> "回收指令: STEINBECK-S02 / 未执行"
+			2 -> "资产归类: 聚居地实验架构子系统"
+			3 -> "受试者 / 设备分类冲突: 未解决"
+			4 -> "库存来源: 封闭运行批次 03"
+			5 -> "公开运行标签: 01 / 初始化标签: 04"
+			6 -> "人格模板校验: 人类源记录缺失"
+			7 -> "管理设施资产表: 建城阶段已登记"
+			8 -> "控制权所有者: S01, S02, S03"
+			9 -> "发放意见: 继续 / 中止 / 吸收"
+			10 -> "关机清单: 本物品不在回收范围"
+			else -> "观察对象字段: ${item.type.name} / PLAYER"
+		}
+		meta.lore(meta.lore().orEmpty() + listOf(
+			Component.text("[自动标签覆写]", NamedTextColor.LIGHT_PURPLE),
+			Component.text(anomalyLore, NamedTextColor.DARK_PURPLE)
+		))
+		meta.persistentDataContainer.set(itemAnomalyKey, PersistentDataType.INTEGER, variant)
+		item.itemMeta = meta
+		return true
 	}
 
 	private fun applyTerritorySpeedBonus(player: Player) {
@@ -1938,7 +2639,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	fun beginRespawnWait(player: Player, anchor: Location, delaySeconds: Int) {
 		val world = anchor.world ?: return
 		respawnWaits[player.uniqueId] = RespawnWait(
-			System.currentTimeMillis() + delaySeconds * 1000L,
+			effectiveNowMillis() + delaySeconds * 1000L,
 			world.name,
 			anchor.x,
 			anchor.y,
@@ -1946,7 +2647,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		)
 		player.sendMessage(Component.text("复活等待 ${delaySeconds} 秒。等待期间无法移动或参与活动。", NamedTextColor.YELLOW))
 		loadoutRestorePending.remove(player.uniqueId)
-		restorePlayerLoadout(player, grantConsumables = true)
+		restorePlayerLoadout(player, grantConsumables = false)
 		save()
 	}
 
@@ -1967,13 +2668,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun notifyRespawnWaiting(player: Player) {
 		val wait = respawnWaits[player.uniqueId] ?: return
-		val seconds = ((wait.untilMillis - System.currentTimeMillis()).coerceAtLeast(0L) + 999L) / 1000L
+		val seconds = ((wait.untilMillis - effectiveNowMillis()).coerceAtLeast(0L) + 999L) / 1000L
 		player.sendActionBar(Component.text("复活等待中：${seconds}s", NamedTextColor.YELLOW))
 	}
 
 	private fun resumeRespawnWait(player: Player): Boolean {
 		val wait = respawnWaits[player.uniqueId] ?: return false
-		if (wait.untilMillis <= System.currentTimeMillis()) {
+		if (wait.untilMillis <= effectiveNowMillis()) {
 			completeRespawnWait(player)
 			return true
 		}
@@ -1985,7 +2686,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private fun processRespawnWaits() {
 		for ((playerId, wait) in respawnWaits) {
 			val player = Bukkit.getPlayer(playerId) ?: continue
-			if (wait.untilMillis <= System.currentTimeMillis()) {
+			if (wait.untilMillis <= effectiveNowMillis()) {
 				completeRespawnWait(player)
 			} else {
 				notifyRespawnWaiting(player)
@@ -2025,44 +2726,66 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun recordMovement(player: Player, from: Location, to: Location) {
-		if (!phase.allowsKeyCapture() || !player.isGliding) {
+		if ((phase != FallenPhase.ACTIVE && phase != FallenPhase.OVERTIME) || !player.isGliding) {
 			elytraSamples.remove(player.uniqueId)
-			return
-		}
-		if (from.world != to.world) {
-			elytraSamples[player.uniqueId] = ElytraSample(to.clone(), System.currentTimeMillis(), 0L)
 			return
 		}
 		val team = teamOf(player) ?: return
-		if (team in eliminatedTeams || isNearOwnRegionCenter(team, to, 100.0)) {
+		if (team in eliminatedTeams) {
 			elytraSamples.remove(player.uniqueId)
 			return
 		}
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
+		val explored = exploredFlightChunks.computeIfAbsent(player.uniqueId) { ConcurrentHashMap.newKeySet() }
+		val discoveredChunk = explored.add(flightChunkKey(to))
+		if (discoveredChunk) save()
+		val inEnemyRegion = isInEnemyRegion(team, to)
+		if (from.world != to.world) {
+			elytraSamples[player.uniqueId] = ElytraSample(to.clone(), now, discoveredChunk, inEnemyRegion, inEnemyRegion)
+			return
+		}
 		val sample = elytraSamples[player.uniqueId]
 		if (sample == null) {
-			elytraSamples[player.uniqueId] = ElytraSample(to.clone(), now, 0L)
+			elytraSamples[player.uniqueId] = ElytraSample(to.clone(), now, discoveredChunk, inEnemyRegion, inEnemyRegion)
 			return
 		}
-		val elapsed = (now - sample.atMillis).coerceAtLeast(1L)
-		val speed = sample.location.distance(to) / (elapsed / 1000.0)
-		val accumulated = if (speed > ELYTRA_SCORE_SPEED) sample.accumulatedMillis + elapsed else 0L
-		if (accumulated >= ELYTRA_SCORE_INTERVAL_MILLIS) {
-			addScore(team, FallenScoreRules.ELYTRA_SCORE)
-			elytraSamples[player.uniqueId] = ElytraSample(to.clone(), now, accumulated - ELYTRA_SCORE_INTERVAL_MILLIS)
-			save()
-			return
+		sample.discoveredNewChunk = sample.discoveredNewChunk || discoveredChunk
+		sample.enteredEnemyRegion = sample.enteredEnemyRegion || (!sample.wasInEnemyRegion && inEnemyRegion)
+		sample.wasInEnemyRegion = inEnemyRegion
+		if (now - sample.startedAtMillis < FallenFlightRules.INTERVAL_MILLIS) return
+		if (FallenFlightRules.qualifies(now - sample.startedAtMillis, sample.origin.distance(to), sample.discoveredNewChunk, sample.enteredEnemyRegion)) {
+			val granted = grantFlightReward(player, team, FallenScoreRules.ELYTRA_SCORE)
+			if (granted > 0) player.sendActionBar(Component.text("探索飞行 +$granted 阵营积分", NamedTextColor.AQUA))
 		}
-		elytraSamples[player.uniqueId] = ElytraSample(to.clone(), now, accumulated)
+		elytraSamples[player.uniqueId] = ElytraSample(to.clone(), now, false, false, inEnemyRegion)
 	}
+
+	private fun grantFlightReward(player: Player, team: FallenTeam, requested: Int): Int {
+		val local = Instant.ofEpochMilli(System.currentTimeMillis()).atZone(FallenAccessPolicy.eventZone)
+		val hourBucket = "%04d-%02d-%02dT%02d".format(local.year, local.monthValue, local.dayOfMonth, local.hour)
+		val dayBucket = local.toLocalDate().toString()
+		val ledger = flightRewardLedgers.computeIfAbsent(player.uniqueId) { FlightRewardLedger(hourBucket, dayBucket, 0, 0) }
+		if (ledger.hourBucket != hourBucket) { ledger.hourBucket = hourBucket; ledger.hourPoints = 0 }
+		if (ledger.dayBucket != dayBucket) { ledger.dayBucket = dayBucket; ledger.dayPoints = 0 }
+		val granted = FallenFlightRules.allowedGrant(requested, ledger.hourPoints, ledger.dayPoints)
+		if (granted <= 0) return 0
+		ledger.hourPoints += granted
+		ledger.dayPoints += granted
+		addScore(team, granted)
+		save()
+		return granted
+	}
+
+	private fun flightChunkKey(location: Location): String = "${location.world?.name}:${location.blockX shr 4}:${location.blockZ shr 4}"
+	private fun isInEnemyRegion(team: FallenTeam, location: Location): Boolean = FallenTeam.entries.any { it != team && isInTeamRegion(it, location) }
 
 	fun protectRespawn(player: Player) {
 		val team = teamOf(player) ?: return
 		if (team in eliminatedTeams) return
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		val duration = if ((teamRespawnBoostUntil[team] ?: 0L) > now) TEAM_RESPAWN_PROTECTION_MILLIS else RESPAWN_PROTECTION_MILLIS
 		loadoutRestorePending.remove(player.uniqueId)
-		restorePlayerLoadout(player, grantConsumables = true)
+		restorePlayerLoadout(player, grantConsumables = false)
 		respawnProtectionUntil[player.uniqueId] = now + duration
 		player.sendMessage(Component.text("你获得了 ${duration / 1000L} 秒复活保护。", NamedTextColor.AQUA))
 	}
@@ -2079,7 +2802,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun hasRespawnProtection(player: Player): Boolean {
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		val stationUntil = stationProtectionUntil[player.uniqueId] ?: 0L
 		if (stationUntil > now) return true
 		if (stationUntil > 0L) stationProtectionUntil.remove(player.uniqueId)
@@ -2101,10 +2824,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun tick() {
+		if (finaleTask != null) return
+		advanceEffectiveClock()
 		if (phase != FallenPhase.IDLE && phase != FallenPhase.ENDED) {
 			runTickSubsystem("world-rules", ::applyWorldRules)
 		}
 		runTickSubsystem("timeline", ::processTimeline)
+		runTickSubsystem("narrative", ::processNarrative)
 		runTickSubsystem("dropped-keys", ::processDroppedKeyEntities)
 		var loginAccessEnforced = false
 		runTickSubsystem("login-access") { loginAccessEnforced = enforceLoginAccess() }
@@ -2167,12 +2893,20 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun enforceLoginAccess(): Boolean {
 		val message = loginDisconnectMessage() ?: return false
+		if (FallenAccessPolicy.isCurfew(phase)) {
+			val marker = Instant.now().atZone(FallenAccessPolicy.eventZone).toLocalDate().toString()
+			if (curfewCleanupMarker != marker) {
+				curfewCleanupMarker = marker
+				val removed = clearLaboratoryTnt()
+				if (removed > 0) plugin.logger.info("Curfew cleanup removed $removed unprimed laboratory TNT blocks.")
+			}
+		}
 		Bukkit.getOnlinePlayers().forEach { it.kick(message) }
 		return true
 	}
 
 	private fun renderVisuals() {
-		if (phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return
+		if (finaleTask != null || phase == FallenPhase.IDLE || phase == FallenPhase.ENDED) return
 		visualFrame++
 		runTickSubsystem("visual-keys") { renderPlacedKeys(visualFrame) }
 		runTickSubsystem("visual-stations") { renderStations(visualFrame) }
@@ -2219,7 +2953,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			lines += " "
 			for ((team, since) in dangerSince) {
 				if (team in eliminatedTeams) continue
-				val remaining = (since + ELIMINATION_GRACE_MILLIS - System.currentTimeMillis()).coerceAtLeast(0L)
+				val remaining = (since + ELIMINATION_GRACE_MILLIS - effectiveNowMillis()).coerceAtLeast(0L)
 				lines += "${team.name} 濒危 ${formatDuration(remaining)}"
 			}
 		}
@@ -2333,15 +3067,16 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			startGame()
 		}
 		if (startedAtMillis == 0L) return
-		val deploymentEndsAt = startedAtMillis + DEPLOYMENT_MILLIS
+		val gameplayNow = effectiveNowMillis()
+		val deploymentEndsAt = DEPLOYMENT_MILLIS
 		if (phase == FallenPhase.DEPLOYMENT) {
-			announceRemaining("deployment-30m", deploymentEndsAt - now, 30 * 60 * 1000L, "部署阶段剩余 30 分钟。")
-			announceRemaining("deployment-10m", deploymentEndsAt - now, 10 * 60 * 1000L, "部署阶段剩余 10 分钟。")
-			announceRemaining("deployment-1m", deploymentEndsAt - now, 60 * 1000L, "部署阶段剩余 1 分钟。")
-			if (now >= deploymentEndsAt) {
+			announceRemaining("deployment-30m", deploymentEndsAt - gameplayNow, 30 * 60 * 1000L, "部署阶段剩余 30 分钟。")
+			announceRemaining("deployment-10m", deploymentEndsAt - gameplayNow, 10 * 60 * 1000L, "部署阶段剩余 10 分钟。")
+			announceRemaining("deployment-1m", deploymentEndsAt - gameplayNow, 60 * 1000L, "部署阶段剩余 1 分钟。")
+			if (gameplayNow >= deploymentEndsAt) {
 				phase = FallenPhase.ACTIVE
 				broadcast(Component.text("部署阶段结束，密钥夺取已启用。", NamedTextColor.RED))
-				doctorBroadcast("准备时间结束。现在，请证明哪一座城市最值得继续存在。")
+				doctorBroadcast("准备时间结束。请证明哪座城市最值得继续存在；‘大家都很努力’不是系统支持的结算条件。")
 				save()
 			}
 		}
@@ -2368,6 +3103,14 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
+	private fun processNarrative() {
+		if (!FallenAccessPolicy.isEventInProgress(phase)) return
+		val selection = FallenNarrative.latestDue(effectiveNowMillis(), announcedMilestones) ?: return
+		announcedMilestones.addAll(selection.consumedKeys)
+		steinbeckBroadcast(selection.cue.sender, selection.cue.message)
+		save()
+	}
+
 	private fun announceRemaining(key: String, remaining: Long, threshold: Long, message: String) {
 		if (remaining in 1..threshold && announcedMilestones.add(key)) {
 			broadcast(Component.text(message, NamedTextColor.YELLOW))
@@ -2380,7 +3123,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (startedAtMillis == 0L) initializeScheduledTimeline()
 		phase = FallenPhase.OVERTIME
 		broadcast(Component.text("最长游戏时间到达，进入 30 分钟加时。所有放置密钥坐标公开，密钥持续积分停止，指南针免费。", NamedTextColor.GOLD))
-		doctorBroadcast("数据仍然无法区分你们。很好——我已经公开全部密钥坐标，开始最后三十分钟。")
+		doctorBroadcast("数据仍然无法区分你们。能把平局维持这么久也算一种才能；全部密钥坐标现已公开，最后三十分钟开始。")
 		broadcastPlacedKeyCoordinates()
 		save()
 	}
@@ -2422,10 +3165,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private fun initializeScheduledTimeline() {
 		startedAtMillis = EVENT_START_MILLIS
 		if (lastPlacedKeyScoreAt == 0L) {
-			lastPlacedKeyScoreAt = EVENT_START_MILLIS + DEPLOYMENT_MILLIS
-		}
-		if (lastRefreshKeyAt == 0L) {
-			lastRefreshKeyAt = EVENT_START_MILLIS
+			lastPlacedKeyScoreAt = DEPLOYMENT_MILLIS
 		}
 	}
 
@@ -2440,15 +3180,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private fun normalizeScheduledTimeline() {
 		if (startedAtMillis == 0L) return
 		val changed = startedAtMillis != EVENT_START_MILLIS
-			|| lastPlacedKeyScoreAt == 0L
-			|| lastRefreshKeyAt == 0L
+			|| lastPlacedKeyScoreAt > effectiveGameTimeMillis + PLACED_KEY_SCORE_INTERVAL_MILLIS
 		startedAtMillis = EVENT_START_MILLIS
-		if (lastPlacedKeyScoreAt == 0L || lastPlacedKeyScoreAt < EVENT_START_MILLIS + DEPLOYMENT_MILLIS) {
-			lastPlacedKeyScoreAt = EVENT_START_MILLIS + DEPLOYMENT_MILLIS
+		if (lastPlacedKeyScoreAt == 0L || lastPlacedKeyScoreAt > effectiveGameTimeMillis + PLACED_KEY_SCORE_INTERVAL_MILLIS) {
+			lastPlacedKeyScoreAt = DEPLOYMENT_MILLIS
 		}
-		if (lastRefreshKeyAt == 0L || lastRefreshKeyAt < EVENT_START_MILLIS) {
-			lastRefreshKeyAt = EVENT_START_MILLIS
-		}
+		if (lastRefreshKeyAt > effectiveGameTimeMillis) lastRefreshKeyAt = 0L
 		if (changed) save()
 	}
 
@@ -2567,7 +3304,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun processCaptures() {
 		if (!phase.allowsKeyCapture()) return
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		val seen = HashSet<String>()
 		for (key in keys.values) {
 			if (key.state != FallenKeyState.PLACED) continue
@@ -2594,6 +3331,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun capture(player: Player, capturingTeam: FallenTeam, key: FallenKey) {
 		val oldOwner = key.ownerTeam
+		key.displacedTeam = oldOwner
+		key.requiresPlacementForValidity = true
 		key.ownerTeam = capturingTeam
 		transitionKey(key, FallenKeyState.ITEM)
 		if (key.type != FallenKeyType.REFRESH) key.type = FallenKeyType.STOLEN
@@ -2604,13 +3343,21 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		addScore(oldOwner, -FallenScoreRules.CAPTURE_LOSS)
 		captureProgress.clear()
 		unresolvedCaptures.computeIfAbsent(player.uniqueId) { ConcurrentHashMap.newKeySet() }.add(key.id)
-		doctorBroadcast("${player.name} 从 ${oldOwner.displayName} 夺走了密钥 ${key.shortId()}。让我们看看它能否活着回到另一座城市。")
+		doctorBroadcastByChance(
+			4,
+			"Doc. Steinbeck" to "${player.name} 从 ${oldOwner.displayName} 夺走了密钥 ${key.shortId()}。最难的六秒结束了，现在只剩整段返程和所有追兵。",
+			"Steinbeck // S-01" to "夺取成立，原聚居地的有效节点立即减少。系统不等待转化，焦虑指标也不必等待。",
+			"Steinbeck // S-02" to "${oldOwner.displayName} 仍可夺回密钥 ${key.shortId()}。系统把警报写得像讣告，只是为了让界面更有权威感。",
+			"Steinbeck // S-03" to "节点 ${key.shortId()} 暂不属于任何网络。携带者正在选择下一处连接，真像一根非常紧张的移动网线。",
+			"Doc. Steinbeck" to "密钥离开原位时，暴露的通常不是防线，而是追赶它的人。以及那些直到警报响起才开始问坐标的人。",
+			"Steinbeck // S-02" to "${player.name}，你携带的是一座城市的倒计时，不只是得分物品。背包说明书对此写得出奇简略。"
+		)
 		save()
 	}
 
 	private fun processSelfDestruct() {
 		if (!phase.allowsKeyCapture()) return
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		var changed = false
 		for (key in keys.values) {
 			if (key.state != FallenKeyState.SELF_DESTRUCTING) continue
@@ -2625,7 +3372,15 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			addScore(key.ownerTeam, FallenScoreRules.SELF_DESTRUCT_SCORE)
 			addScore(key.originalTeam, -FallenScoreRules.SELF_DESTRUCT_LOSS)
 			destroyedKeys[key.ownerTeam] = (destroyedKeys[key.ownerTeam] ?: 0) + 1
-			doctorBroadcast("密钥 ${key.shortId()} 已化为灰烬。${key.ownerTeam.displayName} 完成了这项破坏性实验。")
+			doctorBroadcastByChance(
+				2,
+				"Doc. Steinbeck" to "密钥 ${key.shortId()} 已化为灰烬。${key.ownerTeam.displayName} 完成了破坏性实验，清洁工作则慷慨地留给了空气。",
+				"Steinbeck // S-01" to "自毁执行完毕，永久损失已写入本轮数据。回滚请求入口位于一个不存在的菜单中。",
+				"Steinbeck // S-02" to "密钥消失了，做出选择的人还在。系统常把两者混为一谈，因为责任分配会因此方便很多。",
+				"Steinbeck // S-03" to "节点已移除，关联行为仍留在网络中。没有真正的空白，只有被重新命名的组成部分。是不是很整洁？",
+				"Doc. Steinbeck" to "倒计时结束。现在观察哪一方最先把损失称作必要，哪一方最先声称这本来就是计划。",
+				"Steinbeck // S-01" to "样本 ${key.shortId()} 终止。模型将以缺失状态继续运行；缺失数据通常比玩家解释更可靠。"
+			)
 			changed = true
 		}
 		if (changed) save()
@@ -2633,8 +3388,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun processRefreshKeys() {
 		if (startedAtMillis == 0L || phase == FallenPhase.IDLE || phase == FallenPhase.DEPLOYMENT || phase == FallenPhase.ENDED) return
-		val now = System.currentTimeMillis()
-		if (lastRefreshKeyAt == 0L) lastRefreshKeyAt = startedAtMillis
+		val now = effectiveNowMillis()
 		var changed = false
 		while (now - lastRefreshKeyAt >= REFRESH_KEY_INTERVAL_MILLIS) {
 			val issuedAt = lastRefreshKeyAt + REFRESH_KEY_INTERVAL_MILLIS
@@ -2663,7 +3417,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun processRefreshKeyExpiry() {
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		var changed = false
 		for (key in keys.values) {
 			if (key.state == FallenKeyState.DESTROYED || !key.isExpired(now)) continue
@@ -2681,7 +3435,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun processPlacedKeyScore() {
 		if (phase != FallenPhase.ACTIVE) return
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		if (lastPlacedKeyScoreAt == 0L) {
 			lastPlacedKeyScoreAt = now
 			return
@@ -2702,7 +3456,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun processEliminations() {
 		if (phase != FallenPhase.ACTIVE && phase != FallenPhase.OVERTIME) return
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		for (team in FallenTeam.entries) {
 			if (team in eliminatedTeams) continue
 			val effectiveKeys = keys.values.count {
@@ -2716,7 +3470,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				continue
 			}
 			val since = dangerSince.getOrPut(team) {
-				doctorBroadcast("${team.displayName} 的生命体征已经归零。十分钟后若仍无有效密钥，我将终止该组实验。")
+				doctorBroadcast("${team.displayName} 的生命体征已经归零。你们有十分钟证明这只是一次非常昂贵的登记错误。")
+				narrativeBroadcastOnce(
+					"narrative-first-danger-conflict",
+					"Steinbeck // S-02",
+					"更正：十分钟不是悼念环节，是你们仍可改变结果的时间。夺回并重新放置密钥，最好赶在它写完讣告之前。"
+				)
 				save()
 				now
 			}
@@ -2733,7 +3492,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun processCompasses() {
 		if (!phase.allowsKeyCapture()) return
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		for (player in Bukkit.getOnlinePlayers()) {
 			val playerTeam = teamOf(player) ?: continue
 			for (item in player.inventory.contents.filterNotNull()) {
@@ -2789,7 +3548,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun processPreciseReveals() {
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		var changed = false
 		for ((id, reveal) in preciseReveals) {
 			if (reveal.untilMillis <= now) {
@@ -2819,7 +3578,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun processActiveTracks() {
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		for ((trackerId, track) in activeTracks) {
 			if (track.untilMillis <= now) {
 				activeTracks.remove(trackerId)
@@ -2838,7 +3597,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun processKeyAlerts() {
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		for ((keyId, until) in keyAlertUntil) {
 			if (until <= now) {
 				keyAlertUntil.remove(keyId)
@@ -2867,7 +3626,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun processStations() {
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		val seenUse = HashSet<String>()
 		val seenDisrupt = HashSet<String>()
 		val seenRepair = HashSet<String>()
@@ -2925,6 +3684,12 @@ class FallenGameService(private val plugin: JavaPlugin) {
 						stationDisruptedUntil[station.id] = now + STATION_DISRUPT_MILLIS
 						stationDisruptProgress.remove(progressKey)
 						alertTeam(station.team, Component.text("传送站 ${station.id} 已被干扰 10 分钟。", NamedTextColor.RED))
+						narrativeBroadcastOnceByChance(
+							"narrative-first-station-disruption",
+							3,
+							"Steinbeck // S-03",
+							"传送节点故障已记录。它们并非后来被实验征用，而是从设计之初就在拓扑中；城市规划终于派上了它真正的用途。"
+						)
 						save()
 					}
 				}
@@ -2936,7 +3701,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun renderStations(frame: Int) {
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		for (station in fixedStations) {
 			renderStation(station, now, frame)
 		}
@@ -3078,7 +3843,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		CommandMessages.warning(player, reason)
 	}
 
-	private fun isCombatTagged(player: Player, now: Long = System.currentTimeMillis()): Boolean {
+	private fun isCombatTagged(player: Player, now: Long = effectiveNowMillis()): Boolean {
 		return (combatUntil[player.uniqueId] ?: 0L) > now
 	}
 
@@ -3098,11 +3863,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private fun isSafeRespawn(team: FallenTeam, location: Location): Boolean {
 		if (!isInTeamRegion(team, location)) return false
 		if (nearEnemyPlacedKey(location, team, 30.0)) return false
+		if (Bukkit.getOnlinePlayers().any { enemy ->
+			val enemyTeam = teamOf(enemy)
+			enemyTeam != null && enemyTeam != team && enemyTeam !in eliminatedTeams
+				&& enemy.gameMode != GameMode.SPECTATOR && !enemy.isDead
+				&& enemy.world == location.world && enemy.location.distanceSquared(location) < SAFE_RESPAWN_ENEMY_RADIUS_SQUARED
+		}) return false
 		val feet = location.block
 		val head = location.clone().add(0.0, 1.0, 0.0).block
 		val below = location.clone().subtract(0.0, 1.0, 0.0).block
-		if (!feet.isEmpty || !head.isEmpty) return false
-		if (feet.type == Material.LAVA || head.type == Material.LAVA || below.type == Material.LAVA) return false
+		if (!feet.isEmpty || !head.isEmpty || feet.isLiquid || head.isLiquid) return false
+		if (feet.type in UNSAFE_RESPAWN_MATERIALS || head.type in UNSAFE_RESPAWN_MATERIALS || below.type in UNSAFE_RESPAWN_MATERIALS) return false
 		if (below.isEmpty || below.isLiquid) return false
 		return true
 	}
@@ -3136,6 +3907,16 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		return "${location.world?.name}:${location.blockX}:${location.blockY}:${location.blockZ}"
 	}
 
+	private fun blockLocation(encoded: String): Location? {
+		val parts = encoded.split(':')
+		if (parts.size < 4) return null
+		val world = Bukkit.getWorld(parts.dropLast(3).joinToString(":")) ?: return null
+		val x = parts[parts.size - 3].toIntOrNull() ?: return null
+		val y = parts[parts.size - 2].toIntOrNull() ?: return null
+		val z = parts[parts.size - 1].toIntOrNull() ?: return null
+		return Location(world, x.toDouble(), y.toDouble(), z.toDouble())
+	}
+
 	private fun isNearOwnRegionCenter(team: FallenTeam, location: Location, radius: Double): Boolean {
 		return regionsOf(team).any { region ->
 			region.center()?.let { center -> center.world == location.world && center.distance(location) <= radius } == true
@@ -3143,7 +3924,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun shouldDropKeysOnQuit(player: Player): Boolean {
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		if (isCombatTagged(player, now)) return true
 		if (hasUnresolvedCapture(player.uniqueId)) return true
 		return player.inventory.contents.filterNotNull()
@@ -3183,7 +3964,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private fun revealPrecisely(requesterTeam: FallenTeam, targetTeam: FallenTeam, key: FallenKey, center: Location) {
 		val cooldownKey = "${requesterTeam.name}:${key.id}"
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		if ((keyJammedUntil[key.id] ?: 0L) > now) {
 			val noticeKey = "jammed:$cooldownKey"
 			if ((jammedRevealNoticeUntil[noticeKey] ?: 0L) <= now) {
@@ -3201,7 +3982,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun activeCompassCount(team: FallenTeam): Int {
-		val now = System.currentTimeMillis()
+		val now = effectiveNowMillis()
 		return Bukkit.getOnlinePlayers()
 			.filter { teamOf(it) == team }
 			.sumOf { player ->
@@ -3216,13 +3997,16 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun spendScore(player: Player, team: FallenTeam, cost: Int): Boolean {
-		val current = scores[team] ?: 0
-		if (current < cost) {
-			CommandMessages.warning(player, "阵营积分不足，需要 $cost 分，当前 $current 分。")
-			return false
+		return synchronized(scores) {
+			val current = scores[team] ?: 0
+			if (current < cost) {
+				CommandMessages.warning(player, "阵营积分不足，需要 $cost 分，当前 $current 分。")
+				false
+			} else {
+				scores[team] = current - cost
+				true
+			}
 		}
-		addScore(team, -cost)
-		return true
 	}
 
 	private fun playerTeamForPurchase(player: Player): FallenTeam? {
@@ -3319,7 +4103,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		pdc.set(compassOwnerTeamKey, PersistentDataType.STRING, ownerTeam.name)
 		pdc.set(compassTargetTeamKey, PersistentDataType.STRING, targetTeam.name)
 		pdc.set(compassTargetKeyIdKey, PersistentDataType.STRING, targetKey.id.toString())
-		pdc.set(compassExpiresAtKey, PersistentDataType.LONG, System.currentTimeMillis() + COMPASS_DURATION_MILLIS)
+		pdc.set(compassExpiresAtKey, PersistentDataType.LONG, effectiveNowMillis() + COMPASS_DURATION_MILLIS)
 		pdc.set(compassNextRefreshAtKey, PersistentDataType.LONG, 0L)
 		item.itemMeta = meta
 		return item
@@ -3354,12 +4138,19 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				player.gameMode = GameMode.SPECTATOR
 			}
 		}
-		doctorBroadcast("${team.displayName} 已从实验中淘汰。原因：$reason。")
+		doctorBroadcast("${team.displayName} 已从实验中淘汰。原因：$reason。感谢各位的贡献，尤其是那些完全可以避免的部分。")
+		narrativeBroadcastOnce(
+			"narrative-first-elimination-vote",
+			"实验系统",
+			"淘汰决议已执行。STEINBECK 实例表决未达成一致；协议因此选择了最体贴的方案——假装反对意见不存在。"
+		)
 		save()
 	}
 
 	private fun isEffectiveKeyForSurvival(key: FallenKey): Boolean {
-		return key.isEffectiveForSurvival(System.currentTimeMillis())
+		val holderTeam = key.holder?.let(Bukkit::getPlayer)?.takeIf { it.isOnline }?.let(::teamOf)
+		val inOwnerPool = key.state == FallenKeyState.ITEM && key.holder == null && key.worldName == null
+		return key.isEffectiveForSurvival(effectiveNowMillis(), holderTeam == key.ownerTeam, inOwnerPool)
 	}
 
 	private fun winnerTeams(): List<FallenTeam> {
@@ -3534,10 +4325,52 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	private fun doctorBroadcast(message: String) {
-		Bukkit.broadcast(
-			Component.text("[Doc. Steinbeck] ", NamedTextColor.DARK_PURPLE)
-				.append(Component.text(message, NamedTextColor.LIGHT_PURPLE))
-		)
+		steinbeckBroadcast("Doc. Steinbeck", message)
+	}
+
+	private fun doctorBroadcastByChance(oneIn: Int, vararg lines: Pair<String, String>) {
+		require(oneIn > 0) { "oneIn must be positive" }
+		if (lines.isEmpty()) return
+		val random = ThreadLocalRandom.current()
+		if (random.nextInt(oneIn) != 0) return
+		val (sender, message) = lines[random.nextInt(lines.size)]
+		steinbeckBroadcast(sender, message)
+	}
+
+	private fun steinbeckBroadcast(sender: String, message: String) {
+		Bukkit.broadcast(steinbeckComponent(sender, message))
+	}
+
+	private fun steinbeckComponent(sender: String, message: String): Component {
+		val random = ThreadLocalRandom.current()
+		val corruptionWidth = if (message.length >= 18) 2 else 1
+		val corruptionStart = if (message.length > corruptionWidth + 4) {
+			random.nextInt(2, message.length - corruptionWidth - 1)
+		} else 0
+		val before = message.substring(0, corruptionStart)
+		val corrupted = message.substring(corruptionStart, (corruptionStart + corruptionWidth).coerceAtMost(message.length))
+		val after = message.substring((corruptionStart + corruptionWidth).coerceAtMost(message.length))
+		val signal = listOf("CRC", "SYNC", "MEM", "VOICE", "INSTANCE")[random.nextInt(5)]
+		return Component.text("[", NamedTextColor.DARK_PURPLE)
+				.append(Component.text(sender, NamedTextColor.DARK_PURPLE))
+				.append(Component.text(" // ", NamedTextColor.DARK_GRAY))
+				.append(Component.text(signal, NamedTextColor.DARK_RED).decorate(TextDecoration.OBFUSCATED))
+				.append(Component.text("] ", NamedTextColor.DARK_PURPLE))
+				.append(Component.text(before, NamedTextColor.LIGHT_PURPLE))
+				.append(Component.text(corrupted.ifEmpty { "?" }, NamedTextColor.RED).decorate(TextDecoration.OBFUSCATED))
+				.append(Component.text(after, NamedTextColor.LIGHT_PURPLE))
+				.append(Component.text("  ⟦SIGNAL CORRUPTION⟧", NamedTextColor.DARK_RED).decorate(TextDecoration.ITALIC))
+	}
+
+	private fun narrativeBroadcastOnce(key: String, sender: String, message: String) {
+		if (!announcedMilestones.add(key)) return
+		steinbeckBroadcast(sender, message)
+		save()
+	}
+
+	private fun narrativeBroadcastOnceByChance(key: String, oneIn: Int, sender: String, message: String) {
+		if (key in announcedMilestones || ThreadLocalRandom.current().nextInt(oneIn) != 0) return
+		narrativeBroadcastOnce(key, sender, message)
 	}
 
 	private fun alertTeam(team: FallenTeam, component: Component) {
@@ -3552,8 +4385,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (!dataFile.exists()) return
 		val config = YamlConfiguration.loadConfiguration(dataFile)
 		phase = FallenPhase.valueOf(config.getString("phase", FallenPhase.IDLE.name)!!)
+		effectiveGameTimeMillis = config.getLong("effective-game-time", 0L).coerceAtLeast(0L)
 		config.getConfigurationSection("scores")?.let { section ->
-			FallenTeam.entries.forEach { scores[it] = section.getInt(it.name, 0) }
+			FallenTeam.entries.forEach { scores[it] = section.getInt(it.name, 0).coerceAtLeast(0) }
 		}
 		config.getConfigurationSection("kills")?.let { section ->
 			FallenTeam.entries.forEach { kills[it] = section.getInt(it.name, 0) }
@@ -3586,19 +4420,19 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		config.getConfigurationSection("key-jammed-until")?.let { section ->
 			for (id in section.getKeys(false)) {
 				val until = section.getLong(id)
-				if (until > System.currentTimeMillis()) keyJammedUntil[UUID.fromString(id)] = until
+				if (until > effectiveNowMillis()) keyJammedUntil[UUID.fromString(id)] = until
 			}
 		}
 		config.getConfigurationSection("key-alert-until")?.let { section ->
 			for (id in section.getKeys(false)) {
 				val until = section.getLong(id)
-				if (until > System.currentTimeMillis()) keyAlertUntil[UUID.fromString(id)] = until
+				if (until > effectiveNowMillis()) keyAlertUntil[UUID.fromString(id)] = until
 			}
 		}
 		config.getConfigurationSection("team-respawn-boost-until")?.let { section ->
 			for (teamName in section.getKeys(false)) {
 				val until = section.getLong(teamName)
-				if (until > System.currentTimeMillis()) teamRespawnBoostUntil[FallenTeam.parse(teamName)] = until
+				if (until > effectiveNowMillis()) teamRespawnBoostUntil[FallenTeam.parse(teamName)] = until
 			}
 		}
 		config.getConfigurationSection("players")?.let { section ->
@@ -3619,6 +4453,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			runCatching { UUID.fromString(it) }.getOrNull()
 		}
 		config.getStringList("loadout-restore-pending").mapNotNullTo(loadoutRestorePending) {
+			runCatching { UUID.fromString(it) }.getOrNull()
+		}
+		config.getStringList("combat-logout-pending").mapNotNullTo(combatLogoutPending) {
 			runCatching { UUID.fromString(it) }.getOrNull()
 		}
 		config.getStringList("elytra-players").mapNotNullTo(elytraPlayers) {
@@ -3664,6 +4501,31 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			}
 		}
 		placedScoringBlocks.addAll(config.getStringList("placed-scoring-blocks"))
+		config.getConfigurationSection("explored-flight-chunks")?.let { section ->
+			for (uuid in section.getKeys(false)) {
+				val playerId = runCatching { UUID.fromString(uuid) }.getOrNull() ?: continue
+				exploredFlightChunks.computeIfAbsent(playerId) { ConcurrentHashMap.newKeySet() }.addAll(section.getStringList(uuid))
+			}
+		}
+		config.getConfigurationSection("flight-reward-ledgers")?.let { section ->
+			for (uuid in section.getKeys(false)) {
+				val playerId = runCatching { UUID.fromString(uuid) }.getOrNull() ?: continue
+				val ledger = section.getConfigurationSection(uuid) ?: continue
+				flightRewardLedgers[playerId] = FlightRewardLedger(
+					ledger.getString("hour-bucket").orEmpty(), ledger.getString("day-bucket").orEmpty(),
+					ledger.getInt("hour-points"), ledger.getInt("day-points")
+				)
+			}
+		}
+		config.getConfigurationSection("laboratory-tnt")?.let { section ->
+			for (id in section.getKeys(false)) {
+				val placement = section.getConfigurationSection(id) ?: continue
+				val location = placement.getString("location") ?: continue
+				val owner = runCatching { UUID.fromString(placement.getString("owner")) }.getOrNull() ?: continue
+				val team = runCatching { FallenTeam.parse(placement.getString("team")) }.getOrNull() ?: continue
+				laboratoryTnt[location] = LaboratoryTntPlacement(owner, team)
+			}
+		}
 		config.getStringList("eliminated").mapTo(eliminatedTeams) { FallenTeam.parse(it) }
 		config.getConfigurationSection("danger-since")?.let { section ->
 			for (teamName in section.getKeys(false)) {
@@ -3674,7 +4536,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			for (id in section.getKeys(false)) {
 				val revealSection = section.getConfigurationSection(id) ?: continue
 				val until = revealSection.getLong("until", 0L)
-				if (until <= System.currentTimeMillis()) continue
+				if (until <= effectiveNowMillis()) continue
 				preciseReveals[id] = PreciseReveal(
 					FallenTeam.parse(revealSection.getString("requester")),
 					FallenTeam.parse(revealSection.getString("target")),
@@ -3748,6 +4610,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		config["phase"] = phase.name
 		config["started-at"] = startedAtMillis
 		config["ended-at"] = endedAtMillis
+		config["effective-game-time"] = effectiveGameTimeMillis
 		config["last-placed-key-score-at"] = lastPlacedKeyScoreAt
 		config["last-refresh-key-at"] = lastRefreshKeyAt
 		for ((team, score) in scores) config["scores.${team.name}"] = score
@@ -3768,6 +4631,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		for ((playerId, deaths) in deathCounts) config["deaths.$playerId"] = deaths
 		config["loadout-initialized-players"] = loadoutInitializedPlayers.map(UUID::toString)
 		config["loadout-restore-pending"] = loadoutRestorePending.map(UUID::toString)
+		config["combat-logout-pending"] = combatLogoutPending.map(UUID::toString)
 		config["elytra-players"] = elytraPlayers.map(UUID::toString)
 		for ((playerId, availableAt) in gearSwitchAvailableAt) config["gear-switch-available-at.$playerId"] = availableAt
 		for ((playerId, path) in upgradePaths) config["upgrade-paths.$playerId"] = path.name
@@ -3783,6 +4647,18 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			config["unresolved-captures.$playerId"] = keyIds.map(UUID::toString)
 		}
 		config["placed-scoring-blocks"] = placedScoringBlocks.toList()
+		for ((playerId, chunks) in exploredFlightChunks) config["explored-flight-chunks.$playerId"] = chunks.toList()
+		for ((playerId, ledger) in flightRewardLedgers) {
+			config["flight-reward-ledgers.$playerId.hour-bucket"] = ledger.hourBucket
+			config["flight-reward-ledgers.$playerId.day-bucket"] = ledger.dayBucket
+			config["flight-reward-ledgers.$playerId.hour-points"] = ledger.hourPoints
+			config["flight-reward-ledgers.$playerId.day-points"] = ledger.dayPoints
+		}
+		laboratoryTnt.entries.forEachIndexed { index, (location, placement) ->
+			config["laboratory-tnt.$index.location"] = location
+			config["laboratory-tnt.$index.owner"] = placement.owner.toString()
+			config["laboratory-tnt.$index.team"] = placement.team.name
+		}
 		config["eliminated"] = eliminatedTeams.map { it.name }
 		config["announced"] = announcedMilestones.toList()
 		for ((team, since) in dangerSince) config["danger-since.${team.name}"] = since
@@ -3861,8 +4737,27 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val ACCELERATION_HARNESS_FLYING_SPEED = 0.15
 		private const val ACTIVITY_STATUS_WARNING_INTERVAL_MILLIS = 60_000L
 		private const val PERSISTENCE_INTERVAL_TICKS = 20L
+		private const val REFRESH_KEY_LABEL_ANOMALY_ONE_IN = 16
+		private const val REFILLED_SUPPLY_LABEL_ANOMALY_ONE_IN = 24
+		private const val FINALE_STEP_TICKS = 5
+		private const val FINALE_BLINDNESS_TICKS = 60
+		private const val FINALE_REVEAL_TICKS = 60
+		private const val FINALE_COLLAPSE_START_TICKS = 90
+		private const val FINALE_FRACTURE_LEAD_TICKS = 10
+		private const val FINALE_CHUNKS_PER_PLAYER_STEP = 16
+		private const val FINALE_EXIT_NOTICE_DELAY_TICKS = 40
+		private const val FINALE_KICK_DELAY_TICKS = 120
+		private const val FINALE_MAX_CHUNK_RADIUS = 16
+		private const val FINALE_DEBRIS_PER_PLAYER_PER_WAVE = 3
+		private const val FINALE_MAX_DEBRIS_PER_WAVE = 12
+		private const val FINALE_MAX_DEBRIS_ATTEMPTS_PER_WAVE = 24
+		private const val FINALE_DEBRIS_LIFETIME_TICKS = 40L
+		private val FINALE_PROGRESS_MILESTONES = listOf(25, 50, 75)
+		private const val KILL_COMMENT_ONE_IN = 5
+		private const val KILL_COMMENT_COOLDOWN_MILLIS = 20 * 1000L
 		private const val ALLOY_BULLET_BASE_DAMAGE = 2.0
 		private const val ALLOY_BULLET_SPEED_BLOCKS_PER_TICK = 20.0
+		private const val ALLOY_BULLET_MAX_LIFETIME_TICKS = 100
 		private val KEY_SHAPE_PIXELS = listOf(
 			-4 to 1, -4 to 2, -3 to 3, -2 to 3, -1 to 2, -1 to 1, -2 to 0, -3 to 0,
 			-1 to 1, 0 to 1, 1 to 1, 2 to 1, 3 to 1, 4 to 1, 5 to 1,
@@ -3882,9 +4777,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val CAPTURE_MILLIS = 6 * 1000L
 		private const val DROP_CONFIRM_MILLIS = 5_000L
 		private const val DROPPED_KEY_RECONCILE_INTERVAL_MILLIS = 5_000L
-		private const val SELF_DESTRUCT_MILLIS = 10 * 60 * 1000L
+		private const val SELF_DESTRUCT_MILLIS = 8 * 60 * 1000L
 		private const val RESPAWN_PROTECTION_MILLIS = 8_000L
 		private const val SAFE_RESPAWN_SEARCH_ATTEMPTS = 16
+		private const val SAFE_RESPAWN_ENEMY_RADIUS_SQUARED = 24.0 * 24.0
 		private const val RESPAWN_WAIT_MOVEMENT_EPSILON_SQUARED = 0.0001
 		private const val TICK_FAILURE_WARNING_INTERVAL_MILLIS = 60_000L
 		private const val PLACED_KEY_SCORE_INTERVAL_MILLIS = 10 * 60 * 1000L
@@ -3912,8 +4808,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private const val BLAST_PROTECTION_MILLIS = 120 * 1000L
 		private const val TEAM_RESPAWN_BOOST_MILLIS = 30 * 60 * 1000L
 		private const val TEAM_RESPAWN_PROTECTION_MILLIS = 10 * 1000L
-		private const val ELYTRA_SCORE_SPEED = 100.0 / 3.6
-		private const val ELYTRA_SCORE_INTERVAL_MILLIS = 30 * 1000L
+		private const val LABORATORY_TNT_CAP_PER_TEAM = 128
 		private const val INTERNAL_GAME_MODE_CHANGE_WINDOW_MILLIS = 2 * 1000L
 		private const val JAMMED_REVEAL_NOTICE_COOLDOWN_MILLIS = 30 * 1000L
 		private const val SCOREBOARD_OBJECTIVE = "fallen_status"
@@ -3985,6 +4880,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			Material.SMOOTH_BASALT,
 			Material.END_STONE
 		)
+		private val UNSAFE_RESPAWN_MATERIALS = setOf(
+			Material.LAVA, Material.FIRE, Material.SOUL_FIRE, Material.CACTUS,
+			Material.MAGMA_BLOCK, Material.CAMPFIRE, Material.SOUL_CAMPFIRE, Material.POWDER_SNOW
+		)
 	}
 
 	private data class PreciseReveal(
@@ -3996,7 +4895,22 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	private data class ActiveTrack(val targetId: UUID, val untilMillis: Long)
 
-	private data class ElytraSample(val location: Location, val atMillis: Long, val accumulatedMillis: Long)
+	private data class ElytraSample(
+		val origin: Location,
+		val startedAtMillis: Long,
+		var discoveredNewChunk: Boolean,
+		var enteredEnemyRegion: Boolean,
+		var wasInEnemyRegion: Boolean
+	)
+
+	private data class FlightRewardLedger(
+		var hourBucket: String,
+		var dayBucket: String,
+		var hourPoints: Int,
+		var dayPoints: Int
+	)
+
+	private data class LaboratoryTntPlacement(val owner: UUID, val team: FallenTeam)
 
 	private data class RespawnWait(
 		val untilMillis: Long,

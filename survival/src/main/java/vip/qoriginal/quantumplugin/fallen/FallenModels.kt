@@ -62,7 +62,7 @@ enum class FallenKeyState {
 		return when (this) {
 			PLACED -> next == ITEM || next == DESTROYED
 			ITEM -> next == PLACED || next == SELF_DESTRUCTING || next == DESTROYED
-			SELF_DESTRUCTING -> next == DESTROYED
+			SELF_DESTRUCTING -> next == ITEM || next == DESTROYED
 			DESTROYED -> false
 		}
 	}
@@ -193,7 +193,9 @@ data class FallenKey(
 	var holder: UUID? = null,
 	var selfDestructAtMillis: Long = 0L,
 	var expiresAtMillis: Long = 0L,
-	var conversionScored: Boolean = false
+	var conversionScored: Boolean = false,
+	var requiresPlacementForValidity: Boolean = false,
+	var displacedTeam: FallenTeam? = null
 ) {
 	fun placeAt(location: Location) {
 		require(state.canTransitionTo(FallenKeyState.PLACED)) {
@@ -206,6 +208,8 @@ data class FallenKey(
 		z = location.blockZ
 		holder = null
 		selfDestructAtMillis = 0L
+		requiresPlacementForValidity = false
+		displacedTeam = null
 		if (type != FallenKeyType.REFRESH) expiresAtMillis = 0L
 		state = FallenKeyState.PLACED
 	}
@@ -216,12 +220,12 @@ data class FallenKey(
 			&& expiresAtMillis <= nowMillis
 	}
 
-	fun isEffectiveForSurvival(nowMillis: Long): Boolean {
-		if (state != FallenKeyState.PLACED && state != FallenKeyState.ITEM && state != FallenKeyState.SELF_DESTRUCTING) {
-			return false
-		}
-		if (type != FallenKeyType.REFRESH || expiresAtMillis == 0L) return true
-		return expiresAtMillis - nowMillis > FALLEN_REFRESH_KEY_EXPIRY_WARNING_MILLIS
+	fun isEffectiveForSurvival(nowMillis: Long, heldByOwnerMember: Boolean = false, inOwnerPool: Boolean = false): Boolean {
+		if (state == FallenKeyState.DESTROYED || state == FallenKeyState.SELF_DESTRUCTING) return false
+		if (type == FallenKeyType.REFRESH && expiresAtMillis > 0L
+			&& expiresAtMillis - nowMillis <= FALLEN_REFRESH_KEY_EXPIRY_WARNING_MILLIS) return false
+		return state == FallenKeyState.PLACED
+			|| (!requiresPlacementForValidity && state == FallenKeyState.ITEM && (heldByOwnerMember || inOwnerPool))
 	}
 
 	fun minLocation(): Location? {
@@ -257,6 +261,8 @@ data class FallenKey(
 		section["self-destruct-at"] = selfDestructAtMillis
 		section["expires-at"] = expiresAtMillis
 		section["conversion-scored"] = conversionScored
+		section["requires-placement-for-validity"] = requiresPlacementForValidity
+		section["displaced-team"] = displacedTeam?.name
 	}
 
 	companion object {
@@ -275,7 +281,9 @@ data class FallenKey(
 				holder = section.getString("holder")?.let(UUID::fromString),
 				selfDestructAtMillis = section.getLong("self-destruct-at"),
 				expiresAtMillis = section.getLong("expires-at"),
-				conversionScored = section.getBoolean("conversion-scored", false)
+				conversionScored = section.getBoolean("conversion-scored", false),
+				requiresPlacementForValidity = section.getBoolean("requires-placement-for-validity", false),
+				displacedTeam = section.getString("displaced-team")?.let(FallenTeam::parse)
 			)
 		}
 	}

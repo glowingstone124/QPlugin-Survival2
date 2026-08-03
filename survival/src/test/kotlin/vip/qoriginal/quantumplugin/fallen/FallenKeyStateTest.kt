@@ -20,8 +20,8 @@ class FallenKeyStateTest {
 	}
 
 	@Test
-	fun `self destruction cannot be cancelled by placing the key`() {
-		assertFalse(FallenKeyState.SELF_DESTRUCTING.canTransitionTo(FallenKeyState.ITEM))
+	fun `self destruction can be cancelled back to carried state`() {
+		assertTrue(FallenKeyState.SELF_DESTRUCTING.canTransitionTo(FallenKeyState.ITEM))
 		assertFalse(FallenKeyState.SELF_DESTRUCTING.canTransitionTo(FallenKeyState.PLACED))
 		assertTrue(FallenKeyState.SELF_DESTRUCTING.canTransitionTo(FallenKeyState.DESTROYED))
 	}
@@ -45,8 +45,8 @@ class FallenKeyStateTest {
 			expiresAtMillis = now + FALLEN_REFRESH_KEY_EXPIRY_WARNING_MILLIS + 1L
 		)
 
-		assertTrue(key.isEffectiveForSurvival(now))
-		assertFalse(key.isEffectiveForSurvival(now + 1L))
+		assertTrue(key.isEffectiveForSurvival(now, heldByOwnerMember = true))
+		assertFalse(key.isEffectiveForSurvival(now + 1L, heldByOwnerMember = true))
 		assertFalse(key.isExpired(now))
 		assertTrue(key.isExpired(key.expiresAtMillis))
 	}
@@ -62,5 +62,20 @@ class FallenKeyStateTest {
 		)
 
 		assertFalse(key.isEffectiveForSurvival(0L))
+	}
+
+	@Test
+	fun `captured item keys do not count until replaced`() {
+		val key = FallenKey(UUID.randomUUID(), FallenTeam.B, FallenTeam.A, FallenKeyState.ITEM, FallenKeyType.STOLEN,
+			requiresPlacementForValidity = true, displacedTeam = FallenTeam.A)
+		assertFalse(key.isEffectiveForSurvival(0L, heldByOwnerMember = true))
+	}
+
+	@Test
+	fun `ordinary item keys require owner control`() {
+		val key = FallenKey(UUID.randomUUID(), FallenTeam.A, FallenTeam.A, FallenKeyState.ITEM, FallenKeyType.INITIAL)
+		assertFalse(key.isEffectiveForSurvival(0L))
+		assertTrue(key.isEffectiveForSurvival(0L, heldByOwnerMember = true))
+		assertTrue(key.isEffectiveForSurvival(0L, inOwnerPool = true))
 	}
 }

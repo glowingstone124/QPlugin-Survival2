@@ -10,6 +10,9 @@ import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockExplodeEvent
 import org.bukkit.event.block.BlockPlaceEvent
+import org.bukkit.event.block.BlockPistonExtendEvent
+import org.bukkit.event.block.BlockPistonRetractEvent
+import org.bukkit.event.block.TNTPrimeEvent
 import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
@@ -17,12 +20,14 @@ import org.bukkit.event.entity.EntityChangeBlockEvent
 import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.event.entity.EntityExhaustionEvent
 import org.bukkit.event.entity.EntityPickupItemEvent
+import org.bukkit.event.entity.EntityPortalEvent
 import org.bukkit.event.entity.EntityRemoveEvent
 import org.bukkit.event.entity.ItemDespawnEvent
 import org.bukkit.event.entity.ItemMergeEvent
 import org.bukkit.event.entity.ItemSpawnEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.entity.ProjectileLaunchEvent
+import org.bukkit.event.entity.ProjectileHitEvent
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryDragEvent
@@ -42,6 +47,7 @@ import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerRespawnEvent
+import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.event.world.PortalCreateEvent
 import org.bukkit.event.world.ChunkLoadEvent
 import org.bukkit.entity.Entity
@@ -64,12 +70,27 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			event.isCancelled = true
 			return
 		}
+		service.recordDestroyedBlocks(event.blockList().map { it.location })
 		event.blockList().removeIf { service.isFixedStationBlock(it.location) }
 	}
 
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	fun onBlockExplode(event: BlockExplodeEvent) {
+		service.recordDestroyedBlocks(event.blockList().map { it.location })
 		event.blockList().removeIf { service.isFixedStationBlock(it.location) }
+	}
+
+	@EventHandler(ignoreCancelled = true)
+	fun onTntPrime(event: TNTPrimeEvent) = service.recordLaboratoryTntPrimed(event.block.location)
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun onPistonExtend(event: BlockPistonExtendEvent) {
+		if (service.containsLaboratoryTnt(event.blocks.map { it.location })) event.isCancelled = true
+	}
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun onPistonRetract(event: BlockPistonRetractEvent) {
+		if (service.containsLaboratoryTnt(event.blocks.map { it.location })) event.isCancelled = true
 	}
 
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -87,7 +108,7 @@ class FallenListener(private val service: FallenGameService) : Listener {
 
 	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
 	fun onPlayerChat(event: AsyncChatEvent) {
-		if (service.isRespawnWaiting(event.player)) {
+		if (service.isRespawnWaiting(event.player) || service.isFinaleLocked(event.player)) {
 			event.isCancelled = true
 			return
 		}
@@ -152,6 +173,12 @@ class FallenListener(private val service: FallenGameService) : Listener {
 
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	fun onPlayerCommand(event: PlayerCommandPreprocessEvent) {
+		if (service.isFinaleLocked(event.player)) {
+			val canCancel = event.message.equals("/fallen finale cancel", ignoreCase = true)
+				&& (event.player.isOp || event.player.hasPermission("quantumplugin.fallen.admin"))
+			if (!canCancel) event.isCancelled = true
+			return
+		}
 		if (denyRespawnWaitAction(event.player)) {
 			event.isCancelled = true
 		}
@@ -214,6 +241,10 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			return
 		}
 		val player = event.entity as? Player ?: return
+		if (service.isFinaleLocked(player)) {
+			event.isCancelled = true
+			return
+		}
 		if (service.isRespawnWaiting(player)) {
 			event.isCancelled = true
 			return
@@ -230,6 +261,12 @@ class FallenListener(private val service: FallenGameService) : Listener {
 		}
 	}
 
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	fun onCaptureDamage(event: EntityDamageEvent) {
+		val player = event.entity as? Player ?: return
+		if (event.finalDamage > 0.0) service.interruptCapture(player)
+	}
+
 	@EventHandler(ignoreCancelled = true)
 	fun onEntityDamageByEntity(event: EntityDamageByEntityEvent) {
 		val attacker = attackingPlayer(event) ?: return
@@ -243,7 +280,7 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			event.isCancelled = true
 			return
 		}
-		if (service.isFriendlyFire(attacker, target)) {
+		if (service.isPlayerCombatForbidden(attacker, target)) {
 			event.isCancelled = true
 			return
 		}
@@ -272,7 +309,11 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			event.isCancelled = true
 			return
 		}
-		service.recordBlockPlace(event.block.location, event.block.type)
+		if (service.rejectKeyRegionBlockEdit(event.player, event.block.location)) {
+			event.isCancelled = true
+			return
+		}
+		if (!service.recordBlockPlace(event.player, event.block.location, event.block.type, event.itemInHand)) event.isCancelled = true
 	}
 
 	@EventHandler(ignoreCancelled = true)
@@ -285,11 +326,19 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			event.isCancelled = true
 			return
 		}
+		if (service.rejectKeyRegionBlockEdit(event.player, event.block.location)) {
+			event.isCancelled = true
+			return
+		}
 		service.recordBlockBreak(event.player, event.block.location, event.block.type)
 	}
 
 	@EventHandler(ignoreCancelled = true)
 	fun onPlayerMove(event: PlayerMoveEvent) {
+		if (service.isFinaleLocked(event.player)) {
+			event.to = event.from
+			return
+		}
 		val held = service.holdRespawnMovement(event.player, event.to)
 		if (held != null) {
 			event.to = held
@@ -309,6 +358,26 @@ class FallenListener(private val service: FallenGameService) : Listener {
 		if (service.rejectForbiddenEventItem(player, player.inventory.itemInMainHand) || service.rejectForbiddenEventItem(player, player.inventory.itemInOffHand)) {
 			event.isCancelled = true
 		}
+	}
+
+	@EventHandler(ignoreCancelled = true)
+	fun onProjectileHit(event: ProjectileHitEvent) {
+		service.handleAlloyBulletImpact(event.entity)
+	}
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun onPlayerTeleport(event: PlayerTeleportEvent) {
+		if (service.isFinaleLocked(event.player)) {
+			event.isCancelled = true
+			return
+		}
+		if (service.rejectKeyTeleport(event.player, event.cause.name)) event.isCancelled = true
+	}
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	fun onEntityPortal(event: EntityPortalEvent) {
+		val item = event.entity as? Item ?: return
+		if (service.isLiveKeyItem(item.itemStack)) event.isCancelled = true
 	}
 
 	@EventHandler(ignoreCancelled = true)
@@ -479,6 +548,7 @@ class FallenListener(private val service: FallenGameService) : Listener {
 				.forEach(Entity::remove)
 		}
 		service.reconcileLoadedChunk(event.chunk)
+		service.reconcileLaboratoryTntChunk(event.chunk)
 	}
 
 	private fun destructiveEntityRestrictionsActive(): Boolean =
@@ -504,6 +574,7 @@ class FallenListener(private val service: FallenGameService) : Listener {
 	}
 
 	private fun denyRespawnWaitAction(player: Player): Boolean {
+		if (service.isFinaleLocked(player)) return true
 		if (!service.isRespawnWaiting(player)) return false
 		service.notifyRespawnWaiting(player)
 		return true
