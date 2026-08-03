@@ -112,6 +112,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val playerMenuActionKey = NamespacedKey(plugin, "fallen_player_menu_action")
 	private val dataFile = File(plugin.dataFolder, "fallen.yml")
 	private val playerTeams = ConcurrentHashMap<UUID, FallenTeam>()
+	private val playerRecords = ConcurrentHashMap<UUID, FallenPlayerRecord>()
 	private val deployedPlayers = ConcurrentHashMap.newKeySet<UUID>()
 	private val pendingAdmissions = ConcurrentHashMap.newKeySet<UUID>()
 	private val scores = EnumMap<FallenTeam, Int>(FallenTeam::class.java)
@@ -713,17 +714,54 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			elytraPlayers.remove(playerId)
 		}
 		playerTeams[playerId] = team
+		playerRecords.computeIfPresent(playerId) { _, record -> record.copy(team = team) }
 		save()
 	}
 
 	fun clearTeam(playerId: UUID) {
 		playerTeams.remove(playerId)
+		playerRecords.computeIfPresent(playerId) { _, record -> record.copy(team = null) }
 		elytraPlayers.remove(playerId)
 		gearSwitchAvailableAt.remove(playerId)
 		save()
 	}
 
 	fun teamOf(player: Player): FallenTeam? = playerTeams[player.uniqueId]
+
+	private fun newPlayerRecord(player: Player, nowMillis: Long = System.currentTimeMillis()): FallenPlayerRecord =
+		FallenPlayerRecord(
+			lastKnownName = player.name,
+			team = playerTeams[player.uniqueId],
+			upgradePath = upgradePaths[player.uniqueId],
+			firstJoinedAtMillis = nowMillis,
+			lastSeenAtMillis = nowMillis
+		)
+
+	private fun touchPlayerRecord(player: Player) {
+		val now = System.currentTimeMillis()
+		playerRecords.compute(player.uniqueId) { _, existing ->
+			(existing ?: newPlayerRecord(player, now)).copy(
+				lastKnownName = player.name,
+				team = playerTeams[player.uniqueId],
+				upgradePath = upgradePaths[player.uniqueId],
+				lastSeenAtMillis = now
+			)
+		}
+		save()
+	}
+
+	private fun updatePlayerRecord(player: Player, update: (FallenPlayerRecord) -> FallenPlayerRecord) {
+		val now = System.currentTimeMillis()
+		playerRecords.compute(player.uniqueId) { _, existing ->
+			val current = (existing ?: newPlayerRecord(player, now)).copy(
+				lastKnownName = player.name,
+				team = playerTeams[player.uniqueId],
+				upgradePath = upgradePaths[player.uniqueId],
+				lastSeenAtMillis = now
+			)
+			update(current)
+		}
+	}
 
 	fun loginDisconnectMessage(now: Instant = Instant.now()): Component? {
 		if (!FallenAccessPolicy.hasEventStarted(now)) {
@@ -804,6 +842,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			)
 			return
 		}
+		touchPlayerRecord(player)
 		reconcilePlayerKeys(player)
 		sanitizeForbiddenEventItems(player)
 		if (team in eliminatedTeams) {
@@ -1392,6 +1431,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			return false
 		}
 		upgradePaths[player.uniqueId] = path
+		playerRecords.compute(player.uniqueId) { _, record ->
+			(record ?: newPlayerRecord(player)).copy(upgradePath = path)
+		}
 		restorePlayerLoadout(player, grantConsumables = false)
 		CommandMessages.success(player, "已永久选择 ${path.displayName} 路径，当前解锁节点 ${upgradeNode(player)}。")
 		save()
@@ -2092,6 +2134,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun handleQuit(player: Player) {
 		if (isFinaleLocked(player)) restoreFinalePlayer(player)
+		if (playerRecords.containsKey(player.uniqueId)) touchPlayerRecord(player)
 		pendingAdmissions.remove(player.uniqueId)
 		val removedTnt = clearLaboratoryTnt(player.uniqueId)
 		if (removedTnt > 0) plugin.logger.info("Removed $removedTnt unprimed laboratory TNT blocks for disconnected player ${player.name}.")
@@ -2136,6 +2179,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			item.amount = 0
 		}
 		deathCounts[player.uniqueId] = (deathCounts[player.uniqueId] ?: 0) + 1
+		updatePlayerRecord(player) { it.copy(deaths = it.deaths + 1) }
 		addScore(team, -FallenScoreRules.DEATH_LOSS)
 		if (carriedKey) addScore(team, -FallenScoreRules.KEY_CARRIER_DEATH_LOSS)
 		loadoutRestorePending.add(player.uniqueId)
@@ -2225,6 +2269,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (team in eliminatedTeams) return
 		loadoutRestorePending.add(player.uniqueId)
 		deathCounts[player.uniqueId] = (deathCounts[player.uniqueId] ?: 0) + 1
+		updatePlayerRecord(player) { it.copy(deaths = it.deaths + 1) }
 		addScore(team, -FallenScoreRules.DEATH_LOSS)
 		if (hasKeyItem(player)) {
 			addScore(team, -FallenScoreRules.KEY_CARRIER_DEATH_LOSS)
@@ -2237,10 +2282,14 @@ class FallenGameService(private val plugin: JavaPlugin) {
 
 	fun recordDamage(attacker: Player, target: Player, finalDamage: Double) {
 		if (!phase.allowsKeyCapture()) return
+		if (!finalDamage.isFinite() || finalDamage <= 0.0) return
 		val attackerTeam = teamOf(attacker) ?: return
 		val targetTeam = teamOf(target) ?: return
 		if (attackerTeam == targetTeam || attackerTeam in eliminatedTeams || targetTeam in eliminatedTeams) return
 		if (attacker.gameMode == GameMode.SPECTATOR || target.gameMode == GameMode.SPECTATOR) return
+		updatePlayerRecord(attacker) { it.copy(damageDealt = it.damageDealt + finalDamage) }
+		updatePlayerRecord(target) { it.copy(damageTaken = it.damageTaken + finalDamage) }
+		save()
 		val now = effectiveNowMillis()
 		activateTrackingDust(attacker, target, now)
 		combatUntil[attacker.uniqueId] = now + COMBAT_TAG_MILLIS
@@ -2280,6 +2329,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (killer != null && killerTeam != null && killerTeam != victimTeam && killerTeam !in eliminatedTeams) {
 			addScore(killerTeam, FallenScoreRules.KILL_SCORE)
 			kills[killerTeam] = (kills[killerTeam] ?: 0) + 1
+			updatePlayerRecord(killer) { it.copy(kills = it.kills + 1) }
 			maybeBroadcastKillComment(killer, victim, killerTeam, victimTeam)
 		}
 		val now = effectiveNowMillis()
@@ -2289,6 +2339,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			val attackerTeam = playerTeams[attackerId] ?: continue
 			if (attackerTeam == victimTeam || attackerTeam in eliminatedTeams) continue
 			addScore(attackerTeam, FallenScoreRules.ASSIST_SCORE)
+			playerRecords.computeIfPresent(attackerId) { _, record -> record.copy(assists = record.assists + 1) }
 		}
 		save()
 	}
@@ -4474,6 +4525,17 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				upgradePaths[playerId] = path
 			}
 		}
+		config.getConfigurationSection("player-records")?.let { section ->
+			for (uuid in section.getKeys(false)) {
+				val playerId = runCatching { UUID.fromString(uuid) }.getOrNull() ?: continue
+				val recordSection = section.getConfigurationSection(uuid) ?: continue
+				val record = FallenPlayerRecord.load(recordSection)
+				playerRecords[playerId] = record
+				record.team?.let { playerTeams.putIfAbsent(playerId, it) }
+				record.upgradePath?.let { upgradePaths.putIfAbsent(playerId, it) }
+				if (record.deaths > 0) deathCounts.merge(playerId, record.deaths, ::maxOf)
+			}
+		}
 		config.getConfigurationSection("upgrade-supply-next-at")?.let { section ->
 			for (key in section.getKeys(false)) upgradeSupplyNextAt[key] = section.getLong(key)
 		}
@@ -4556,6 +4618,31 @@ class FallenGameService(private val plugin: JavaPlugin) {
 				keys[UUID.fromString(uuid)] = FallenKey.load(UUID.fromString(uuid), keySection)
 			}
 		}
+		backfillPlayerRecords()
+	}
+
+	private fun backfillPlayerRecords() {
+		val playerIds = HashSet<UUID>()
+		playerIds.addAll(playerTeams.keys)
+		playerIds.addAll(upgradePaths.keys)
+		playerIds.addAll(deathCounts.keys)
+		for (playerId in playerIds) {
+			playerRecords.compute(playerId) { _, existing ->
+				val firstSeen = startedAtMillis.coerceAtLeast(0L)
+				val current = existing ?: FallenPlayerRecord(
+					lastKnownName = "",
+					team = playerTeams[playerId],
+					upgradePath = upgradePaths[playerId],
+					firstJoinedAtMillis = firstSeen,
+					lastSeenAtMillis = firstSeen
+				)
+				current.copy(
+					team = playerTeams[playerId] ?: current.team,
+					upgradePath = upgradePaths[playerId] ?: current.upgradePath,
+					deaths = maxOf(current.deaths, deathCounts[playerId] ?: 0)
+				)
+			}
+		}
 	}
 
 	fun save() {
@@ -4627,6 +4714,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		for ((id, until) in keyAlertUntil) config["key-alert-until.$id"] = until
 		for ((team, until) in teamRespawnBoostUntil) config["team-respawn-boost-until.${team.name}"] = until
 		for ((playerId, team) in playerTeams) config["players.$playerId"] = team.name
+		for ((playerId, record) in playerRecords) {
+			record.save(config.createSection("player-records.$playerId"))
+		}
 		config["deployed-players"] = deployedPlayers.map(UUID::toString)
 		for ((playerId, deaths) in deathCounts) config["deaths.$playerId"] = deaths
 		config["loadout-initialized-players"] = loadoutInitializedPlayers.map(UUID::toString)

@@ -285,6 +285,12 @@ class FallenListener(private val service: FallenGameService) : Listener {
 			return
 		}
 		service.cancelRespawnProtection(attacker)
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	fun onPlayerDamageRecorded(event: EntityDamageByEntityEvent) {
+		val attacker = attackingPlayer(event) ?: return
+		val target = event.entity as? Player ?: return
 		val actualDamage = minOf(event.finalDamage, target.health + target.absorptionAmount)
 		service.recordDamage(attacker, target, actualDamage)
 	}

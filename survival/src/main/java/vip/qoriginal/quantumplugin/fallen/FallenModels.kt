@@ -74,6 +74,53 @@ enum class FallenKeyType {
 	STOLEN
 }
 
+data class FallenPlayerRecord(
+	val lastKnownName: String,
+	val team: FallenTeam?,
+	val upgradePath: FallenUpgradePath?,
+	val kills: Int = 0,
+	val assists: Int = 0,
+	val deaths: Int = 0,
+	val damageDealt: Double = 0.0,
+	val damageTaken: Double = 0.0,
+	val firstJoinedAtMillis: Long,
+	val lastSeenAtMillis: Long
+) {
+	fun save(section: ConfigurationSection) {
+		section["last-known-name"] = lastKnownName
+		section["team"] = team?.name
+		section["upgrade-path"] = upgradePath?.name
+		section["kills"] = kills
+		section["assists"] = assists
+		section["deaths"] = deaths
+		section["damage-dealt"] = damageDealt
+		section["damage-taken"] = damageTaken
+		section["first-joined-at"] = firstJoinedAtMillis
+		section["last-seen-at"] = lastSeenAtMillis
+	}
+
+	companion object {
+		fun load(section: ConfigurationSection): FallenPlayerRecord {
+			val team = section.getString("team")
+				?.let { runCatching { FallenTeam.parse(it) }.getOrNull() }
+			val path = section.getString("upgrade-path")
+				?.let { runCatching { FallenUpgradePath.parse(it) }.getOrNull() }
+			return FallenPlayerRecord(
+				lastKnownName = section.getString("last-known-name").orEmpty(),
+				team = team,
+				upgradePath = path,
+				kills = section.getInt("kills").coerceAtLeast(0),
+				assists = section.getInt("assists").coerceAtLeast(0),
+				deaths = section.getInt("deaths").coerceAtLeast(0),
+				damageDealt = section.getDouble("damage-dealt").takeIf(Double::isFinite)?.coerceAtLeast(0.0) ?: 0.0,
+				damageTaken = section.getDouble("damage-taken").takeIf(Double::isFinite)?.coerceAtLeast(0.0) ?: 0.0,
+				firstJoinedAtMillis = section.getLong("first-joined-at").coerceAtLeast(0L),
+				lastSeenAtMillis = section.getLong("last-seen-at").coerceAtLeast(0L)
+			)
+		}
+	}
+}
+
 data class FallenRegion(
 	val worldName: String,
 	val minX: Int,
