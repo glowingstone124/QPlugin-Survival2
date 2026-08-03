@@ -1180,7 +1180,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		)
 		2 -> listOf(
 			Component.text("所属设施: 聚居地实验架构", NamedTextColor.DARK_PURPLE),
-			Component.text("安装日期: 早于当前实验", NamedTextColor.RED)
+			Component.text("安装日期: 2026/5", NamedTextColor.RED)
 		)
 		3 -> listOf(
 			Component.text("控制实例表决: 1 / 3", NamedTextColor.DARK_PURPLE),
@@ -1188,7 +1188,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		)
 		4 -> listOf(
 			Component.text("项目代号: SETTLEMENT-COLLAPSE", NamedTextColor.DARK_PURPLE),
-			Component.text("阶段: 公开观察 / 非首次初始化", NamedTextColor.RED)
+			Component.text("阶段: 公开观察", NamedTextColor.RED)
 		)
 		5 -> listOf(
 			Component.text("签发实例: STEINBECK-S01", NamedTextColor.DARK_PURPLE),
@@ -1203,16 +1203,16 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			Component.text("受领者分类: 系统构成单元", NamedTextColor.RED)
 		)
 		8 -> listOf(
-			Component.text("来源仓: 城市管理节点 / 旧索引", NamedTextColor.DARK_PURPLE),
+			Component.text("来源仓: 城市管理节点", NamedTextColor.DARK_PURPLE),
 			Component.text("仓储状态: 地图启用前已存在", NamedTextColor.RED)
 		)
 		9 -> listOf(
 			Component.text("销毁建议: 已提交", NamedTextColor.DARK_PURPLE),
-			Component.text("否决来源: 同名控制人格", NamedTextColor.RED)
+			Component.text("否决来源: SETINBECK", NamedTextColor.RED)
 		)
 		10 -> listOf(
 			Component.text("实验对象编号: [字段溢出]", NamedTextColor.DARK_PURPLE),
-			Component.text("城市 / 玩家边界: 未定义", NamedTextColor.RED)
+			Component.text("城市: 未定义", NamedTextColor.RED)
 		)
 		else -> listOf(
 			Component.text("关机后处理: 等待授权", NamedTextColor.DARK_PURPLE),
