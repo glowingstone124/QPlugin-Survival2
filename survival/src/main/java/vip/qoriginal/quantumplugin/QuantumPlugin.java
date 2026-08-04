@@ -16,6 +16,8 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.HappyGhast;
+import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -40,6 +42,7 @@ import vip.qoriginal.quantumplugin.industry.StoneFarm;
 import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
 import vip.qoriginal.quantumplugin.metro.ExperimentalMinecartSpeedBypass;
+import vip.qoriginal.quantumplugin.metro.ExperimentalAcceleration;
 
 import java.io.IOException;
 import java.util.*;
@@ -128,7 +131,11 @@ public final class QuantumPlugin extends JavaPlugin {
                 new Knowledge(),
                 cs,
                 /*new Chat(),*/
-                new SpeedMonitor(this),
+                new SpeedMonitor(
+                        this,
+                        vehicle -> vehicle instanceof HappyGhast,
+                        vehicle -> vehicle instanceof Minecart minecart && ExperimentalAcceleration.isActive(minecart)
+                ),
                 new NamePrefix(),
                 new PlayerEventListener(),
                 new SurvivalPlayerEventListener(),

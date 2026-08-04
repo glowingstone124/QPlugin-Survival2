@@ -19,6 +19,9 @@ class ExperimentalAcceleration {
 		private const val ACCELERATION_FACTOR = 1.03
 		private val eAccMinecarts =
 			ConcurrentHashMap.newKeySet<UUID>()
+
+		@JvmStatic
+		fun isActive(minecart: Minecart): Boolean = eAccMinecarts.contains(minecart.uniqueId)
 	}
 
 	fun ensuresCondition(minecart: Minecart): Boolean {

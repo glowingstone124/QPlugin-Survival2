@@ -29,7 +29,7 @@ public class Speed implements Listener{
         if (event.getVehicle() instanceof Minecart) {
             Minecart minecart = (Minecart) event.getVehicle();
             Material blockTypeBelow = minecart.getLocation().subtract(0, 1, 0).getBlock().getType();
-            if (minecart.getScoreboardTags().contains("accel")) {
+            if (minecart.getScoreboardTags().contains("accel") || minecart.getScoreboardTags().contains("accelplus")) {
                 if (blockTypeBelow == Material.SMOOTH_STONE) { //普刹车
                     calc = boost(minecart, .4d, .005, f, t);
                 } else if (blockTypeBelow == Material.SMOOTH_STONE_SLAB) { //急刹车
