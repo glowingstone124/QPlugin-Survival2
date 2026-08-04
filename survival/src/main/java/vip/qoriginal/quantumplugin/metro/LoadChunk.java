@@ -49,6 +49,7 @@ public class LoadChunk implements Listener {
                 minecart.setMaxSpeed(0.4D);
             } else if (blockBelow.getType() == Material.GOLD_BLOCK) {
                 endExperimentalAcceleration(minecart);
+                minecart.addScoreboardTag("accel");
                 minecart.addScoreboardTag("curve");
                 minecart.setMaxSpeed(0.89D);
             } else if (minecart.getScoreboardTags().contains("accelplus")) {

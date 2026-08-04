@@ -48,6 +48,11 @@ class ExperimentalAcceleration {
 				return@forEach
 			}
 			minecart.maxSpeed = MAX_SPEED_400_KMH
+			// Keep the bypass active on connector/braking sections, but only provide
+			// experimental thrust while the cart is actually above the copper track bed.
+			if (!ensuresCondition(minecart)) {
+				return@forEach
+			}
 			val velocity = minecart.velocity
 			val horizontal = Vector(
 				velocity.x,

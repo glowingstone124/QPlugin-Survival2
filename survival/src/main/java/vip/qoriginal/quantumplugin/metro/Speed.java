@@ -62,7 +62,7 @@ public class Speed implements Listener{
         for (String str: minecart.getScoreboardTags()) {
             if (str.indexOf("queueing-") == 0) {
                 ts = 0;
-                a = -0.1;
+                a = 0.1;
                 break;
             }
         }
