@@ -18,29 +18,42 @@ public class LoadChunk implements Listener {
     public LoadChunk(Plugin plugin) {
         this.plugin=plugin;
     }
+    private final ExperimentalAcceleration acceleration = new ExperimentalAcceleration();
     @EventHandler
     public void onMinecartMove(VehicleMoveEvent event) {
-        if (event.getVehicle() instanceof Minecart) {
-            Minecart minecart = (Minecart) event.getVehicle();
+        if (event.getVehicle() instanceof Minecart minecart) {
             Block blockBelow = minecart.getLocation().subtract(0, 1, 0).getBlock();
 
             if (blockBelow.getType() == Material.DIAMOND_BLOCK) {
+                endExperimentalAcceleration(minecart);
                 minecart.addScoreboardTag("accel");
                 minecart.addScoreboardTag("cr200j");
                 minecart.removeScoreboardTag("curve");
                 minecart.setMaxSpeed(1.6D);
             } else if (blockBelow.getType() == Material.EMERALD_BLOCK) {
+                endExperimentalAcceleration(minecart);
                 minecart.addScoreboardTag("accel");
                 minecart.removeScoreboardTag("cr200j");
                 minecart.removeScoreboardTag("curve");
                 minecart.setMaxSpeed(1.2D);
+            } else if (acceleration.ensuresCondition(minecart)) {
+                minecart.removeScoreboardTag("accel");
+                minecart.removeScoreboardTag("cr200j");
+                minecart.removeScoreboardTag("curve");
+                minecart.addScoreboardTag("accelplus");
+                acceleration.startExperimentalAcceleration(minecart);
             } else if (blockBelow.getType() == Material.IRON_BLOCK) {
                 minecart.removeScoreboardTag("accel");
                 minecart.removeScoreboardTag("curve");
+                endExperimentalAcceleration(minecart);
                 minecart.setMaxSpeed(0.4D);
             } else if (blockBelow.getType() == Material.GOLD_BLOCK) {
+                endExperimentalAcceleration(minecart);
                 minecart.addScoreboardTag("curve");
                 minecart.setMaxSpeed(0.89D);
+            } else if (minecart.getScoreboardTags().contains("accelplus")) {
+                // Restore the in-memory state after the entity has been unloaded and loaded again.
+                acceleration.startExperimentalAcceleration(minecart);
             }
 
             if (blockBelow.getType() == Material.WHITE_TERRACOTTA || blockBelow.getType() == Material.BLACK_TERRACOTTA) {
@@ -83,5 +96,10 @@ public class LoadChunk implements Listener {
                 }
             }
         }
+    }
+
+    private void endExperimentalAcceleration(Minecart minecart) {
+        minecart.removeScoreboardTag("accelplus");
+        acceleration.endExperimentalAcceleration(minecart);
     }
 }

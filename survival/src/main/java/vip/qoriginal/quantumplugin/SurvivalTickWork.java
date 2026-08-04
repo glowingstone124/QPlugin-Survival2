@@ -11,19 +11,25 @@ import org.bukkit.block.Sign;
 import org.bukkit.block.sign.Side;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import vip.qoriginal.quantumplugin.metro.ExperimentalAcceleration;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
 public final class SurvivalTickWork implements Runnable {
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss");
-
+    private static final ExperimentalAcceleration acceleration = new ExperimentalAcceleration();
     @Override
     public void run() {
+        updateAcceleration();
         World world = Bukkit.getWorld("world");
         if (world == null) return;
         updateClock(world);
         updateBoneMeal(world);
+    }
+
+    private static void updateAcceleration() {
+        acceleration.apply();
     }
 
     private static void updateClock(World world) {
