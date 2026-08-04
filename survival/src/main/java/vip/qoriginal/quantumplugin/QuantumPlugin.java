@@ -39,6 +39,7 @@ import vip.qoriginal.quantumplugin.registration.ReservedMinecraftRegistrationTes
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
 import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
+import vip.qoriginal.quantumplugin.metro.ExperimentalMinecartSpeedBypass;
 
 import java.io.IOException;
 import java.util.*;
@@ -216,6 +217,7 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        ExperimentalMinecartSpeedBypass.restoreAll();
         if (servuxEntityDataBridge != null) {
             servuxEntityDataBridge.close();
         }

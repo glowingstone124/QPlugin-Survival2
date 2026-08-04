@@ -28,10 +28,12 @@ class ExperimentalAcceleration {
 
 	fun startExperimentalAcceleration(minecart: Minecart) {
 		eAccMinecarts.add(minecart.uniqueId)
+		ExperimentalMinecartSpeedBypass.enable(minecart)
 	}
 
 	fun endExperimentalAcceleration(minecart: Minecart) {
 		eAccMinecarts.remove(minecart.uniqueId)
+		ExperimentalMinecartSpeedBypass.disable(minecart)
 	}
 
 	fun apply() {
@@ -39,9 +41,9 @@ class ExperimentalAcceleration {
 			val minecart = Bukkit.getEntity(uuid) as? Minecart
 			if (minecart == null || !minecart.isValid || minecart.isDead) {
 				eAccMinecarts.remove(uuid)
+				ExperimentalMinecartSpeedBypass.forget(uuid)
 				return@forEach
 			}
-
 			minecart.maxSpeed = MAX_SPEED_400_KMH
 			val velocity = minecart.velocity
 			val horizontal = Vector(
