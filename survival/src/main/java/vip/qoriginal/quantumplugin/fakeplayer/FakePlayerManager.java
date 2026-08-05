@@ -18,6 +18,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.craftbukkit.CraftServer;
@@ -26,6 +27,7 @@ import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.Server;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.plugin.Plugin;
 
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
@@ -43,8 +45,13 @@ public final class FakePlayerManager {
     private static final Field PLAYERS_BY_NAME_FIELD = playerListField("playersByName");
 
     private final Map<String, ServerPlayer> players = new ConcurrentHashMap<>();
+    private final FakePlayerActionController actions = new FakePlayerActionController();
 
     public FakePlayerManager() {
+    }
+
+    public void start(Plugin plugin) {
+        actions.startTicker(plugin);
     }
 
     public ServerPlayer spawn(String requestedName, Location location, PropertyMap skinProperties) {
@@ -93,6 +100,7 @@ public final class FakePlayerManager {
             return false;
         }
 
+        actions.clear(player);
         MinecraftServer server = server();
         ServerLevel level = player.level();
         broadcastLeave(player);
@@ -118,12 +126,82 @@ public final class FakePlayerManager {
         }
     }
 
+    public void shutdown() {
+        actions.shutdown();
+    }
+
+    FakePlayerActionController.Target action(
+            String requestedName,
+            FakePlayerActionController.Action action,
+            FakePlayerActionController.Mode mode
+    ) {
+        return actions.configure(requirePlayer(requestedName), action, mode);
+    }
+
+    Rotation look(String requestedName, double yaw, double pitch) {
+        if (!Double.isFinite(yaw) || !Double.isFinite(pitch)) {
+            throw new IllegalArgumentException("yaw 和 pitch 必须是有限数字");
+        }
+        if (pitch < -90.0 || pitch > 90.0) {
+            throw new IllegalArgumentException("pitch 必须在 -90 到 90 之间");
+        }
+
+        float normalizedYaw = normalizeYaw(yaw);
+        float normalizedPitch = (float) pitch;
+        ServerPlayer player = requirePlayer(requestedName);
+        player.absSnapRotationTo(normalizedYaw, normalizedPitch);
+        player.setYHeadRot(normalizedYaw);
+        player.setYBodyRot(normalizedYaw);
+        return new Rotation(normalizedYaw, normalizedPitch);
+    }
+
+    Rotation lookAt(String requestedName, double x, double y, double z) {
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
+            throw new IllegalArgumentException("目标坐标必须是有限数字");
+        }
+
+        ServerPlayer player = requirePlayer(requestedName);
+        Vec3 eye = player.getEyePosition();
+        double deltaX = x - eye.x;
+        double deltaY = y - eye.y;
+        double deltaZ = z - eye.z;
+        double horizontalDistance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
+        if (horizontalDistance < 1.0E-7 && Math.abs(deltaY) < 1.0E-7) {
+            throw new IllegalArgumentException("目标坐标不能与假人眼睛位置重合");
+        }
+
+        double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0;
+        double pitch = -Math.toDegrees(Math.atan2(deltaY, horizontalDistance));
+        return look(requestedName, yaw, pitch);
+    }
+
+    record Rotation(float yaw, float pitch) {
+    }
+
     public static boolean isFakePlayer(Player player) {
         return player.getScoreboardTags().contains(SCOREBOARD_TAG);
     }
 
     private ServerPlayer find(String requestedName) {
         return players.get(key(normalizeName(requestedName)));
+    }
+
+    private ServerPlayer requirePlayer(String requestedName) {
+        ServerPlayer player = find(requestedName);
+        if (player == null) {
+            throw new IllegalArgumentException("找不到假人: " + requestedName);
+        }
+        return player;
+    }
+
+    private float normalizeYaw(double yaw) {
+        double normalized = yaw % 360.0;
+        if (normalized >= 180.0) {
+            normalized -= 360.0;
+        } else if (normalized < -180.0) {
+            normalized += 360.0;
+        }
+        return (float) normalized;
     }
 
     private void registerPlayer(PlayerList playerList, ServerPlayer player) {

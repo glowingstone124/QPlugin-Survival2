@@ -44,6 +44,9 @@ public final class FakePlayerCommand implements CommandExecutor {
                 case "remove" -> remove(sender, args);
                 case "list" -> list(sender);
                 case "inventory", "inv" -> inventory(sender, args);
+                case "attack", "left" -> action(sender, args, FakePlayerActionController.Action.ATTACK);
+                case "use", "right" -> action(sender, args, FakePlayerActionController.Action.USE);
+                case "look", "turn" -> look(sender, args);
                 default -> {
                     CommandMessages.warning(sender, "未知操作: " + args[0]);
                     sendHelp(sender, label);
@@ -132,6 +135,81 @@ public final class FakePlayerCommand implements CommandExecutor {
         return true;
     }
 
+    private boolean action(CommandSender sender, String[] args, FakePlayerActionController.Action action) {
+        if (args.length < 2 || args.length > 3) {
+            String actionName = action == FakePlayerActionController.Action.ATTACK ? "attack" : "use";
+            sendUsage(sender, "/fakeplayer " + actionName + " <name> [once|start|stop]", "控制假人的左右键动作。");
+            return true;
+        }
+
+        FakePlayerActionController.Mode mode = args.length == 2
+                ? FakePlayerActionController.Mode.ONCE
+                : switch (args[2].toLowerCase(Locale.ROOT)) {
+                    case "once" -> FakePlayerActionController.Mode.ONCE;
+                    case "start" -> FakePlayerActionController.Mode.START;
+                    case "stop" -> FakePlayerActionController.Mode.STOP;
+                    default -> throw new IllegalArgumentException("动作模式只能是 once、start 或 stop");
+                };
+        FakePlayerActionController.Target target = manager.action(args[1], action, mode);
+        String actionText = action == FakePlayerActionController.Action.ATTACK ? "攻击" : "使用";
+        if (mode == FakePlayerActionController.Mode.STOP) {
+            CommandMessages.success(sender, "已停止假人 " + args[1] + " 的" + actionText + "动作");
+        } else if (mode == FakePlayerActionController.Mode.START) {
+            CommandMessages.success(sender, "假人 " + args[1] + " 已开始持续" + actionText + "，当前目标: " + targetText(target));
+        } else {
+            CommandMessages.success(sender, "假人 " + args[1] + " 已执行一次" + actionText + "，目标: " + targetText(target));
+        }
+        return true;
+    }
+
+    private String targetText(FakePlayerActionController.Target target) {
+        return switch (target) {
+            case ENTITY -> "实体";
+            case BLOCK -> "方块";
+            case AIR -> "空气";
+        };
+    }
+
+    private boolean look(CommandSender sender, String[] args) {
+        if (args.length == 4) {
+            double yaw = number(args[2], "yaw");
+            double pitch = number(args[3], "pitch");
+            FakePlayerManager.Rotation rotation = manager.look(args[1], yaw, pitch);
+            CommandMessages.success(sender, "已将假人 " + args[1] + " 转向 yaw="
+                    + angle(rotation.yaw()) + "°, pitch=" + angle(rotation.pitch()) + "°");
+            return true;
+        }
+        if (args.length == 6 && args[2].equalsIgnoreCase("at")) {
+            double x = number(args[3], "x");
+            double y = number(args[4], "y");
+            double z = number(args[5], "z");
+            FakePlayerManager.Rotation rotation = manager.lookAt(args[1], x, y, z);
+            CommandMessages.success(sender, "假人 " + args[1] + " 已看向 (" + args[3] + ", " + args[4] + ", " + args[5]
+                    + ")，yaw=" + angle(rotation.yaw()) + "°, pitch=" + angle(rotation.pitch()) + "°");
+            return true;
+        }
+
+        sendUsage(sender, "/fakeplayer look <name> <yaw> <pitch>", "直接设置假人朝向。");
+        sendUsage(sender, "/fakeplayer look <name> at <x> <y> <z>", "让假人看向世界坐标。");
+        return true;
+    }
+
+    private double number(String raw, String name) {
+        try {
+            double value = Double.parseDouble(raw);
+            if (!Double.isFinite(value)) {
+                throw new NumberFormatException();
+            }
+            return value;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(name + " 必须是有限数字: " + raw);
+        }
+    }
+
+    private String angle(float value) {
+        return String.format(Locale.ROOT, "%.1f", value);
+    }
+
     private void sendHelp(CommandSender sender, String label) {
         String root = "/" + label;
         sender.sendMessage(CommandMessages.title("假人管理")
@@ -142,7 +220,15 @@ public final class FakePlayerCommand implements CommandExecutor {
                 .appendNewline()
                 .append(commandLine(root + " list", "查看假人列表"))
                 .appendNewline()
-                .append(commandLine(root + " inventory <name>", "打开假人背包")));
+                .append(commandLine(root + " inventory <name>", "打开假人背包"))
+                .appendNewline()
+                .append(commandLine(root + " attack <name> [once|start|stop]", "左键攻击或挖掘"))
+                .appendNewline()
+                .append(commandLine(root + " use <name> [once|start|stop]", "右键交互或使用物品"))
+                .appendNewline()
+                .append(commandLine(root + " look <name> <yaw> <pitch>", "设置假人朝向"))
+                .appendNewline()
+                .append(commandLine(root + " look <name> at <x> <y> <z>", "让假人看向坐标")));
     }
 
     private void sendUsage(CommandSender sender, String usage, String description) {

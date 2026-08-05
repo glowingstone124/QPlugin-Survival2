@@ -73,6 +73,7 @@ public final class QuantumPlugin extends JavaPlugin {
         WORLD_MAIN = Bukkit.getWorld("world");
         instance = this;
         PluginContext.setPlugin(this);
+        fakePlayerManager.start(this);
         getServer().getServicesManager().register(
                 MinecraftRegistrationTest.class,
                 minecraftRegistrationTest,
@@ -229,6 +230,7 @@ public final class QuantumPlugin extends JavaPlugin {
             servuxEntityDataBridge.close();
         }
         fakePlayerManager.removeAll();
+        fakePlayerManager.shutdown();
         if (eliteWeaponListener != null) {
             eliteWeaponListener.shutdown();
         }
