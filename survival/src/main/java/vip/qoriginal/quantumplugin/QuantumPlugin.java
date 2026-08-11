@@ -162,7 +162,7 @@ public final class QuantumPlugin extends JavaPlugin {
             public void run() {
                 su.run();
             }
-        }.runTaskTimer(this, 0L, 10L);
+        }.runTaskTimer(this, 0L, 60L);
         new BukkitRunnable() {
             @Override
             public void run() {

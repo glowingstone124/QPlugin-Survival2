@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Predicate;
 
@@ -16,6 +18,7 @@ public class StatusUpload implements Runnable {
     private static final Gson GSON = new Gson();
     private static final Logger LOGGER = LoggerProvider.INSTANCE.getLogger("StatusUpload");
     private static final List<Long> timings = new CopyOnWriteArrayList<>();
+    private final AtomicBoolean uploadInFlight = new AtomicBoolean(false);
     private static volatile Predicate<Player> playerFilter = player -> true;
 
     public static void setPlayerFilter(Predicate<Player> filter) {
@@ -24,19 +27,41 @@ public class StatusUpload implements Runnable {
 
     @Override
     public void run() {
-        long started = System.currentTimeMillis();
-        try {
-            upload();
-        } finally {
-            timings.add(System.currentTimeMillis() - started);
-            if (timings.size() >= 50) {
-                LOGGER.debug(timings.toString());
-                timings.clear();
-            }
+        if (!uploadInFlight.compareAndSet(false, true)) {
+            return;
         }
+        long started = System.currentTimeMillis();
+        final StatusSample status;
+        try {
+            status = capture();
+        } catch (Throwable error) {
+            uploadInFlight.set(false);
+            Bukkit.getLogger().warning("Failed to capture server status: " + error.getMessage());
+            return;
+        }
+
+        // Bukkit state is captured on the server thread above. JSON encoding and all network
+        // work stay off that thread, and a slow request cannot create an overlapping backlog.
+        CompletableFuture.supplyAsync(() -> GSON.toJson(status))
+                .thenCompose(json -> Request.sendPostRequest(
+                        Config.INSTANCE.getAPI_ENDPOINT() + "/qo/upload/status",
+                        json,
+                        Optional.of(Map.of("Authorization", Config.INSTANCE.getAPI_SECRET()))
+                ))
+                .whenComplete((ignored, error) -> {
+                    timings.add(System.currentTimeMillis() - started);
+                    if (timings.size() >= 50) {
+                        LOGGER.debug(timings.toString());
+                        timings.clear();
+                    }
+                    if (error != null) {
+                        Bukkit.getLogger().warning("Failed to upload server status: " + rootMessage(error));
+                    }
+                    uploadInFlight.set(false);
+                });
     }
 
-    private void upload() {
+    private StatusSample capture() {
         StatusSample status = new StatusSample();
         status.timestamp = System.currentTimeMillis();
         status.totalcount = Bukkit.getOfflinePlayers().length;
@@ -51,12 +76,13 @@ public class StatusUpload implements Runnable {
         status.tick_time = Bukkit.getServer().getTickTimes();
         World world = Bukkit.getWorld("world");
         status.game_time = world == null ? 0 : world.getGameTime();
-        try {
-            Request.sendPostRequest(Config.INSTANCE.getAPI_ENDPOINT() + "/qo/upload/status", GSON.toJson(status),
-                    Optional.of(Map.of("Authorization", Config.INSTANCE.getAPI_SECRET())));
-        } catch (Exception error) {
-            Bukkit.getLogger().warning("Failed to upload server status: " + error.getMessage());
-        }
+        return status;
+    }
+
+    private static String rootMessage(Throwable error) {
+        Throwable current = error;
+        while (current.getCause() != null) current = current.getCause();
+        return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
     }
 
     public static final class StatusSample {

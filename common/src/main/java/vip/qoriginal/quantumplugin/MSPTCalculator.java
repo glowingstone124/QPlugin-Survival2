@@ -5,12 +5,14 @@ import com.destroystokyo.paper.event.server.ServerTickStartEvent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 
 public class MSPTCalculator implements Listener {
     public static volatile float mspt;
-    private static final ArrayList<Float> recent60Ticks = new ArrayList<>();
-    private static final ArrayList<Float> tickList = new ArrayList<>();
+    private static final int THREE_SECOND_TICKS = 60;
+    private static final ArrayDeque<Float> recent3SecondTicks = new ArrayDeque<>(THREE_SECOND_TICKS);
+    private static final ArrayDeque<Float> tickList = new ArrayDeque<>(THREE_SECOND_TICKS);
     private static volatile Runnable tickHook = () -> {};
     private long startNanos;
 
@@ -29,18 +31,16 @@ public class MSPTCalculator implements Listener {
         if (startNanos == 0) return;
         float sample = (System.nanoTime() - startNanos) / 1_000_000f;
         mspt = mspt == 0 || Float.isNaN(mspt) ? sample : mspt * .95f + sample * .05f;
-        synchronized (recent60Ticks) { recent60Ticks.add(mspt); }
-        add_to_tick_list(mspt);
+        addSample(recent3SecondTicks, sample);
+        addSample(tickList, sample);
     }
 
     public static float getR3s() {
-        synchronized (recent60Ticks) {
-            if (recent60Ticks.isEmpty()) return 0f;
+        synchronized (recent3SecondTicks) {
+            if (recent3SecondTicks.isEmpty()) return 0f;
             float sum = 0;
-            for (float value : recent60Ticks) sum += value;
-            int count = recent60Ticks.size();
-            recent60Ticks.clear();
-            return sum / count;
+            for (float value : recent3SecondTicks) sum += value;
+            return sum / recent3SecondTicks.size();
         }
     }
 
@@ -48,10 +48,10 @@ public class MSPTCalculator implements Listener {
         synchronized (tickList) { return new ArrayList<>(tickList); }
     }
 
-    public static void add_to_tick_list(float value) {
-        synchronized (tickList) {
-            if (tickList.size() >= 60) tickList.removeFirst();
-            tickList.add(value);
+    private static void addSample(ArrayDeque<Float> samples, float value) {
+        synchronized (samples) {
+            if (samples.size() >= THREE_SECOND_TICKS) samples.removeFirst();
+            samples.addLast(value);
         }
     }
 }

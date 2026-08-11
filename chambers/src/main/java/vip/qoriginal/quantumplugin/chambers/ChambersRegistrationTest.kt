@@ -49,7 +49,7 @@ class ChambersRegistrationTest(
         chamberManager.cancel(player, false)
     }
 
-    private fun submitResult(result: ChamberRunResult) {
+    private fun submitResult(result: ChamberRunResult, attempt: Int = 1) {
         val session = result.registrationSession ?: return
         val payload = JsonObject().apply {
             addProperty("sessionId", session.sessionId)
@@ -62,7 +62,7 @@ class ChambersRegistrationTest(
             Optional.of(mapOf("Token" to Config.API_SECRET)),
         ).whenComplete { body, error ->
             if (error != null) {
-                plugin.logger.warning("提交测试室结果失败: ${error.message}")
+                retryResult(result, attempt, error.message ?: "network error")
             } else {
                 val completed = runCatching {
                     JsonParser.parseString(body).asJsonObject
@@ -72,9 +72,32 @@ class ChambersRegistrationTest(
                     chamberManager.clearProgress(session.sessionId)
                     plugin.logger.fine("测试室结果已提交: $body")
                 } else {
-                    plugin.logger.warning("测试室结果未被 API 接受: $body")
+                    retryResult(result, attempt, "API response: $body")
                 }
             }
         }
+    }
+
+    private fun retryResult(result: ChamberRunResult, attempt: Int, reason: String) {
+        if (attempt >= MAX_RESULT_ATTEMPTS || !plugin.isEnabled) {
+            plugin.logger.warning(
+                "提交测试室结果失败，进度已保留以便玩家重连后重试: $reason",
+            )
+            return
+        }
+        val delayTicks = 40L shl (attempt - 1)
+        plugin.logger.warning(
+            "提交测试室结果失败，将在 ${delayTicks / 20} 秒后重试 " +
+                "(${attempt + 1}/$MAX_RESULT_ATTEMPTS): $reason",
+        )
+        plugin.server.scheduler.runTaskLaterAsynchronously(
+            plugin,
+            Runnable { submitResult(result, attempt + 1) },
+            delayTicks,
+        )
+    }
+
+    private companion object {
+        const val MAX_RESULT_ATTEMPTS = 5
     }
 }
