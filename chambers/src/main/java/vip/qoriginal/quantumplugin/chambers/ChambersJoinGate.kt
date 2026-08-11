@@ -2,12 +2,14 @@ package vip.qoriginal.quantumplugin.chambers
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import io.papermc.paper.event.player.AsyncChatEvent
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.GameMode
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerCommandPreprocessEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
@@ -16,12 +18,22 @@ import vip.qoriginal.quantumplugin.Request
 import vip.qoriginal.quantumplugin.registration.MinecraftRegistrationTest
 import java.util.Optional
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class ChambersJoinGate(
     private val plugin: ChambersPlugin,
     private val registrationTest: ChambersRegistrationTest,
 ) : Listener {
-    private val waitingForClaim = mutableSetOf<UUID>()
+    private val waitingForClaim = ConcurrentHashMap.newKeySet<UUID>()
+    private val isolatedPlayers = ConcurrentHashMap.newKeySet<UUID>()
+
+    fun shutdown() {
+        isolatedPlayers.toList().forEach { playerId ->
+            plugin.server.getPlayer(playerId)?.let(::reveal)
+        }
+        waitingForClaim.clear()
+        isolatedPlayers.clear()
+    }
 
     @EventHandler
     fun onJoin(event: PlayerJoinEvent) {
@@ -64,6 +76,34 @@ class ChambersJoinGate(
         }
     }
 
+    @EventHandler(ignoreCancelled = true)
+    fun onCommand(event: PlayerCommandPreprocessEvent) {
+        if (event.player.uniqueId !in waitingForClaim) return
+        event.isCancelled = true
+        event.player.sendMessage(
+            Component.text("正在确认测试请求，请稍候。", NamedTextColor.YELLOW),
+        )
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    fun onChat(event: AsyncChatEvent) {
+        if (event.player.uniqueId !in waitingForClaim) return
+        event.isCancelled = true
+        plugin.server.scheduler.runTask(
+            plugin,
+            Runnable {
+                if (event.player.uniqueId in waitingForClaim) {
+                    event.player.sendMessage(
+                        Component.text(
+                            "正在确认测试请求，请稍候。",
+                            NamedTextColor.YELLOW,
+                        ),
+                    )
+                }
+            },
+        )
+    }
+
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         waitingForClaim.remove(event.player.uniqueId)
@@ -102,7 +142,6 @@ class ChambersJoinGate(
             return
         }
 
-        reveal(player)
         player.isInvulnerable = false
         player.gameMode = GameMode.SURVIVAL
         val result = registrationTest.start(
@@ -113,6 +152,7 @@ class ChambersJoinGate(
     }
 
     private fun isolateWhileWaiting(player: Player) {
+        isolatedPlayers.add(player.uniqueId)
         player.isInvulnerable = true
         player.gameMode = GameMode.SPECTATOR
         plugin.server.onlinePlayers
@@ -127,6 +167,7 @@ class ChambersJoinGate(
     }
 
     private fun reveal(player: Player) {
+        isolatedPlayers.remove(player.uniqueId)
         plugin.server.onlinePlayers
             .filter { it.uniqueId != player.uniqueId }
             .forEach { other ->

@@ -64,13 +64,20 @@ class ChambersCommand(
     }
 
     private fun status(sender: CommandSender): Boolean {
-        val prefix = if (sender is Player && chamberManager.isRunning(sender)) {
-            "你正在测试流程中；"
-        } else {
-            ""
+        if (sender is Player) {
+            val run = chamberManager.status(sender)
+            if (run != null) {
+                val runType = if (run.registration) "注册测试" else "练习"
+                sender.sendMessage(
+                    "$runType：${run.chamberTitle} " +
+                        "(${run.currentChamber} / ${run.totalChambers})，" +
+                        "剩余 ${run.remainingSeconds} 秒。",
+                )
+                return true
+            }
         }
         sender.sendMessage(
-            "${prefix}当前共配置 ${chamberManager.chamberCount()} 个测试室。",
+            "当前共配置 ${chamberManager.chamberCount()} 个测试室。",
         )
         return true
     }

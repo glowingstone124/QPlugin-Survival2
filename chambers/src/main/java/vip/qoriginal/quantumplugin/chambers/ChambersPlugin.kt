@@ -9,6 +9,7 @@ import java.io.File
 class ChambersPlugin : JavaPlugin() {
     private var chamberManager: ChamberManager? = null
     private var registrationTest: ChambersRegistrationTest? = null
+    private var joinGate: ChambersJoinGate? = null
 
     override fun onEnable() {
         PluginContext.setPlugin(this)
@@ -36,13 +37,16 @@ class ChambersPlugin : JavaPlugin() {
 
         val test = ChambersRegistrationTest(this, manager)
         registrationTest = test
+        test.startResultRecovery()
         server.servicesManager.register(
             MinecraftRegistrationTest::class.java,
             test,
             this,
             ServicePriority.Normal,
         )
-        server.pluginManager.registerEvents(ChambersJoinGate(this, test), this)
+        val gate = ChambersJoinGate(this, test)
+        joinGate = gate
+        server.pluginManager.registerEvents(gate, this)
         logger.info(
             "QuantumPlugin chambers target started with " +
                 "${manager.chamberCount()} configured chambers.",
@@ -50,6 +54,7 @@ class ChambersPlugin : JavaPlugin() {
     }
 
     override fun onDisable() {
+        registrationTest?.shutdown()
         registrationTest?.let {
             server.servicesManager.unregister(
                 MinecraftRegistrationTest::class.java,
@@ -57,6 +62,7 @@ class ChambersPlugin : JavaPlugin() {
             )
         }
         chamberManager?.shutdown()
+        joinGate?.shutdown()
     }
 
     private fun saveBundledConfiguration() {

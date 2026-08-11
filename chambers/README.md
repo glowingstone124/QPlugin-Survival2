@@ -50,10 +50,19 @@ global `pool` only after both required files are present.
 - An unfinished chamber is never resumed mid-state. Reconnecting rebuilds that chamber from its
   original structure, teleports the player to its spawn, and starts its full time limit again.
 - Progress is removed only after QAPI confirms the final pass/fail result.
+- Terminal progress doubles as a durable result outbox. The plugin scans it after startup and every
+  minute, deduplicates in-flight submissions, and retries results without requiring the player to
+  reconnect.
 - Selected NBT structures are placed along the X axis with the configured gap.
 - Reaching a package's relative goal cuboid advances to the next selected chamber.
 - Completion, timeout, cancellation, disconnect, and plugin shutdown unload and delete the instance.
 - Exact instance-name validation protects the template and normal worlds from cleanup.
+- Each chamber starts with a clean survival inventory, effects, health, hunger, experience, fire,
+  air, and freeze state. The player's pre-run state is restored when the run ends or is suspended.
+- Registration runs block all player commands except `/chambers status` and `/chambers leave`.
+- Registration players remain mutually hidden and cannot use global chat. A terminal pass/fail result
+  returns the player to the saved state, queues the API result, and disconnects them from the
+  chambers server after a short confirmation delay.
 
 ## Authoring
 

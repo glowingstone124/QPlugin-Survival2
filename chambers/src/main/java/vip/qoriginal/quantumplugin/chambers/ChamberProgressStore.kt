@@ -24,6 +24,11 @@ data class ChamberProgress(
     val updatedAtMillis: Long,
 )
 
+data class ChamberTerminalProgressScan(
+    val results: List<ChamberRunResult>,
+    val invalidFiles: List<String>,
+)
+
 class ChamberProgressStore(
     dataFolder: Path,
 ) {
@@ -93,6 +98,64 @@ class ChamberProgressStore(
                 exception,
             )
         }
+    }
+
+    @Synchronized
+    fun scanTerminalResults(): ChamberTerminalProgressScan {
+        val files = try {
+            Files.list(progressDirectory).use { paths ->
+                paths
+                    .filter(Files::isRegularFile)
+                    .filter { it.fileName.toString().endsWith(".json") }
+                    .sorted(compareBy { it.fileName.toString() })
+                    .toList()
+            }
+        } catch (exception: IOException) {
+            throw IllegalStateException(
+                "unable to inspect persisted chamber progress",
+                exception,
+            )
+        }
+        val results = mutableListOf<ChamberRunResult>()
+        val invalidFiles = mutableListOf<String>()
+        files.forEach { file ->
+            try {
+                val identity = JsonParser.parseString(
+                    Files.readString(file, StandardCharsets.UTF_8),
+                ).asJsonObject
+                val session = MinecraftRegistrationTest.Session(
+                    identity.requiredString("sessionId"),
+                    identity.requiredString("username"),
+                )
+                require(file == progressFile(session.sessionId)) {
+                    "progress filename does not match its session id"
+                }
+                val progress = load(file, session)
+                val reason = ChamberRunStateMachine.restore(progress)
+                    .terminalReason()
+                    ?: return@forEach
+                results.add(
+                    ChamberRunResult(
+                        registrationSession = session,
+                        reason = reason,
+                        completedChambers = progress.completedChambers,
+                        totalChambers = progress.chamberIds.size,
+                    ),
+                )
+            } catch (exception: RuntimeException) {
+                invalidFiles.add(
+                    "${file.fileName}: ${exception.message ?: exception.javaClass.simpleName}",
+                )
+            } catch (exception: IOException) {
+                invalidFiles.add(
+                    "${file.fileName}: ${exception.message ?: "unable to read file"}",
+                )
+            }
+        }
+        return ChamberTerminalProgressScan(
+            results = results.toList(),
+            invalidFiles = invalidFiles.toList(),
+        )
     }
 
     private fun load(

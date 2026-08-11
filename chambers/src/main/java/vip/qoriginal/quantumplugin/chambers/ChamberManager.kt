@@ -1,5 +1,6 @@
 package vip.qoriginal.quantumplugin.chambers
 
+import io.papermc.paper.event.player.AsyncChatEvent
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.title.Title
@@ -12,6 +13,7 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerChangedWorldEvent
+import org.bukkit.event.player.PlayerCommandPreprocessEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerPortalEvent
@@ -26,13 +28,14 @@ import vip.qoriginal.quantumplugin.registration.MinecraftRegistrationTest
 import java.io.File
 import java.util.Random
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.function.BooleanSupplier
 import kotlin.math.floor
 
 class ChamberManager(
     private val plugin: ChambersPlugin,
 ) : Listener {
-    private val activeRuns = mutableMapOf<UUID, ActiveRun>()
+    private val activeRuns = ConcurrentHashMap<UUID, ActiveRun>()
     private val progressStore = ChamberProgressStore(plugin.dataFolder.toPath())
     private var catalog = ChamberCatalog(
         chambers = emptyList(),
@@ -74,7 +77,22 @@ class ChamberManager(
 
     fun chamberCount(): Int = catalog.chambers.size
 
-    fun isRunning(player: Player): Boolean = player.uniqueId in activeRuns
+    fun isRunning(player: Player): Boolean = activeRuns.containsKey(player.uniqueId)
+
+    fun status(player: Player): ChamberRunStatus? {
+        val run = activeRuns[player.uniqueId] ?: return null
+        val chamber = run.currentChamber().definition
+        val remainingSeconds =
+            ((run.deadlineMillis - System.currentTimeMillis()).coerceAtLeast(0L) + 999L) /
+                1_000L
+        return ChamberRunStatus(
+            chamberTitle = chamber.title,
+            currentChamber = run.chamberIndex + 1,
+            totalChambers = run.chambers.size,
+            remainingSeconds = remainingSeconds,
+            registration = run.registrationSession != null,
+        )
+    }
 
     fun startPractice(player: Player): Boolean = startRun(player, null) {}
 
@@ -108,6 +126,9 @@ class ChamberManager(
             )
         }
     }
+
+    fun scanTerminalResults(): ChamberTerminalProgressScan =
+        progressStore.scanTerminalResults()
 
     fun cancel(player: Player, reportResult: Boolean) {
         finish(
@@ -160,12 +181,17 @@ class ChamberManager(
 
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
-        finish(event.player.uniqueId, ChamberRunResult.FinishReason.QUIT, false)
+        finish(
+            event.player.uniqueId,
+            ChamberRunResult.FinishReason.QUIT,
+            false,
+            event.player,
+        )
     }
 
     @EventHandler(ignoreCancelled = true)
     fun onPortal(event: PlayerPortalEvent) {
-        if (event.player.uniqueId in activeRuns) {
+        if (activeRuns.containsKey(event.player.uniqueId)) {
             event.isCancelled = true
             event.player.sendMessage(
                 Component.text(
@@ -174,6 +200,41 @@ class ChamberManager(
                 ),
             )
         }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    fun onCommand(event: PlayerCommandPreprocessEvent) {
+        val run = activeRuns[event.player.uniqueId] ?: return
+        if (run.registrationSession == null || isAllowedRunCommand(event.message)) {
+            return
+        }
+        event.isCancelled = true
+        event.player.sendMessage(
+            Component.text(
+                "注册测试期间只能使用 /chambers status 或 /chambers leave。",
+                NamedTextColor.RED,
+            ),
+        )
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    fun onChat(event: AsyncChatEvent) {
+        val run = activeRuns[event.player.uniqueId] ?: return
+        if (run.registrationSession == null) return
+        event.isCancelled = true
+        plugin.server.scheduler.runTask(
+            plugin,
+            Runnable {
+                if (activeRuns[event.player.uniqueId] === run) {
+                    event.player.sendMessage(
+                        Component.text(
+                            "注册测试期间不能使用聊天。",
+                            NamedTextColor.RED,
+                        ),
+                    )
+                }
+            },
+        )
     }
 
     @EventHandler
@@ -198,7 +259,7 @@ class ChamberManager(
         registrationSession: MinecraftRegistrationTest.Session?,
         completion: (ChamberRunResult) -> Unit,
     ): Boolean {
-        if (!isReady() || player.uniqueId in activeRuns) return false
+        if (!isReady() || activeRuns.containsKey(player.uniqueId)) return false
         val progress = if (registrationSession == null) {
             null
         } else {
@@ -263,17 +324,20 @@ class ChamberManager(
             registrationSession = registrationSession,
             completion = completion,
             stateMachine = stateMachine,
+            playerState = ChamberPlayerState.capture(player),
         )
         activeRuns[player.uniqueId] = run
         if (!transitionAndSave(run, ChamberRunStateMachine::start)) {
             suspendForPersistenceFailure(player, run)
             return false
         }
-        enterCurrentChamber(
+        if (!enterCurrentChamberSafely(
             player,
             run,
             resumed = progress?.state?.let { it != ChamberRunState.READY } == true,
-        )
+        )) {
+            return false
+        }
         return true
     }
 
@@ -293,7 +357,22 @@ class ChamberManager(
             finish(player.uniqueId, ChamberRunResult.FinishReason.PASSED, true)
             return
         }
-        enterCurrentChamber(player, run, resumed = false)
+        enterCurrentChamberSafely(player, run, resumed = false)
+    }
+
+    private fun enterCurrentChamberSafely(
+        player: Player,
+        run: ActiveRun,
+        resumed: Boolean,
+    ): Boolean = try {
+        enterCurrentChamber(player, run, resumed)
+        true
+    } catch (exception: RuntimeException) {
+        plugin.logger.severe(
+            "Unable to enter chamber for ${player.name}: ${exception.message}",
+        )
+        suspendForRuntimeFailure(player, run)
+        false
     }
 
     private fun enterCurrentChamber(
@@ -304,6 +383,7 @@ class ChamberManager(
         val chamber = run.currentChamber().definition
         run.deadlineMillis =
             System.currentTimeMillis() + chamber.timeLimitSeconds * 1_000L
+        run.playerState.prepareForChamber(player)
         player.teleport(run.currentSpawn())
         fireCurrentEvent(ChamberScripts.TriggerType.ENTER, player, run)
         player.showTitle(
@@ -352,14 +432,19 @@ class ChamberManager(
         playerId: UUID,
         reason: ChamberRunResult.FinishReason,
         reportResult: Boolean,
+        playerOverride: Player? = null,
     ) {
         val run = activeRuns[playerId] ?: return
-        val player = plugin.server.getPlayer(playerId)
+        val player = playerOverride ?: plugin.server.getPlayer(playerId)
+        val availablePlayer = player?.takeIf {
+            it.isOnline || reason == ChamberRunResult.FinishReason.QUIT
+        }
         if (!transitionForFinish(run, reason)) {
             activeRuns.remove(playerId)
-            if (player?.isOnline == true) {
-                player.teleport((run.lobby ?: run.returnLocation).clone())
-                player.sendMessage(
+            if (availablePlayer != null) {
+                availablePlayer.teleport((run.lobby ?: run.returnLocation).clone())
+                restorePlayerState(availablePlayer, run)
+                availablePlayer.sendMessage(
                     Component.text(
                         "测试结果无法安全保存，请联系管理员后重新连接。",
                         NamedTextColor.RED,
@@ -370,22 +455,23 @@ class ChamberManager(
             return
         }
         if (
-            player?.isOnline == true &&
+            availablePlayer != null &&
             reason != ChamberRunResult.FinishReason.PASSED &&
             reason != ChamberRunResult.FinishReason.QUIT &&
             reason != ChamberRunResult.FinishReason.PLUGIN_DISABLED
         ) {
-            fireCurrentEvent(ChamberScripts.TriggerType.FAIL, player, run)
+            fireCurrentEvent(ChamberScripts.TriggerType.FAIL, availablePlayer, run)
         }
         activeRuns.remove(playerId)
-        if (player?.isOnline == true) {
-            player.teleport((run.lobby ?: run.returnLocation).clone())
+        if (availablePlayer != null) {
+            availablePlayer.teleport((run.lobby ?: run.returnLocation).clone())
+            restorePlayerState(availablePlayer, run)
             if (reason == ChamberRunResult.FinishReason.PASSED) {
-                player.sendMessage(
+                availablePlayer.sendMessage(
                     Component.text("全部测试室完成。", NamedTextColor.GREEN),
                 )
             } else if (reason != ChamberRunResult.FinishReason.PLUGIN_DISABLED) {
-                player.sendMessage(
+                availablePlayer.sendMessage(
                     Component.text(
                         "测试流程已结束：${finishMessage(reason)}",
                         NamedTextColor.RED,
@@ -446,9 +532,26 @@ class ChamberManager(
     private fun suspendForPersistenceFailure(player: Player, run: ActiveRun) {
         if (activeRuns.remove(player.uniqueId) !== run) return
         player.teleport((run.lobby ?: run.returnLocation).clone())
+        restorePlayerState(player, run)
         player.sendMessage(
             Component.text(
                 "测试进度无法安全保存，本次测试已暂停；请联系管理员后重新连接。",
+                NamedTextColor.RED,
+            ),
+        )
+        worldManager.destroyInstance(run.instanceWorld)
+    }
+
+    private fun suspendForRuntimeFailure(player: Player, run: ActiveRun) {
+        if (run.stateMachine?.state == ChamberRunState.RUNNING) {
+            transitionAndSave(run, ChamberRunStateMachine::pause)
+        }
+        if (activeRuns.remove(player.uniqueId) !== run) return
+        player.teleport((run.lobby ?: run.returnLocation).clone())
+        restorePlayerState(player, run)
+        player.sendMessage(
+            Component.text(
+                "测试室加载失败，进度已暂停；请重新连接后重试。",
                 NamedTextColor.RED,
             ),
         )
@@ -543,6 +646,29 @@ class ChamberManager(
             ChamberRunResult.FinishReason.PASSED -> "全部完成"
         }
 
+    private fun restorePlayerState(player: Player, run: ActiveRun) {
+        try {
+            run.playerState.restore(player)
+        } catch (exception: RuntimeException) {
+            plugin.logger.severe(
+                "Unable to restore chamber player state for " +
+                    "${player.name}: ${exception.message}",
+            )
+            player.sendMessage(
+                Component.text(
+                    "玩家状态恢复失败，请立即联系管理员。",
+                    NamedTextColor.RED,
+                ),
+            )
+        }
+    }
+
+    private fun isAllowedRunCommand(message: String): Boolean {
+        val normalized = message.trim().lowercase()
+        return normalized == "/chambers status" ||
+            normalized == "/chambers leave"
+    }
+
     private class ActiveRun(
         chambers: List<PlacedChamber>,
         sourceLobby: Location?,
@@ -551,6 +677,7 @@ class ChamberManager(
         val registrationSession: MinecraftRegistrationTest.Session?,
         val completion: (ChamberRunResult) -> Unit,
         val stateMachine: ChamberRunStateMachine?,
+        val playerState: ChamberPlayerState,
     ) {
         val chambers = chambers.toList()
         val lobby = sourceLobby?.clone()
@@ -575,3 +702,11 @@ class ChamberManager(
         }
     }
 }
+
+data class ChamberRunStatus(
+    val chamberTitle: String,
+    val currentChamber: Int,
+    val totalChambers: Int,
+    val remainingSeconds: Long,
+    val registration: Boolean,
+)

@@ -188,6 +188,71 @@ class ChamberProgressStoreTest {
         assertEquals(null, restored.failureReason)
     }
 
+    @Test
+    fun `terminal result scan restores outbox entries only`() = withStore { store, _ ->
+        val passedSession = MinecraftRegistrationTest.Session(
+            UUID.randomUUID().toString(),
+            "Alex_123",
+        )
+        val passed = ChamberRunStateMachine.restore(
+            store.loadOrCreate(passedSession) { listOf("laser-intro") },
+        ).apply {
+            start()
+            completeCurrentChamber()
+        }
+        store.save(passed.snapshot)
+
+        val pausedSession = MinecraftRegistrationTest.Session(
+            UUID.randomUUID().toString(),
+            "Steve_123",
+        )
+        val paused = ChamberRunStateMachine.restore(
+            store.loadOrCreate(pausedSession) { listOf("cube-drop") },
+        ).apply {
+            start()
+            pause()
+        }
+        store.save(paused.snapshot)
+
+        val scan = store.scanTerminalResults()
+
+        assertTrue(scan.invalidFiles.isEmpty())
+        assertEquals(1, scan.results.size)
+        assertEquals(passedSession, scan.results.single().registrationSession)
+        assertEquals(
+            ChamberRunResult.FinishReason.PASSED,
+            scan.results.single().reason,
+        )
+        assertEquals(1, scan.results.single().completedChambers)
+        assertEquals(1, scan.results.single().totalChambers)
+    }
+
+    @Test
+    fun `terminal result scan isolates invalid progress files`() = withStore { store, directory ->
+        val session = MinecraftRegistrationTest.Session(
+            UUID.randomUUID().toString(),
+            "Alex_123",
+        )
+        val failed = ChamberRunStateMachine.restore(
+            store.loadOrCreate(session) { listOf("laser-intro") },
+        ).apply {
+            start()
+            fail(ChamberRunResult.FinishReason.TIMED_OUT)
+        }
+        store.save(failed.snapshot)
+        Files.writeString(
+            directory.resolve("progress").resolve("broken.json"),
+            "{not-json}",
+        )
+
+        val scan = store.scanTerminalResults()
+
+        assertEquals(1, scan.results.size)
+        assertEquals(session, scan.results.single().registrationSession)
+        assertEquals(1, scan.invalidFiles.size)
+        assertTrue(scan.invalidFiles.single().startsWith("broken.json:"))
+    }
+
     private fun withStore(block: (ChamberProgressStore, Path) -> Unit) {
         val directory = Files.createTempDirectory("chamber-progress-test")
         try {
