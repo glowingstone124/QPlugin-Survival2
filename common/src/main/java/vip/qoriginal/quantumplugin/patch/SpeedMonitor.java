@@ -20,6 +20,16 @@ import java.util.Map;
 import java.util.function.Predicate;
 
 public class SpeedMonitor implements Listener {
+    private static final int MINECART_ANIMATION_TICKS = 40;
+    private static final int MINECART_ANIMATION_FRAME_TICKS = 4;
+    private static final String[] MINECART_ANIMATION_FRAMES = {
+            "Q U H R",
+            "QU H R",
+            "QUH R",
+            "QUHR",
+            "QUHR >"
+    };
+
     private final Plugin plugin;
     private final Predicate<Entity> ignoredVehicles;
     private final Predicate<Entity> experimentalAccelerationVehicles;
@@ -52,14 +62,39 @@ public class SpeedMonitor implements Listener {
                 ? genMinecartMsg(event)
                 : Component.empty();
         new BukkitRunnable() {
+            private int elapsedTicks;
+
             @Override public void run() {
-                if (!player.isInsideVehicle()) { cancel(); return; }
-                String speed = new DecimalFormat("#.#").format(calculatePlayerSpeed(player));
-                player.sendActionBar(event.getVehicle() instanceof Minecart ? genMinecartMsg(event) : actionBar);
-                player.showTitle(Title.title(Component.empty(), Component.text("Speed: " + speed + "KM/H"),
-                        Title.Times.times(Duration.ZERO, Duration.ofSeconds(1), Duration.ZERO)));
+                if (!player.isInsideVehicle() || player.getVehicle() != event.getVehicle()) {
+                    cancel();
+                    return;
+                }
+
+                if (event.getVehicle() instanceof Minecart) {
+                    Component minecartActionBar = elapsedTicks < MINECART_ANIMATION_TICKS
+                            ? genMinecartAnimation(elapsedTicks / MINECART_ANIMATION_FRAME_TICKS)
+                            : genMinecartMsg(event);
+                    player.sendActionBar(minecartActionBar);
+
+                    if (elapsedTicks % 20 == 0) {
+                        sendSpeedTitle(player);
+                    }
+                } else {
+                    player.sendActionBar(actionBar);
+                    sendSpeedTitle(player);
+                }
+                elapsedTicks += 2;
             }
-        }.runTaskTimer(plugin, 0, 20);
+        }.runTaskTimer(plugin, 0, 2);
+    }
+
+    private Component genMinecartAnimation(int frame) {
+        return Component.text(
+                MINECART_ANIMATION_FRAMES[
+                        Math.min(frame, MINECART_ANIMATION_FRAMES.length - 1)
+                ],
+                NamedTextColor.AQUA
+        );
     }
 
     private Component genMinecartMsg(VehicleEnterEvent event) {
@@ -67,6 +102,12 @@ public class SpeedMonitor implements Listener {
             return Component.text("感谢您选择UHR轨道交通系统。", NamedTextColor.AQUA);
         }
         return Component.text("感谢您选择QO铁路，QO高速铁路现已全面普及108km/h高速 ", NamedTextColor.GREEN);
+    }
+
+    private void sendSpeedTitle(Player player) {
+        String speed = new DecimalFormat("#.#").format(calculatePlayerSpeed(player));
+        player.showTitle(Title.title(Component.empty(), Component.text("Speed: " + speed + "KM/H"),
+                Title.Times.times(Duration.ZERO, Duration.ofSeconds(1), Duration.ZERO)));
     }
 
     public double calculatePlayerSpeed(Player player) {

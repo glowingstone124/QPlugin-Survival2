@@ -16,7 +16,7 @@ class ExperimentalAcceleration {
 
 	companion object {
 		private const val MAX_SPEED_400_KMH = 5.56
-		private const val ACCELERATION_FACTOR = 1.03
+		private const val ACCELERATION_RESPONSE = 0.08
 		private val eAccMinecarts =
 			ConcurrentHashMap.newKeySet<UUID>()
 
@@ -61,7 +61,8 @@ class ExperimentalAcceleration {
 			)
 			val speed = horizontal.length()
 			if (speed > 0.0 && speed < MAX_SPEED_400_KMH) {
-				val targetSpeed = minOf(speed * ACCELERATION_FACTOR, MAX_SPEED_400_KMH)
+				val targetSpeed =
+					speed + (MAX_SPEED_400_KMH - speed) * ACCELERATION_RESPONSE
 				minecart.velocity = horizontal.multiply(targetSpeed / speed).setY(velocity.y)
 			}
 		}

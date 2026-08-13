@@ -31,9 +31,9 @@ public class Speed implements Listener{
             Material blockTypeBelow = minecart.getLocation().subtract(0, 1, 0).getBlock().getType();
             if (minecart.getScoreboardTags().contains("accel") || minecart.getScoreboardTags().contains("accelplus")) {
                 if (blockTypeBelow == Material.SMOOTH_STONE) { //普刹车
-                    calc = boost(minecart, .4d, .005, f, t);
+                    calc = boost(minecart, .4d, .18, f, t);
                 } else if (blockTypeBelow == Material.SMOOTH_STONE_SLAB) { //急刹车
-                    calc = boost(minecart, .1d, .02, f, t);
+                    calc = boost(minecart, .1d, .30, f, t);
                 } else if (minecart.getScoreboardTags().contains("curve")){ //弯道减速
                     boolean flag = false;
                     if (minecart.getLocation().getBlock().getBlockData() instanceof Rail) {
@@ -44,10 +44,10 @@ public class Speed implements Listener{
                             flag = true;
                         }
                     }
-                    calc = boost(minecart, flag?0.5:0.72, flag?.015:.0008, f, t);
+                    calc = boost(minecart, flag?0.5:0.72, flag?.22:.10, f, t);
                     minecart.setMaxSpeed(flag?0.6:0.72);
                 } else {
-                    calc = boost(minecart, minecart.getScoreboardTags().contains("cr200j") ? 1.6d : 0.9d, .005, f, t);
+                    calc = boost(minecart, minecart.getScoreboardTags().contains("cr200j") ? 1.6d : 0.9d, .10, f, t);
                 }
                 if(calc!=null) {
                     minecart.teleport(event.getFrom().add(calc));
@@ -62,13 +62,14 @@ public class Speed implements Listener{
         for (String str: minecart.getScoreboardTags()) {
             if (str.indexOf("queueing-") == 0) {
                 ts = 0;
-                a = 0.1;
+                a = .10;
                 break;
             }
         }
         if (cs > 0 && minecart.getLocation().getBlock().isBlockPowered() && !minecart.getScoreboardTags().contains("queueing")) {
-            // ns = Computed Next Speed
-            double ns = ts>cs?Math.min(cs+a,cs*.7+ts*.3):Math.max(cs-a,cs*.7+ts*.3);
+            // Move by a fixed fraction of the remaining error so the target is
+            // approached smoothly without a fixed-step jump near the limit.
+            double ns = cs + (ts - cs) * a;
             double factor = ns / cs;
             Vector newVelocity = currentVelocity.multiply(factor);
             return newVelocity;
