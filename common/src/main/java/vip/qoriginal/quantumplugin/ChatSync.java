@@ -20,6 +20,7 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.net.HttpURLConnection;
+import java.util.logging.Logger;
 
 public class ChatSync implements Listener {
     private final static int QO_CREATIVE_CODE = 4;
@@ -30,6 +31,8 @@ public class ChatSync implements Listener {
     DecimalFormat df = new DecimalFormat("#.##");
     private static Gson gson = new Gson();
     private static final long QQ_CACHE_TTL_MS = 10 * 60 * 1000L;
+    private static final int MAX_SEEN_MESSAGES = 4096;
+    private static final Logger LOGGER = Logger.getLogger(ChatSync.class.getName());
     private static final Map<Long, CachedName> qqNameCache = new ConcurrentHashMap<>();
     private static final PlainTextComponentSerializer PLAIN_TEXT = PlainTextComponentSerializer.plainText();
     private static volatile int defaultSourceCode = QO_CODE;
@@ -211,9 +214,8 @@ public class ChatSync implements Listener {
     }
 
     public class WebMsgGetter implements Runnable {
-        private String buffer = "";
-        private long lastTimestamp = 0L;
         private final Object lock = new Object();
+        private final LinkedHashSet<String> seenMessages = new LinkedHashSet<>();
         private String lastResponse = null;
         private String lastEtag = null;
 
@@ -233,17 +235,21 @@ public class ChatSync implements Listener {
                     return;
                 }
                 String response = resp.body;
-                if (response != null && response.equals(lastResponse)) {
+                if (response == null || response.isBlank()) {
                     return;
                 }
-                lastResponse = response;
-                String etag = null;
-                List<String> etagHeaders = resp.headers.get("ETag");
-                if (etagHeaders != null && !etagHeaders.isEmpty()) {
-                    etag = etagHeaders.get(0);
+                if (response.equals(lastResponse)) {
+                    return;
                 }
-                if (etag != null && !etag.isBlank()) {
-                    lastEtag = etag;
+                String etag = null;
+                for (Map.Entry<String, List<String>> header : resp.headers.entrySet()) {
+                    if (header.getKey() != null
+                            && header.getKey().equalsIgnoreCase("ETag")
+                            && header.getValue() != null
+                            && !header.getValue().isEmpty()) {
+                        etag = header.getValue().get(0);
+                        break;
+                    }
                 }
                 JsonElement jsonElement = JsonParser.parseString(response);
 
@@ -251,31 +257,28 @@ public class ChatSync implements Listener {
                     JsonObject msgObj = jsonElement.getAsJsonObject();
                     List<JsonObject> newMessages = parseMessages(msgObj.getAsJsonArray("messages"));
 
-                    List<JsonObject> messagesToSend = new ArrayList<>();
                     synchronized (lock) {
-                        long maxSeenTimestamp = lastTimestamp;
-                        for (JsonObject msg : newMessages) {
-                            long messageTime = msg.get("time").getAsLong();
-
-                            if (messageTime > lastTimestamp) {
-                                messagesToSend.add(msg);
-                                maxSeenTimestamp = Math.max(maxSeenTimestamp, messageTime);
-                            }
-                        }
-
+                        List<JsonObject> messagesToSend = selectUnseenMessages(newMessages);
                         if (!messagesToSend.isEmpty()) {
                             for (JsonObject msg : messagesToSend) {
-                                int from = msg.get("from").getAsInt();
-                                if (from == sourceCode) continue;
+                                try {
+                                    int from = msg.get("from").getAsInt();
+                                    if (from == sourceCode) continue;
 
-                                Component msgComponent = buildMessageComponent(from, msg);
+                                    Component msgComponent = buildMessageComponent(from, msg);
 
-                                for (Player p : Bukkit.getOnlinePlayers()) {
-                                    p.sendMessage(msgComponent);
+                                    for (Player p : Bukkit.getOnlinePlayers()) {
+                                        p.sendMessage(msgComponent);
+                                    }
+                                } catch (Exception e) {
+                                    LOGGER.warning("无法同步一条聊天消息: " + e.getMessage());
                                 }
                             }
                         }
-                        lastTimestamp = maxSeenTimestamp;
+                    }
+                    lastResponse = response;
+                    if (etag != null && !etag.isBlank()) {
+                        lastEtag = etag;
                     }
                 }
             } catch (Exception e) {
@@ -283,18 +286,61 @@ public class ChatSync implements Listener {
             }
         }
 
-        private List<JsonObject> parseMessages(JsonArray messagesArray) {
+        List<JsonObject> selectUnseenMessages(List<JsonObject> messages) {
+            Map<String, Integer> occurrences = new HashMap<>();
+            List<JsonObject> unseen = new ArrayList<>();
+
+            for (JsonObject message : messages) {
+                String fingerprint = messageFingerprint(message);
+                int occurrence = occurrences.merge(fingerprint, 1, Integer::sum);
+                String identity = fingerprint + '\u0000' + occurrence;
+                if (seenMessages.add(identity)) {
+                    unseen.add(message);
+                }
+            }
+
+            while (seenMessages.size() > MAX_SEEN_MESSAGES) {
+                Iterator<String> iterator = seenMessages.iterator();
+                iterator.next();
+                iterator.remove();
+            }
+            return unseen;
+        }
+
+        private String messageFingerprint(JsonObject message) {
+            for (String idField : List.of("id", "message_id", "messageId", "uuid")) {
+                JsonElement id = message.get(idField);
+                if (id != null && !id.isJsonNull()) {
+                    return idField + ':' + id;
+                }
+            }
+
+            StringBuilder fingerprint = new StringBuilder();
+            for (String field : List.of("time", "from", "sender", "type", "message")) {
+                JsonElement value = message.get(field);
+                String serialized = value == null ? "<missing>" : value.toString();
+                fingerprint.append(field.length()).append(':').append(field)
+                        .append(serialized.length()).append(':').append(serialized);
+            }
+            return fingerprint.toString();
+        }
+
+        List<JsonObject> parseMessages(JsonArray messagesArray) {
             List<JsonObject> messages = new ArrayList<>();
             if (messagesArray == null) {
                 return messages;
             }
             for (JsonElement msgElement : messagesArray) {
-                if (msgElement.isJsonObject()) {
-                    messages.add(msgElement.getAsJsonObject());
-                } else if (msgElement.isJsonPrimitive()) {
-                    String msgStr = msgElement.getAsString();
-                    JsonObject msgObj = JsonParser.parseString(msgStr).getAsJsonObject();
-                    messages.add(msgObj);
+                try {
+                    if (msgElement.isJsonObject()) {
+                        messages.add(msgElement.getAsJsonObject());
+                    } else if (msgElement.isJsonPrimitive()) {
+                        String msgStr = msgElement.getAsString();
+                        JsonObject msgObj = JsonParser.parseString(msgStr).getAsJsonObject();
+                        messages.add(msgObj);
+                    }
+                } catch (RuntimeException e) {
+                    LOGGER.warning("忽略一条格式错误的聊天消息: " + e.getMessage());
                 }
             }
             return messages;
@@ -443,6 +489,7 @@ public class ChatSync implements Listener {
 
     public static class MessageWrapper {
         public String message;
+        public String id;
         public String type;
         public String sender;
         public String token;
@@ -450,6 +497,7 @@ public class ChatSync implements Listener {
         public long time;
 
         public MessageWrapper(String message, String type, String token, int from, long time, String sender) {
+            this.id = UUID.randomUUID().toString();
             this.message = message;
             this.type = type;
             this.token = token;

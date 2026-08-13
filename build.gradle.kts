@@ -150,6 +150,7 @@ project(":common") {
 
 	dependencies {
 		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.2.build.+")
+		"testImplementation"(kotlin("test"))
 	}
 }
 
