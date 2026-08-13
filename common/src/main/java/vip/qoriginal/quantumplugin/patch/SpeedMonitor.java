@@ -3,7 +3,6 @@ package vip.qoriginal.quantumplugin.patch;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
-import org.bukkit.Location;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -11,15 +10,15 @@ import org.bukkit.event.vehicle.VehicleEnterEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Vector;
 
 
 import java.text.DecimalFormat;
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.function.Predicate;
 
 public class SpeedMonitor implements Listener {
+    private static final double BLOCKS_PER_TICK_TO_KMH = 20.0 * 3.6;
     private static final int MINECART_ANIMATION_TICKS = 40;
     private static final int MINECART_ANIMATION_FRAME_TICKS = 4;
     private static final String[] MINECART_ANIMATION_FRAMES = {
@@ -33,7 +32,6 @@ public class SpeedMonitor implements Listener {
     private final Plugin plugin;
     private final Predicate<Entity> ignoredVehicles;
     private final Predicate<Entity> experimentalAccelerationVehicles;
-    private final Map<Player, Location> previousLocations = new HashMap<>();
 
     public SpeedMonitor(Plugin plugin) {
         this(plugin, vehicle -> vehicle instanceof HappyGhast, vehicle -> false);
@@ -111,16 +109,14 @@ public class SpeedMonitor implements Listener {
     }
 
     public double calculatePlayerSpeed(Player player) {
-        Location current = player.getLocation();
-        Location previous = previousLocations.getOrDefault(player, current);
-        previousLocations.put(player, current);
-        return Math.hypot(current.getX() - previous.getX(), current.getZ() - previous.getZ()) * 3.6;
+        Entity vehicle = player.getVehicle();
+        Vector velocity = (vehicle == null ? player : vehicle).getVelocity();
+        return Math.hypot(velocity.getX(), velocity.getZ()) * BLOCKS_PER_TICK_TO_KMH;
     }
 
     @EventHandler
     public void onVehicleExit(VehicleExitEvent event) {
         if (event.getExited() instanceof Player player) {
-            previousLocations.remove(player);
             player.clearTitle();
         }
     }
