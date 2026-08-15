@@ -3,6 +3,7 @@ package vip.qoriginal.quantumplugin.patch;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
+import org.bukkit.Location;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -10,7 +11,6 @@ import org.bukkit.event.vehicle.VehicleEnterEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.util.Vector;
 
 
 import java.text.DecimalFormat;
@@ -61,6 +61,9 @@ public class SpeedMonitor implements Listener {
                 : Component.empty();
         new BukkitRunnable() {
             private int elapsedTicks;
+            private Location previousLocation = player.getLocation();
+            private double accumulatedSpeed;
+            private int sampledTicks;
 
             @Override public void run() {
                 if (!player.isInsideVehicle() || player.getVehicle() != event.getVehicle()) {
@@ -68,22 +71,36 @@ public class SpeedMonitor implements Listener {
                     return;
                 }
 
+                Location currentLocation = player.getLocation();
+                double speed = calculatePlayerSpeed(previousLocation, currentLocation);
+                previousLocation = currentLocation;
+                accumulatedSpeed += speed;
+                sampledTicks++;
+
                 if (event.getVehicle() instanceof Minecart) {
-                    Component minecartActionBar = elapsedTicks < MINECART_ANIMATION_TICKS
-                            ? genMinecartAnimation(elapsedTicks / MINECART_ANIMATION_FRAME_TICKS)
-                            : genMinecartMsg(event);
-                    player.sendActionBar(minecartActionBar);
+                    if (elapsedTicks % 2 == 0) {
+                        Component minecartActionBar = elapsedTicks < MINECART_ANIMATION_TICKS
+                                ? genMinecartAnimation(elapsedTicks / MINECART_ANIMATION_FRAME_TICKS)
+                                : genMinecartMsg(event);
+                        player.sendActionBar(minecartActionBar);
+                    }
 
                     if (elapsedTicks % 20 == 0) {
-                        sendSpeedTitle(player);
+                        sendAverageSpeedTitle();
                     }
-                } else {
+                } else if (elapsedTicks % 2 == 0) {
                     player.sendActionBar(actionBar);
-                    sendSpeedTitle(player);
+                    sendAverageSpeedTitle();
                 }
-                elapsedTicks += 2;
+                elapsedTicks++;
             }
-        }.runTaskTimer(plugin, 0, 2);
+
+            private void sendAverageSpeedTitle() {
+                sendSpeedTitle(player, accumulatedSpeed / sampledTicks);
+                accumulatedSpeed = 0.0;
+                sampledTicks = 0;
+            }
+        }.runTaskTimer(plugin, 0, 1);
     }
 
     private Component genMinecartAnimation(int frame) {
@@ -102,16 +119,17 @@ public class SpeedMonitor implements Listener {
         return Component.text("感谢您选择QO铁路，QO高速铁路现已全面普及108km/h高速 ", NamedTextColor.GREEN);
     }
 
-    private void sendSpeedTitle(Player player) {
-        String speed = new DecimalFormat("#.#").format(calculatePlayerSpeed(player));
+    private void sendSpeedTitle(Player player, double playerSpeed) {
+        String speed = new DecimalFormat("#.#").format(playerSpeed);
         player.showTitle(Title.title(Component.empty(), Component.text("Speed: " + speed + "KM/H"),
                 Title.Times.times(Duration.ZERO, Duration.ofSeconds(1), Duration.ZERO)));
     }
 
-    public double calculatePlayerSpeed(Player player) {
-        Entity vehicle = player.getVehicle();
-        Vector velocity = (vehicle == null ? player : vehicle).getVelocity();
-        return Math.hypot(velocity.getX(), velocity.getZ()) * BLOCKS_PER_TICK_TO_KMH;
+    public double calculatePlayerSpeed(Location previousLocation, Location currentLocation) {
+        if (previousLocation.getWorld() != currentLocation.getWorld()) return 0.0;
+        double deltaX = currentLocation.getX() - previousLocation.getX();
+        double deltaZ = currentLocation.getZ() - previousLocation.getZ();
+        return Math.hypot(deltaX, deltaZ) * BLOCKS_PER_TICK_TO_KMH;
     }
 
     @EventHandler
