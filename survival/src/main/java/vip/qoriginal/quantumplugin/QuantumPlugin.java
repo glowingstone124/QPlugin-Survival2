@@ -63,6 +63,7 @@ public final class QuantumPlugin extends JavaPlugin {
     private final MinecraftRegistrationTest minecraftRegistrationTest = new ReservedMinecraftRegistrationTest();
     private ServuxEntityDataBridge servuxEntityDataBridge;
     private EliteWeaponListener eliteWeaponListener;
+    private PlayerStatisticsReporter playerStatisticsReporter;
     public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
 
@@ -217,6 +218,8 @@ public final class QuantumPlugin extends JavaPlugin {
         Objects.requireNonNull(this.getCommand("flight")).setExecutor(new FlightCommandExecutor());
         Objects.requireNonNull(this.getCommand("fakeplayer")).setExecutor(new FakePlayerCommand(this, fakePlayerManager));
         Ranking ranking = new Ranking();
+        playerStatisticsReporter = new PlayerStatisticsReporter(this);
+        playerStatisticsReporter.start();
     }
 
     public static QuantumPlugin getInstance() {
@@ -225,6 +228,9 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (playerStatisticsReporter != null) {
+            playerStatisticsReporter.stop();
+        }
         ExperimentalMinecartSpeedBypass.restoreAll();
         if (servuxEntityDataBridge != null) {
             servuxEntityDataBridge.close();
