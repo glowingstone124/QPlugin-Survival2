@@ -1,0 +1,72 @@
+phase: IDLE
+started-at: 0
+ended-at: 0
+last-placed-key-score-at: 0
+last-refresh-key-at: 0
+scores:
+  A: 0
+  B: 0
+  C: 0
+kills:
+  A: 0
+  B: 0
+  C: 0
+converted-keys:
+  A: 0
+  B: 0
+  C: 0
+destroyed-keys:
+  A: 0
+  B: 0
+  C: 0
+eliminated: []
+announced: []
+keys:
+  11111111-1111-4111-8111-111111111111:
+    owner: A
+    original: A
+    state: PLACED
+    type: INITIAL
+    world: world
+    x: -72
+    y: -60
+    z: 0
+    holder: null
+    self-destruct-at: 0
+    expires-at: 0
+  11111112-1111-4111-8111-111111111112:
+    owner: A
+    original: A
+    state: PLACED
+    type: INITIAL
+    world: world
+    x: -72
+    y: -60
+    z: 128
+    holder: null
+    self-destruct-at: 0
+    expires-at: 0
+  22222222-2222-4222-8222-222222222221:
+    owner: B
+    original: B
+    state: PLACED
+    type: INITIAL
+    world: world
+    x: 56
+    y: -60
+    z: 0
+    holder: null
+    self-destruct-at: 0
+    expires-at: 0
+  33333333-3333-4333-8333-333333333331:
+    owner: C
+    original: C
+    state: PLACED
+    type: INITIAL
+    world: world
+    x: 0
+    y: -60
+    z: -128
+    holder: null
+    self-destruct-at: 0
+    expires-at: 0

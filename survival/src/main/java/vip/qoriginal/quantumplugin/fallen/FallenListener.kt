@@ -25,6 +25,7 @@ import org.bukkit.event.entity.EntityRemoveEvent
 import org.bukkit.event.entity.ItemDespawnEvent
 import org.bukkit.event.entity.ItemMergeEvent
 import org.bukkit.event.entity.ItemSpawnEvent
+import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.entity.ProjectileLaunchEvent
 import org.bukkit.event.entity.ProjectileHitEvent
@@ -52,6 +53,7 @@ import org.bukkit.event.world.PortalCreateEvent
 import org.bukkit.event.world.ChunkLoadEvent
 import org.bukkit.entity.Entity
 import org.bukkit.entity.Item
+import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
 import vip.qoriginal.quantumplugin.CommandMessages
@@ -282,17 +284,37 @@ class FallenListener(private val service: FallenGameService) : Listener {
 		}
 		if (service.isPlayerCombatForbidden(attacker, target)) {
 			event.isCancelled = true
+			service.notifyFriendlyFire(attacker, target)
 			return
+		}
+		if (service.isAlloyBulletProjectile(event.damager)) {
+			event.damage = FallenGameService.ALLOY_BULLET_FIXED_DAMAGE
 		}
 		service.cancelRespawnProtection(attacker)
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-	fun onPlayerDamageRecorded(event: EntityDamageByEntityEvent) {
+	fun onEntityDamageRecorded(event: EntityDamageByEntityEvent) {
 		val attacker = attackingPlayer(event) ?: return
-		val target = event.entity as? Player ?: return
+		val target = event.entity as? LivingEntity ?: return
 		val actualDamage = minOf(event.finalDamage, target.health + target.absorptionAmount)
-		service.recordDamage(attacker, target, actualDamage)
+		val isCritical = event.isCritical || (event.damager as? org.bukkit.entity.AbstractArrow)?.isCritical == true
+		val projectileDistance = if (event.damager is Projectile && attacker.world == target.world) {
+			attacker.location.distance(target.location)
+		} else null
+		if (target is Player) {
+			service.recordDamage(attacker, target, actualDamage, isCritical, projectileDistance)
+		} else {
+			service.recordMobDamage(attacker, target, actualDamage, isCritical, projectileDistance)
+		}
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR)
+	fun onEntityDeath(event: EntityDeathEvent) {
+		val victim = event.entity
+		if (victim is Player) return
+		val killer = victim.killer ?: return
+		service.recordMobKill(victim, killer)
 	}
 
 	@EventHandler(ignoreCancelled = true)

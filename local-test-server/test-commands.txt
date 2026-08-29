@@ -1,0 +1,40 @@
+# Run these from the server console after joining as <name>.
+# Replace <name> with your local player name.
+
+op <name>
+tp <name> 0 -60 0
+
+# Assign teams to test accounts.
+fallen team set <name> A
+
+# Start the event. This uses the fixed 2026-08-01 14:00 Asia/Shanghai timeline.
+fallen start
+
+# Inspect the local flat test regions and keys.
+fallen region list
+fallen key list
+fallen status
+
+# Preview the complete ending without changing phase, scores, or winners.
+# The selected team receives the winner blindness effect; all players see the
+# client-side chunks disappear and are kicked after about 12 seconds.
+fallen finale test A
+
+# Optional: abort an in-progress preview and restore player state.
+fallen finale cancel
+
+# If you want a clean local seed on next restart:
+# RESET_WORLD=1 RESET_FALLEN=1 local-test-server/run.sh
+
+# Give a key item to place manually inside the current player's team region.
+fallen key give A <name>
+
+# Useful local test teleports:
+# A old-city region and station: around -56,-60,0
+# A fu-island region and station: around -56,-60,128
+# B region: around 56,-60,0
+# C region: around 0,-60,-128
+tp <name> -56 -60 0
+tp <name> -56 -60 128
+tp <name> 56 -60 0
+tp <name> 0 -60 -128

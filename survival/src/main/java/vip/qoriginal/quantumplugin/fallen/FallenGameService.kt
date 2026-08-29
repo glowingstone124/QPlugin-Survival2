@@ -166,6 +166,9 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private val areaBossBars = ConcurrentHashMap<UUID, BossBar>()
 	private val respawnWaits = ConcurrentHashMap<UUID, RespawnWait>()
 	private val tickFailureWarningAt = ConcurrentHashMap<String, Long>()
+	private val lastLowHealthAlertAt = ConcurrentHashMap<UUID, Long>()
+	private val lastFriendlyFireNoticeAt = ConcurrentHashMap<UUID, Long>()
+	val combatHud = FallenCombatHud(plugin)
 
 	// Regions are fixed for the event. Boundaries are inclusive block coordinates.
 	private val fixedRegions: Map<FallenTeam, List<FallenRegion>> = mapOf(
@@ -215,6 +218,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	private var finaleTask: BukkitTask? = null
 	private var finaleChunksForgotten = false
 	private val finaleLockedPlayers = ConcurrentHashMap.newKeySet<UUID>()
+	private val killStreaks = ConcurrentHashMap<UUID, LongArray>()
 	private val finalePlayerStates = ConcurrentHashMap<UUID, FallenFinalePlayerState>()
 	private val finaleDebrisEntities = ConcurrentHashMap.newKeySet<UUID>()
 
@@ -237,6 +241,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		enforceLoginAccess()
 		plugin.server.scheduler.runTask(plugin, Runnable { reconcileLoadedKeyItems() })
 		updateScoreboard()
+		combatHud.start()
 		tickTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { tick() }, 20L, 20L)
 		visualTask = Bukkit.getScheduler().runTaskTimer(plugin, Runnable { renderVisuals() }, 5L, 5L)
 		persistenceTask = Bukkit.getScheduler().runTaskTimer(
@@ -267,6 +272,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		finaleChunksForgotten = false
 		Bukkit.removeRecipe(alloyBulletRecipeKey)
 		clearTeamBonuses()
+		combatHud.stop()
 		tickTask?.cancel()
 		tickTask = null
 		visualTask?.cancel()
@@ -279,6 +285,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		persistenceTask = null
 		clearAreaBossBars()
 		clearScoreboard()
+		clearTabList()
 		dropConfirmUntil.clear()
 		save()
 		flushPersistenceSynchronously()
@@ -727,6 +734,10 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun teamOf(player: Player): FallenTeam? = playerTeams[player.uniqueId]
+	fun teamOf(playerId: UUID): FallenTeam? = playerTeams[playerId]
+	fun upgradePathOf(playerId: UUID): FallenUpgradePath? = upgradePaths[playerId]
+	fun deathCountOf(playerId: UUID): Int = deathCounts[playerId] ?: 0
+	fun playerRecord(playerId: UUID): FallenPlayerRecord? = playerRecords[playerId]
 
 	private fun newPlayerRecord(player: Player, nowMillis: Long = System.currentTimeMillis()): FallenPlayerRecord =
 		FallenPlayerRecord(
@@ -764,6 +775,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun loginDisconnectMessage(now: Instant = Instant.now()): Component? {
+		if (isDevMode()) return null
 		if (!FallenAccessPolicy.hasEventStarted(now)) {
 			return Component.text("《陷落》尚未开始", NamedTextColor.RED)
 				.appendNewline()
@@ -821,14 +833,24 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			player.kick(it)
 			return
 		}
-		if (player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor")) {
+		if (!isDevMode() && (player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor"))) {
 			plugin.server.scheduler.runTaskLater(plugin, Runnable {
 				admitJoinedPlayer(player, teamLookupSucceeded)
 			}, 20L)
 			return
 		}
 		pendingAdmissions.remove(player.uniqueId)
-		val team = teamOf(player)
+		var team = teamOf(player)
+		if (team == null && isDevMode()) {
+			val autoTeam = FallenTeam.entries.firstOrNull { it !in eliminatedTeams } ?: FallenTeam.A
+			assignTeam(player.uniqueId, autoTeam)
+			team = autoTeam
+			player.sendMessage(
+				Component.text("[开发/本地测试模式] 已自动为你分配阵营: ", NamedTextColor.AQUA)
+					.append(Component.text(autoTeam.displayName, autoTeam.color).decorate(TextDecoration.BOLD))
+					.append(Component.text(" (可使用 /fallen team set ${player.name} <A|B|C> 切换)", NamedTextColor.GRAY))
+			)
+		}
 		if (team == null) {
 			val detail = if (teamLookupSucceeded) {
 				"QAPI 尚未返回最终阵营，请稍后重试。"
@@ -931,10 +953,14 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (!projectile.persistentDataContainer.has(alloyBulletProjectileKey, PersistentDataType.BYTE)) return false
 		val location = projectile.location
 		projectile.world.spawnParticle(Particle.ELECTRIC_SPARK, location, 24, 0.22, 0.22, 0.22, 0.22)
-		projectile.world.spawnParticle(Particle.FLASH, location, 1, 0.0, 0.0, 0.0, 0.0)
+		projectile.world.spawnParticle(Particle.CRIT, location, 12, 0.15, 0.15, 0.15, 0.05)
 		projectile.world.playSound(location, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.8f, 1.75f)
 		projectile.world.playSound(location, Sound.BLOCK_AMETHYST_BLOCK_HIT, 1.0f, 0.65f)
 		return true
+	}
+
+	fun isAlloyBulletProjectile(entity: org.bukkit.entity.Entity): Boolean {
+		return entity.persistentDataContainer.has(alloyBulletProjectileKey, PersistentDataType.BYTE)
 	}
 
 	private fun isAlloyBulletItem(item: ItemStack?): Boolean {
@@ -1087,6 +1113,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		lastActivityStatusWarningAt = now
 		plugin.logger.warning("Failed to upload Fallen activity status: $message")
 	}
+
+	fun isDevMode(): Boolean =
+		"true".equals(System.getenv("FALLEN_LOCAL_TEST"), ignoreCase = true)
+			|| "true".equals(System.getenv("DISABLE_QO_API"), ignoreCase = true)
+			|| "true".equals(System.getenv("DEV_MODE"), ignoreCase = true)
+			|| "true".equals(System.getProperty("fallen.localTest"), ignoreCase = true)
+			|| !qoApiEnabled()
 
 	private fun qoApiEnabled(): Boolean = !"true".equals(System.getenv("DISABLE_QO_API"), ignoreCase = true)
 
@@ -1457,9 +1490,18 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		val holder = FallenPlayerMenuHolder()
 		val inventory = Bukkit.createInventory(holder, 27, Component.text("陷落实验室终端", NamedTextColor.DARK_AQUA))
 		holder.backingInventory = inventory
-		inventory.setItem(4, menuItem(Material.CLOCK, "当前状态", listOf(
+		val record = playerRecords[player.uniqueId]
+		val kills = record?.kills ?: 0
+		val assists = record?.assists ?: 0
+		val deaths = deathCounts[player.uniqueId] ?: 0
+		val kd = if (deaths > 0) "%.2f".format(kills.toDouble() / deaths) else "$kills.00"
+		val dealt = "%.1f".format(record?.damageDealt ?: 0.0)
+		val taken = "%.1f".format(record?.damageTaken ?: 0.0)
+		inventory.setItem(4, menuItem(Material.CLOCK, "当前状态与战绩", listOf(
 			upgradeStatus(player),
-			if (player.uniqueId in elytraPlayers) "当前护甲：鞘翅" else "当前护甲：下界合金胸甲"
+			if (player.uniqueId in elytraPlayers) "当前护甲：鞘翅" else "当前护甲：下界合金胸甲",
+			"战绩：$kills 击杀 / $assists 助攻 / $deaths 死亡 (K/D: $kd)",
+			"输出：$dealt ❤ / 承伤：$taken ❤"
 		)))
 		inventory.setItem(10, menuItem(Material.GOLDEN_APPLE, "A · 生存路径", listOf(
 			"I：最大生命值 +4",
@@ -2025,6 +2067,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			convertedKeys[team] = (convertedKeys[team] ?: 0) + 1
 			addScore(key.originalTeam, -FallenScoreRules.CONVERSION_LOSS)
 			key.conversionScored = true
+			combatHud.showPopup(player, FallenScoreRules.CONVERSION_SCORE, "转化敌方密钥", NamedTextColor.YELLOW, NamedTextColor.LIGHT_PURPLE)
+			player.playSound(player.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 1.5f)
 			doctorBroadcastByChance(
 				4,
 				"Doc. Steinbeck" to "有趣。${player.name} 把 ${key.originalTeam.displayName} 的生命线改写给了 ${team.displayName}，甚至办完了放置手续。",
@@ -2133,6 +2177,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun handleQuit(player: Player) {
+		combatHud.clearForPlayer(player.uniqueId)
 		if (isFinaleLocked(player)) restoreFinalePlayer(player)
 		if (playerRecords.containsKey(player.uniqueId)) touchPlayerRecord(player)
 		pendingAdmissions.remove(player.uniqueId)
@@ -2264,6 +2309,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 	}
 
 	fun handleDeath(player: Player) {
+		combatHud.clearForPlayer(player.uniqueId)
 		if (!FallenAccessPolicy.isEventInProgress(phase)) return
 		val team = teamOf(player) ?: return
 		if (team in eliminatedTeams) return
@@ -2280,7 +2326,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		}
 	}
 
-	fun recordDamage(attacker: Player, target: Player, finalDamage: Double) {
+	fun recordDamage(
+		attacker: Player,
+		target: Player,
+		finalDamage: Double,
+		isCritical: Boolean = false,
+		projectileDistance: Double? = null
+	) {
 		if (!phase.allowsKeyCapture()) return
 		if (!finalDamage.isFinite() || finalDamage <= 0.0) return
 		val attackerTeam = teamOf(attacker) ?: return
@@ -2296,19 +2348,136 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		combatUntil[target.uniqueId] = now + COMBAT_TAG_MILLIS
 		recentAttackers.computeIfAbsent(target.uniqueId) { ConcurrentHashMap() }[attacker.uniqueId] = now
 		val score = FallenScoreRules.damageScore(finalDamage)
-		if (score <= 0) return
-		val windowKey = "${attacker.uniqueId}:${target.uniqueId}"
-		val window = damageScoreWindows.compute(windowKey) { _, current ->
-			if (current == null || now - current.startedAtMillis >= DAMAGE_SCORE_WINDOW_MILLIS) {
-				DamageScoreWindow(now, 0)
-			} else {
-				current
+		if (score > 0) {
+			val windowKey = "${attacker.uniqueId}:${target.uniqueId}"
+			val window = damageScoreWindows.compute(windowKey) { _, current ->
+				if (current == null || now - current.startedAtMillis >= DAMAGE_SCORE_WINDOW_MILLIS) {
+					DamageScoreWindow(now, 0)
+				} else {
+					current
+				}
 			}
-		} ?: return
-		val grant = score.coerceAtMost((FallenScoreRules.DAMAGE_SCORE_CAP_PER_WINDOW - window.score).coerceAtLeast(0))
-		if (grant > 0) {
-			window.score += grant
-			addScore(attackerTeam, grant)
+			if (window != null) {
+				val grant = score.coerceAtMost((FallenScoreRules.DAMAGE_SCORE_CAP_PER_WINDOW - window.score).coerceAtLeast(0))
+				if (grant > 0) {
+					window.score += grant
+					addScore(attackerTeam, grant)
+				}
+			}
+		}
+
+		sendHitFeedback(attacker, target, targetTeam, finalDamage, isCritical, projectileDistance)
+		checkLowHealthAlert(target, finalDamage)
+	}
+
+	private fun sendHitFeedback(
+		attacker: Player,
+		target: Player,
+		targetTeam: FallenTeam,
+		finalDamage: Double,
+		isCritical: Boolean,
+		projectileDistance: Double?
+	) {
+		val maxHealth = target.getAttribute(Attribute.MAX_HEALTH)?.value ?: 20.0
+		val state = FallenCombatIndicator.calculatePostDamageState(
+			currentHealth = target.health,
+			currentAbsorption = target.absorptionAmount,
+			maxHealth = maxHealth,
+			finalDamage = finalDamage
+		)
+		val isKeyCarrier = hasKeyItem(target)
+		val actionBar = FallenCombatIndicator.formatHitActionBar(
+			targetName = target.name,
+			targetTeam = targetTeam,
+			finalDamage = finalDamage,
+			state = state,
+			isCritical = isCritical,
+			isKeyCarrier = isKeyCarrier,
+			projectileDistance = projectileDistance
+		)
+		attacker.sendActionBar(actionBar)
+
+		val pitch = (0.9f + (1.0f - state.healthRatio.toFloat()) * 0.7f).coerceIn(0.8f, 1.8f)
+		attacker.playSound(attacker.location, Sound.ENTITY_ARROW_HIT_PLAYER, 0.75f, pitch)
+
+		if (isCritical) {
+			attacker.playSound(attacker.location, Sound.ENTITY_PLAYER_ATTACK_CRIT, 0.65f, 1.2f)
+		}
+		if (projectileDistance != null && projectileDistance >= FallenCombatIndicator.LONG_SHOT_DISTANCE) {
+			attacker.playSound(attacker.location, Sound.BLOCK_NOTE_BLOCK_BELL, 0.8f, 1.6f)
+		}
+	}
+
+	fun recordMobDamage(
+		attacker: Player,
+		target: org.bukkit.entity.LivingEntity,
+		finalDamage: Double,
+		isCritical: Boolean,
+		projectileDistance: Double?
+	) {
+		val maxHealth = target.getAttribute(Attribute.MAX_HEALTH)?.value ?: 20.0
+		val state = FallenCombatIndicator.calculatePostDamageState(
+			currentHealth = target.health,
+			currentAbsorption = target.absorptionAmount,
+			maxHealth = maxHealth,
+			finalDamage = finalDamage
+		)
+		val mobName = target.customName() ?: Component.translatable(target.type.translationKey())
+		val actionBar = FallenCombatIndicator.formatMobHitActionBar(
+			mobName = mobName,
+			finalDamage = finalDamage,
+			state = state,
+			isCritical = isCritical,
+			projectileDistance = projectileDistance
+		)
+		attacker.sendActionBar(actionBar)
+
+		val pitch = (1.0f + (1.0f - state.healthRatio.toFloat()) * 0.6f).coerceIn(0.9f, 1.8f)
+		attacker.playSound(attacker.location, Sound.ENTITY_ARROW_HIT_PLAYER, 0.75f, pitch)
+
+		if (isCritical) {
+			attacker.playSound(attacker.location, Sound.ENTITY_PLAYER_ATTACK_CRIT, 0.65f, 1.2f)
+		}
+		if (projectileDistance != null && projectileDistance >= FallenCombatIndicator.LONG_SHOT_DISTANCE) {
+			attacker.playSound(attacker.location, Sound.BLOCK_NOTE_BLOCK_BELL, 0.8f, 1.6f)
+		}
+	}
+
+	fun recordMobKill(victim: org.bukkit.entity.LivingEntity, killer: Player) {
+		if (victim is Player) return
+		combatHud.showPopup(killer, null, "消灭目标", reasonColor = NamedTextColor.WHITE)
+		killer.playSound(killer.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.75f, 1.6f)
+		killer.playSound(killer.location, Sound.ENTITY_ARROW_HIT_PLAYER, 0.8f, 0.7f)
+	}
+
+	private fun checkLowHealthAlert(target: Player, finalDamage: Double) {
+		val maxHealth = target.getAttribute(Attribute.MAX_HEALTH)?.value ?: 20.0
+		val state = FallenCombatIndicator.calculatePostDamageState(
+			currentHealth = target.health,
+			currentAbsorption = target.absorptionAmount,
+			maxHealth = maxHealth,
+			finalDamage = finalDamage
+		)
+		if (state.remainingHealth in 0.1..FallenCombatIndicator.LOW_HEALTH_THRESHOLD) {
+			val now = effectiveNowMillis()
+			val lastAlert = lastLowHealthAlertAt[target.uniqueId] ?: 0L
+			if (now - lastAlert >= 5_000L) {
+				lastLowHealthAlertAt[target.uniqueId] = now
+				target.sendActionBar(FallenCombatIndicator.formatLowHealthWarning(state.remainingHealth))
+				target.playSound(target.location, Sound.ENTITY_WARDEN_HEARTBEAT, 1.0f, 1.3f)
+			}
+		}
+	}
+
+	fun notifyFriendlyFire(attacker: Player, target: Player) {
+		val targetTeam = teamOf(target) ?: return
+		if (isFriendlyFire(attacker, target)) {
+			val now = effectiveNowMillis()
+			val last = lastFriendlyFireNoticeAt[attacker.uniqueId] ?: 0L
+			if (now - last >= 1_500L) {
+				lastFriendlyFireNoticeAt[attacker.uniqueId] = now
+				attacker.sendActionBar(FallenCombatIndicator.formatFriendlyFireNotice(target.name, targetTeam))
+			}
 		}
 	}
 
@@ -2326,13 +2495,51 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		if (!phase.allowsKeyCapture()) return
 		val victimTeam = teamOf(victim) ?: return
 		val killerTeam = killer?.let(::teamOf)
+		val isKeyCarrier = hasKeyItem(victim)
+		val now = effectiveNowMillis()
 		if (killer != null && killerTeam != null && killerTeam != victimTeam && killerTeam !in eliminatedTeams) {
 			addScore(killerTeam, FallenScoreRules.KILL_SCORE)
 			kills[killerTeam] = (kills[killerTeam] ?: 0) + 1
 			updatePlayerRecord(killer) { it.copy(kills = it.kills + 1) }
+
+			val tracker = killStreaks.compute(killer.uniqueId) { _, existing ->
+				val lastTime = existing?.get(0) ?: 0L
+				val lastCount = existing?.get(1)?.toInt() ?: 0
+				if (now - lastTime < 5000L) {
+					longArrayOf(now, (lastCount + 1).toLong())
+				} else {
+					longArrayOf(now, 1L)
+				}
+			}!!
+			val streak = tracker[1].toInt()
+
+			val (reason, reasonColor) = when {
+				streak == 2 -> "双杀" to NamedTextColor.GOLD
+				streak == 3 -> "三连杀" to NamedTextColor.GOLD
+				streak == 4 -> "四连杀" to NamedTextColor.RED
+				streak >= 5 -> "超神连杀" to NamedTextColor.LIGHT_PURPLE
+				isKeyCarrier -> "截获密钥" to NamedTextColor.LIGHT_PURPLE
+				else -> "消灭敌人" to NamedTextColor.WHITE
+			}
+
+			killer.sendActionBar(
+				FallenCombatIndicator.formatKillActionBar(
+					victim.name,
+					victimTeam,
+					FallenScoreRules.KILL_SCORE,
+					isKeyCarrier
+				)
+			)
+			combatHud.showKillPopup(killer, FallenScoreRules.KILL_SCORE, reason, reasonColor)
+			val killPitch = (1.4f + (streak - 1) * 0.15f).coerceAtMost(2.0f)
+			killer.playSound(killer.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8f, killPitch)
+			killer.playSound(killer.location, Sound.ENTITY_ARROW_HIT_PLAYER, 0.8f, 0.6f)
+			if (streak >= 2 || isKeyCarrier) {
+				killer.playSound(killer.location, Sound.BLOCK_NOTE_BLOCK_CHIME, 0.9f, 2.0f)
+			}
+
 			maybeBroadcastKillComment(killer, victim, killerTeam, victimTeam)
 		}
-		val now = effectiveNowMillis()
 		val assists = recentAttackers.remove(victim.uniqueId).orEmpty()
 		for ((attackerId, lastDamageAt) in assists) {
 			if (now - lastDamageAt > ASSIST_WINDOW_MILLIS || attackerId == killer?.uniqueId) continue
@@ -2340,6 +2547,13 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			if (attackerTeam == victimTeam || attackerTeam in eliminatedTeams) continue
 			addScore(attackerTeam, FallenScoreRules.ASSIST_SCORE)
 			playerRecords.computeIfPresent(attackerId) { _, record -> record.copy(assists = record.assists + 1) }
+
+			val assistPlayer = Bukkit.getPlayer(attackerId)
+			if (assistPlayer != null && assistPlayer.isOnline) {
+				assistPlayer.sendActionBar(FallenCombatIndicator.formatAssistActionBar(victim.name, victimTeam, FallenScoreRules.ASSIST_SCORE))
+				combatHud.showAssistPopup(assistPlayer, FallenScoreRules.ASSIST_SCORE, "协助消灭")
+				assistPlayer.playSound(assistPlayer.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.2f)
+			}
 		}
 		save()
 	}
@@ -2903,6 +3117,7 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		runTickSubsystem("eliminations", ::processEliminations)
 		runTickSubsystem("area-boss-bars", ::updateAreaBossBars)
 		runTickSubsystem("scoreboard", ::updateScoreboard)
+		runTickSubsystem("tab-list", ::updateTabList)
 	}
 
 	private fun enforcePlayerArmor() {
@@ -3048,6 +3263,50 @@ class FallenGameService(private val plugin: JavaPlugin) {
 			bar.removeAll()
 		}
 		areaBossBars.clear()
+	}
+
+	private fun updateTabList() {
+		if (phase == FallenPhase.IDLE) return
+		val header = FallenCombatIndicator.formatTabHeader(phase.displayName(), formatDuration(remainingMillis()))
+		for (player in Bukkit.getOnlinePlayers()) {
+			val team = teamOf(player)
+			val isSpectator = player.gameMode == GameMode.SPECTATOR || (team != null && team in eliminatedTeams)
+			val record = playerRecords[player.uniqueId]
+			val kills = record?.kills ?: 0
+			val assists = record?.assists ?: 0
+			val deaths = deathCounts[player.uniqueId] ?: 0
+			val kd = if (deaths > 0) "%.2f".format(kills.toDouble() / deaths) else "$kills.00"
+			val dealt = record?.damageDealt ?: 0.0
+			val taken = record?.damageTaken ?: 0.0
+
+			player.playerListName(
+				FallenCombatIndicator.formatPlayerListName(
+					playerName = player.name,
+					team = team,
+					kills = kills,
+					deaths = deaths,
+					assists = assists,
+					isSpectator = isSpectator
+				)
+			)
+
+			val footer = FallenCombatIndicator.formatTabFooter(
+				kills = kills,
+				deaths = deaths,
+				assists = assists,
+				kdText = kd,
+				damageDealt = dealt,
+				damageTaken = taken
+			)
+			player.sendPlayerListHeaderAndFooter(header, footer)
+		}
+	}
+
+	private fun clearTabList() {
+		for (player in Bukkit.getOnlinePlayers()) {
+			player.playerListName(null)
+			player.sendPlayerListHeaderAndFooter(Component.empty(), Component.empty())
+		}
 	}
 
 	private fun currentArea(player: Player): AreaDisplay {
@@ -3392,6 +3651,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		giveKeyOrDrop(player, key)
 		addScore(capturingTeam, FallenScoreRules.CAPTURE_SCORE)
 		addScore(oldOwner, -FallenScoreRules.CAPTURE_LOSS)
+		combatHud.showPopup(player, FallenScoreRules.CAPTURE_SCORE, "夺取敌方密钥", NamedTextColor.YELLOW, NamedTextColor.LIGHT_PURPLE)
+		player.playSound(player.location, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 1.4f)
 		captureProgress.clear()
 		unresolvedCaptures.computeIfAbsent(player.uniqueId) { ConcurrentHashMap.newKeySet() }.add(key.id)
 		doctorBroadcastByChance(
@@ -4845,7 +5106,8 @@ class FallenGameService(private val plugin: JavaPlugin) {
 		private val FINALE_PROGRESS_MILESTONES = listOf(25, 50, 75)
 		private const val KILL_COMMENT_ONE_IN = 5
 		private const val KILL_COMMENT_COOLDOWN_MILLIS = 20 * 1000L
-		private const val ALLOY_BULLET_BASE_DAMAGE = 2.0
+		private const val ALLOY_BULLET_BASE_DAMAGE = 0.60
+		const val ALLOY_BULLET_FIXED_DAMAGE = 12.0
 		private const val ALLOY_BULLET_SPEED_BLOCKS_PER_TICK = 20.0
 		private const val ALLOY_BULLET_MAX_LIFETIME_TICKS = 100
 		private val KEY_SHAPE_PIXELS = listOf(

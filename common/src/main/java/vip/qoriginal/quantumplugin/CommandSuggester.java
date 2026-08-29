@@ -19,11 +19,11 @@ import java.util.Locale;
 
 public final class CommandSuggester implements TabCompleter {
     private static final List<String> TOGGLE_OPTIONS = List.of("query", "enable", "disable");
-    private static final List<String> FALLEN_ACTIONS = List.of("help", "status", "time", "start", "end", "phase", "team", "region", "key", "score", "buy", "beacon", "admin");
+    private static final List<String> FALLEN_ACTIONS = List.of("help", "status", "time", "start", "end", "phase", "team", "region", "key", "score", "buy", "gear", "upgrade", "menu", "stats", "me", "finale", "admin");
     private static final List<String> FALLEN_PHASES = List.of("idle", "deployment", "active", "overtime", "ended");
     private static final List<String> FALLEN_TEAMS = List.of("A", "B", "C");
-    private static final List<String> FALLEN_BUY_OPTIONS = List.of("compass", "scan", "jammer", "tracking", "supply", "advanced", "resistance", "speed", "nightvision", "blast", "respawn", "keyalert", "beacon");
-    private static final List<String> SHOP_IDS = List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15");
+    private static final List<String> FALLEN_BUY_OPTIONS = List.of("compass", "scan", "jammer", "tracking", "supply", "advanced", "resistance", "speed", "nightvision", "blast", "respawn", "keyalert", "harness");
+    private static final List<String> SHOP_IDS = List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16");
 
     public static void register(JavaPlugin plugin, Collection<String> commandNames) {
         CommandSuggester suggester = new CommandSuggester();

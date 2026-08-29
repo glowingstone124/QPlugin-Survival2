@@ -1,0 +1,11 @@
+*
+!.gitignore
+!README.md
+!run.sh
+!server.properties
+!eula.txt
+!config.yml
+!fallen-local-test.yml
+!segments.json
+!lines.json
+!test-commands.txt

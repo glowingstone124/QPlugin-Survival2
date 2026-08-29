@@ -13,7 +13,10 @@ object FallenAccessPolicy {
 		.toInstant()
 	private val curfewStartsAt = LocalTime.of(1, 0)
 	private val curfewEndsAt = LocalTime.of(7, 0)
-	private val localScheduleBypass = System.getenv("FALLEN_LOCAL_TEST")?.equals("true", ignoreCase = true) == true
+	private val localScheduleBypass = "true".equals(System.getenv("FALLEN_LOCAL_TEST"), ignoreCase = true)
+		|| "true".equals(System.getenv("DISABLE_QO_API"), ignoreCase = true)
+		|| "true".equals(System.getenv("DEV_MODE"), ignoreCase = true)
+		|| "true".equals(System.getProperty("fallen.localTest"), ignoreCase = true)
 
 	fun hasEventStarted(now: Instant = Instant.now()): Boolean {
 		return localScheduleBypass || !now.isBefore(eventStartsAt)

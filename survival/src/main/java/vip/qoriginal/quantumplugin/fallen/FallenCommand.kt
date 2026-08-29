@@ -33,6 +33,7 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				"gear" -> gear(sender, args)
 				"upgrade" -> upgrade(sender, args)
 				"menu" -> menu(sender)
+				"stats", "me" -> stats(sender, args)
 				"finale" -> finale(sender, args)
 				"admin" -> admin(sender, args)
 				else -> {
@@ -72,6 +73,8 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 				.append(line("$root upgrade [A|B|C]", "查看或永久选择升级路径"))
 				.appendNewline()
 				.append(line("$root menu", "打开实验室可视化终端"))
+				.appendNewline()
+				.append(line("$root stats [player]", "查看个人或指定玩家的战斗战绩与统计"))
 				.appendNewline()
 				.append(line("$root score [add|set] <A|B|C> <amount>", "查看或调整积分"))
 				.appendNewline()
@@ -263,6 +266,34 @@ class FallenCommand(private val service: FallenGameService) : CommandExecutor {
 	private fun menu(sender: CommandSender) {
 		val player = sender as? Player ?: throw IllegalArgumentException("只有玩家可以打开实验室终端。")
 		service.openPlayerMenu(player)
+	}
+
+	private fun stats(sender: CommandSender, args: Array<out String>) {
+		val target = if (args.size >= 2) {
+			Bukkit.getOfflinePlayer(args[1])
+		} else {
+			sender as? Player ?: throw IllegalArgumentException("控制台需要指定玩家名称: /fallen stats <player>")
+		}
+		val record = service.playerRecord(target.uniqueId)
+		val team = record?.team ?: service.teamOf(target.uniqueId)
+		val name = target.name ?: record?.lastKnownName ?: args.getOrNull(1) ?: "未知"
+		val path = record?.upgradePath ?: service.upgradePathOf(target.uniqueId)
+		val pathText = path?.displayName ?: "未选择"
+		val kills = record?.kills ?: 0
+		val assists = record?.assists ?: 0
+		val deaths = record?.deaths ?: (service.deathCountOf(target.uniqueId))
+		val kd = if (deaths > 0) "%.2f".format(kills.toDouble() / deaths) else "$kills.00"
+		val dealt = "%.1f".format(record?.damageDealt ?: 0.0)
+		val taken = "%.1f".format(record?.damageTaken ?: 0.0)
+
+		val component = CommandMessages.title("《陷落》战斗战绩 · $name")
+			.appendNewline()
+			.append(Component.text("阵营: ${team?.displayName ?: "未分配"}  |  升级路径: $pathText", NamedTextColor.WHITE))
+			.appendNewline()
+			.append(Component.text("击杀: $kills  |  助攻: $assists  |  死亡: $deaths  (K/D: $kd)", NamedTextColor.YELLOW))
+			.appendNewline()
+			.append(Component.text("输出伤害: $dealt ❤  |  承受伤害: $taken ❤", NamedTextColor.AQUA))
+		sender.sendMessage(component)
 	}
 
 	private fun finale(sender: CommandSender, args: Array<out String>) {

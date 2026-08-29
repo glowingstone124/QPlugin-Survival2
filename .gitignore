@@ -23,6 +23,7 @@ build/
 
 # Log file
 *.log
+*.untracked_bak
 
 # BlueJ files
 *.ctxt
