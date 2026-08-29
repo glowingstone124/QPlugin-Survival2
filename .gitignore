@@ -25,6 +25,10 @@ build/
 *.log
 *.untracked_bak
 
+# Local dev server
+local-test-server/
+*.command
+
 # BlueJ files
 *.ctxt
 

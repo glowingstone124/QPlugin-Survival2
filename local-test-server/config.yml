@@ -1,6 +1,0 @@
-API_ENDPOINT: "http://127.0.0.1:8080"
-API_SECRET: "local-test"
-API_PERM_KEY: "local-test"
-LLM_MENTION_ALIASES:
-  - "@恋恋"
-LLM_REQUEST_TIMEOUT_MILLIS: 5000
