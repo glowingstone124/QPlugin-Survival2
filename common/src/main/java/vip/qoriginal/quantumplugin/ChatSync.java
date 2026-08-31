@@ -130,18 +130,28 @@ public class ChatSync implements Listener {
             var world = loc.getWorld().toString();
             var coord = "x:" + loc.getBlockX() + " y:" + loc.getBlockY() + " z:" + loc.getBlockZ();
             var hp = df.format(player.getHealth());
-            String response = Request.sendPostRequest(
+            Request.Response response = Request.sendPostRequestWithStatus(
                     Config.INSTANCE.getAPI_ENDPOINT() + "/qo/asking/v1/chat/completions/minecraft?model=fast",
                     buildLlmRequest(prompt),
                     Optional.of(Map.of(
                             "Authorization", "Bearer " + Config.INSTANCE.getAPI_SECRET(),
                             "X-Minecraft-Name", player.getName(),
                             "X-Minecraft-Coordinate", world + "," + coord,
-                            "X-Minecraft-HP", hp.trim()
+                            "X-Minecraft-HP", hp.trim(),
+                            "X-Request-ID", UUID.randomUUID().toString()
                     )),
                     Config.INSTANCE.llmRequestTimeoutMillis()
             ).get(Config.INSTANCE.llmRequestTimeoutMillis() + 1000L, TimeUnit.MILLISECONDS);
-            String answer = extractLlmAnswer(response);
+            LlmApiError apiError = LlmApiError.parse(response.status, response.body, response.headers);
+            if (apiError != null) {
+                PluginContext.getPlugin().getLogger().warning("Minecraft LLM request rejected: " + apiError.technicalSummary());
+                Bukkit.getScheduler().runTask(PluginContext.getPlugin(), () ->
+                        player.sendMessage(Component.text("LLM请求失败：" + apiError.userMessage())
+                                .color(TextColor.color(220, 80, 80)))
+                );
+                return;
+            }
+            String answer = extractLlmAnswer(response.body);
             String clippedAnswer = answer.length() > 1800 ? answer.substring(0, 1800) : answer;
             Bukkit.getScheduler().runTask(PluginContext.getPlugin(), () -> {
                 Component component = Component.text("<恋恋> " + clippedAnswer)
