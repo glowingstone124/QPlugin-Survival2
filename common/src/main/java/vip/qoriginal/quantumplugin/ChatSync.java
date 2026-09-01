@@ -154,6 +154,7 @@ public class ChatSync implements Listener {
     private String buildLlmRequest(String prompt) {
         JsonObject request = new JsonObject();
         request.addProperty("stream", false);
+        request.addProperty("reasoning_effort", "none");
         JsonArray messages = new JsonArray();
         JsonObject userMessage = new JsonObject();
         userMessage.addProperty("role", "user");
