@@ -117,23 +117,29 @@ public class ChatSync implements Listener {
             return;
         }
 
-        try {
+        Bukkit.getScheduler().runTask(PluginContext.getPlugin(), () -> {
             var loc = player.getLocation();
-            var world = loc.getWorld().toString();
-            var coord = "x:" + loc.getBlockX() + " y:" + loc.getBlockY() + " z:" + loc.getBlockZ();
-            var hp = df.format(player.getHealth());
-            String response = Request.sendPostRequest(
-                    Config.INSTANCE.getAPI_ENDPOINT() + "/qo/asking/v1/chat/completions/minecraft?model=fast",
-                    buildLlmRequest(prompt),
-                    Optional.of(Map.of(
-                            "Authorization", "Bearer " + Config.INSTANCE.getAPI_SECRET(),
-                            "X-Minecraft-Name", player.getName(),
-                            "X-Minecraft-Coordinate", world + "," + coord,
-                            "X-Minecraft-HP", hp.trim()
-                    )),
+            String playerName = player.getName();
+            String coordinate = loc.getWorld().getName() + ",x:" + loc.getBlockX() +
+                    " y:" + loc.getBlockY() + " z:" + loc.getBlockZ();
+            String hp = df.format(player.getHealth());
+            String requestId = UUID.randomUUID().toString();
+            Thread.startVirtualThread(() -> requestLlmAnswer(player, playerName, prompt, coordinate, hp, requestId));
+        });
+    }
+
+    private void requestLlmAnswer(Player player, String playerName, String prompt,
+            String coordinate, String hp, String requestId) {
+        try {
+            Request.Response response = Request.sendPostRequestWithStatus(
+                    Config.INSTANCE.getAPI_ENDPOINT() + "/qo/asking/v1/chat/completions/minecraft?model=" + MinecraftLlmClient.MODEL,
+                    MinecraftLlmClient.requestBody(prompt),
+                    Optional.of(MinecraftLlmClient.requestHeaders(Config.INSTANCE.getAPI_SECRET(),
+                            playerName, coordinate, hp, requestId)),
                     Config.INSTANCE.llmRequestTimeoutMillis()
             ).get(Config.INSTANCE.llmRequestTimeoutMillis() + 1000L, TimeUnit.MILLISECONDS);
-            String answer = extractLlmAnswer(response);
+            MinecraftLlmClient.Reply reply = MinecraftLlmClient.parseResponse(response);
+            String answer = reply.answer();
             String clippedAnswer = answer.length() > 1800 ? answer.substring(0, 1800) : answer;
             Bukkit.getScheduler().runTask(PluginContext.getPlugin(), () -> {
                 Component component = Component.text("<恋恋> " + clippedAnswer)
@@ -141,77 +147,21 @@ public class ChatSync implements Listener {
                 for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
                     onlinePlayer.sendMessage(component);
                 }
+                if (reply.chargedUnits() != null && player.isOnline()) {
+                    player.sendMessage(Component.text("本次消耗 " + reply.chargedUnits() + " Units")
+                            .color(TextColor.color(180, 180, 180)));
+                }
             });
         } catch (Exception e) {
-            e.printStackTrace();
-            Bukkit.getScheduler().runTask(PluginContext.getPlugin(), () ->
-                    player.sendMessage(Component.text("LLM请求失败：" + (e.getMessage() == null ? "未知错误" : e.getMessage()))
-                            .color(TextColor.color(220, 80, 80)))
-            );
-        }
-    }
-
-    private String buildLlmRequest(String prompt) {
-        JsonObject request = new JsonObject();
-        request.addProperty("stream", false);
-        request.addProperty("reasoning_effort", "none");
-        JsonArray messages = new JsonArray();
-        JsonObject userMessage = new JsonObject();
-        userMessage.addProperty("role", "user");
-        userMessage.addProperty("content", prompt);
-        messages.add(userMessage);
-        request.add("messages", messages);
-        return request.toString();
-    }
-
-    private String extractLlmAnswer(String response) {
-        if (response == null || response.isBlank()) {
-            return "LLM 没有返回内容。";
-        }
-        JsonElement rootElement;
-        try {
-            rootElement = JsonParser.parseString(response);
-        } catch (JsonSyntaxException e) {
-            return response.trim();
-        }
-        if (!rootElement.isJsonObject()) {
-            return rootElement.toString();
-        }
-        JsonObject root = rootElement.getAsJsonObject();
-        if (root.has("error")) {
-            JsonElement errorElement = root.get("error");
-            if (errorElement != null && errorElement.isJsonObject()) {
-                JsonObject error = errorElement.getAsJsonObject();
-                JsonElement message = error.get("message");
-                if (message != null && !message.isJsonNull()) {
-                    return message.getAsString();
+            Throwable cause = e instanceof java.util.concurrent.ExecutionException && e.getCause() != null ? e.getCause() : e;
+            if (!(cause instanceof MinecraftLlmClient.ApiException)) e.printStackTrace();
+            Bukkit.getScheduler().runTask(PluginContext.getPlugin(), () -> {
+                if (player.isOnline()) {
+                    player.sendMessage(Component.text("恋恋请求失败：" + (cause.getMessage() == null ? "未知错误" : cause.getMessage()))
+                            .color(TextColor.color(220, 80, 80)));
                 }
-            } else if (errorElement != null && !errorElement.isJsonNull()) {
-                return errorElement.getAsString();
-            }
-            return "LLM 返回错误。";
+            });
         }
-        JsonArray choices = root.getAsJsonArray("choices");
-        if (choices == null || choices.isEmpty()) {
-            return "LLM 没有返回内容。";
-        }
-        JsonElement messageElement = choices.get(0).getAsJsonObject().get("message");
-        if (messageElement == null || messageElement.isJsonNull()) {
-            return "LLM 没有返回内容。";
-        }
-        if (messageElement.isJsonPrimitive()) {
-            String answer = messageElement.getAsString().trim();
-            return answer.isBlank() ? "LLM 没有返回内容。" : answer;
-        }
-        if (!messageElement.isJsonObject()) {
-            return "LLM 没有返回内容。";
-        }
-        JsonObject message = messageElement.getAsJsonObject();
-        if (!message.has("content") || message.get("content").isJsonNull()) {
-            return "LLM 没有返回内容。";
-        }
-        String answer = message.get("content").getAsString().trim();
-        return answer.isBlank() ? "LLM 没有返回内容。" : answer;
     }
 
     public class WebMsgGetter implements Runnable {
