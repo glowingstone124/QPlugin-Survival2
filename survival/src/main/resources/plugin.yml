@@ -7,6 +7,10 @@ authors: [ glowingstone124 ]
 description: Plugin for Quantum Original
 website: https://glowingstone.cn/
 commands:
+  lightscan:
+    description: 扫描指定世界光源和空间亮度并导出 CSV
+    usage: /<command> <scan|status|cancel> [world] [x1 z1 x2 z2 [minY maxY]]
+    permission: quantum.lightscan
   suicide:
     description: 结束自己的生命
     usage: /<command>
@@ -61,3 +65,8 @@ commands:
   fakeplayer:
     description: 管理服务器假人
     usage: /<command> <spawn|remove|list|inventory|attack|use|look> ...
+
+permissions:
+  quantum.lightscan:
+    description: 扫描世界光源和空间亮度并导出统计数据
+    default: op

@@ -39,6 +39,7 @@ import vip.qoriginal.quantumplugin.servux.ServuxEntityDataBridge;
 import vip.qoriginal.quantumplugin.registration.MinecraftRegistrationTest;
 import vip.qoriginal.quantumplugin.registration.ReservedMinecraftRegistrationTest;
 import vip.qoriginal.quantumplugin.industry.StoneFarm;
+import vip.qoriginal.quantumplugin.lightscan.LightScanCommand;
 import vip.qoriginal.quantumplugin.metro.Speed;
 import vip.qoriginal.quantumplugin.metro.LoadChunk;
 import vip.qoriginal.quantumplugin.metro.ExperimentalMinecartSpeedBypass;
@@ -64,6 +65,7 @@ public final class QuantumPlugin extends JavaPlugin {
     private ServuxEntityDataBridge servuxEntityDataBridge;
     private EliteWeaponListener eliteWeaponListener;
     private PlayerStatisticsReporter playerStatisticsReporter;
+    private LightScanCommand lightScanCommand;
     public static boolean DEBUG_FLAG;
     public static World WORLD_MAIN;
 
@@ -217,6 +219,7 @@ public final class QuantumPlugin extends JavaPlugin {
         Objects.requireNonNull(this.getCommand("gm")).setExecutor(new CustomGamemodeCmd());
         Objects.requireNonNull(this.getCommand("flight")).setExecutor(new FlightCommandExecutor());
         Objects.requireNonNull(this.getCommand("fakeplayer")).setExecutor(new FakePlayerCommand(this, fakePlayerManager));
+        lightScanCommand = new LightScanCommand(this);
         Ranking ranking = new Ranking();
         playerStatisticsReporter = new PlayerStatisticsReporter(this);
         playerStatisticsReporter.start();
@@ -228,6 +231,9 @@ public final class QuantumPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (lightScanCommand != null) {
+            lightScanCommand.close();
+        }
         if (playerStatisticsReporter != null) {
             playerStatisticsReporter.stop();
         }

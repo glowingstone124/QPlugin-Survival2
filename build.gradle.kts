@@ -134,6 +134,7 @@ project(":survival") {
 	dependencies {
 		"ksp"(project(":processor"))
 		"implementation"("io.github.classgraph:classgraph:4.8.181")
+		"testImplementation"(kotlin("test"))
 		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.2.build.+")
 	}
 }
