@@ -71,9 +71,24 @@ configure(javaProjects) {
 		}
 	}
 
+	tasks.withType<org.gradle.jvm.tasks.Jar>().configureEach {
+		from(listOf(rootProject.file("LICENSE"), rootProject.file("COPYING"))) {
+			into("META-INF/licenses/${project.name}")
+		}
+	}
+
 	publishing {
 		publications.create<MavenPublication>("maven") {
 			from(components["java"])
+			pom {
+				licenses {
+					license {
+						name.set("GNU Lesser General Public License v3.0 only")
+						url.set("https://www.gnu.org/licenses/lgpl-3.0.html")
+						distribution.set("repo")
+					}
+				}
+			}
 		}
 	}
 }
