@@ -17,6 +17,7 @@ try {
         "repository" to (setting("QPLUGIN_REPOSITORY") ?: ""),
         "release_store" to (setting("QPLUGIN_RELEASE_STORE") ?: ""),
         "http_proxy" to (setting("QPLUGIN_HTTP_PROXY") ?: ""),
+        "java_home" to (setting("QPLUGIN_JAVA_HOME") ?: ""),
         "receipt" to receipt.toString(),
     ))
     val buildLog = Path.of(context.paths!!.workspaceDir).resolve("qplugin-build-last.log")

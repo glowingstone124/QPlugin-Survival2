@@ -5,6 +5,16 @@ QPLUGIN_RELEASE_STORE="${ORIN_CONTEXT_RELEASE_STORE:-${QPLUGIN_RELEASE_STORE:-}}
 : "${QPLUGIN_REPOSITORY:?Set a trusted Git repository URL on the build node}"
 : "${QPLUGIN_RELEASE_STORE:?Set an absolute persistent release-store directory}"
 : "${ORIN_CONTEXT_RECEIPT:?Orin action must provide a build receipt path}"
+qplugin_java_home="${ORIN_CONTEXT_JAVA_HOME:-${QPLUGIN_JAVA_HOME:-${JAVA_HOME:-}}}"
+if [[ -z "$qplugin_java_home" || ! -x "$qplugin_java_home/bin/java" || ! -x "$qplugin_java_home/bin/javac" ]]; then
+  echo 'QPlugin build requires a full JDK with bin/java and bin/javac. Set QPLUGIN_JAVA_HOME to the JDK 25 installation; Orin can keep its current JRE.' >&2
+  exit 1
+fi
+export JAVA_HOME="$qplugin_java_home"
+export PATH="$JAVA_HOME/bin:$PATH"
+printf 'QPlugin build JAVA_HOME: %s\n' "$JAVA_HOME"
+"$JAVA_HOME/bin/java" -version
+"$JAVA_HOME/bin/javac" -version
 qplugin_proxy="${ORIN_CONTEXT_HTTP_PROXY:-${QPLUGIN_HTTP_PROXY:-}}"
 if [[ -n "$qplugin_proxy" ]]; then
   export http_proxy="$qplugin_proxy" https_proxy="$qplugin_proxy" HTTP_PROXY="$qplugin_proxy" HTTPS_PROXY="$qplugin_proxy"
@@ -31,7 +41,7 @@ git -C "$work/repo" checkout --quiet --detach FETCH_HEAD
 commit="$(git -C "$work/repo" rev-parse --verify HEAD)"
 (
   cd "$work/repo"
-  ./gradlew --no-daemon build packageHotRelease "-PreleaseId=$commit"
+  ./gradlew "-Dorg.gradle.java.home=$JAVA_HOME" --no-daemon build packageHotRelease "-PreleaseId=$commit"
   python3 -m unittest discover -s scripts -p 'test_*.py' -v
 )
 python3 - "$work/repo/build/releases/$commit.zip" "$QPLUGIN_RELEASE_STORE" "$commit" "$ORIN_CONTEXT_RECEIPT" <<'PY'

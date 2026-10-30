@@ -60,6 +60,7 @@ Orin 进程环境变量：
 | `QPLUGIN_REPOSITORY` | 构建节点信任的 Git 仓库地址；本项目为 `https://github.com/glowingstone124/QPlugin-Survival2.git` |
 | `QPLUGIN_RELEASE_STORE` | 绝对路径，不可变产物长期存储目录，例如 `/opt/server/orin/releases/qplugin` |
 | `QPLUGIN_DEFAULT_REVISION` | 默认构建分支，缺省 `main`；分支试验可设为 `hot-update` |
+| `QPLUGIN_JAVA_HOME` | QPlugin 构建专用完整 JDK；本机已确认 `/usr/lib/jvm/jdk-25.0.3+9` 含 javac 25.0.3 |
 | `QPLUGIN_DOWNLOADS` | 部署节点的绝对下载目录，例如 `/opt/server/orin/downloads/qplugin` |
 | `QPLUGIN_BUILD_NODE` | 可选，现有 Orin Remote 节点名；省略时就在当前实例构建并部署 |
 | `QPLUGIN_HTTP_PROXY` | 可选，QPlugin 构建子进程专用 HTTP 代理；同时配置 Git 与 Java/Gradle 下载 |
@@ -68,6 +69,10 @@ Orin 进程环境变量：
 可将 [orin.env.example](orin.env.example) 中的值加入当前 Orin 服务环境；示例使用 `hot-update` 分支。
 也可直接将该文件复制到 Orin 工作目录的 `qplugin.env`，使用不带引号的 `KEY=value` 格式；
 action 会读取这个文件，已设置的进程环境变量优先。MCSManager 启动参数无需为此修改。
+构建脚本会检查 `bin/java` 和 `bin/javac`，单独设置子进程的 `JAVA_HOME`、`PATH`，并通过
+`-Dorg.gradle.java.home` 固定 Gradle 构建 JVM。Orin 自身可以继续使用现有 Java 22 JRE。
+仅在 build.gradle 中声明 toolchain 无法补上 Gradle 初始化阶段所需的 Java 编译器；
+JVM 选择优先级见 [Gradle 构建环境说明](https://docs.gradle.org/current/userguide/build_environment.html)。
 仓库中的新实现需先提交推送，远端构建不会读取本地未提交修改。
 如果配置 `QPLUGIN_BUILD_NODE`，它必须指向另一个 Orin 实例；单工作队列等待自身的远程任务会阻塞。
 单实例模式在同一个 action 内依次构建和部署，不发起对自身的 remote trigger。

@@ -10,7 +10,7 @@ fun main(args: Array<String>) {
     val source = Path.of(args[1]).toAbsolutePath()
     val artifact = base.resolve("release.zip")
     Files.createDirectories(base)
-    Files.writeString(base.resolve("qplugin.env"), "QPLUGIN_REPOSITORY=https://example.org/test.git\nQPLUGIN_RELEASE_STORE=$base/releases\nQPLUGIN_DOWNLOADS=$base/downloads\nQPLUGIN_DEFAULT_REVISION=hot-update\n")
+    Files.writeString(base.resolve("qplugin.env"), "QPLUGIN_REPOSITORY=https://example.org/test.git\nQPLUGIN_RELEASE_STORE=$base/releases\nQPLUGIN_DOWNLOADS=$base/downloads\nQPLUGIN_DEFAULT_REVISION=hot-update\nQPLUGIN_JAVA_HOME=/fixtures/full-jdk\n")
     Files.writeString(artifact, "isolated-build-stub")
     val backends = mapOf("survival" to "QuantumPlugin", "creative" to "QuantumPlugin-Creative")
     val hotDirectories = backends.mapValues { (role, host) ->
@@ -25,6 +25,7 @@ fun main(args: Array<String>) {
         Files.writeString(directory.resolve("build.sh"), """
             #!/usr/bin/env bash
             set -euo pipefail
+            test "${'$'}ORIN_CONTEXT_JAVA_HOME" = /fixtures/full-jdk
             printf '%s\n%s\n' '${"a".repeat(40)}' '$artifact' > "${'$'}ORIN_CONTEXT_RECEIPT"
         """.trimIndent())
     }

@@ -70,6 +70,7 @@ val archive = if (readyArchive != null) {
             "repository" to (setting("QPLUGIN_REPOSITORY") ?: ""),
             "release_store" to (setting("QPLUGIN_RELEASE_STORE") ?: ""),
             "http_proxy" to (setting("QPLUGIN_HTTP_PROXY") ?: ""),
+            "java_home" to (setting("QPLUGIN_JAVA_HOME") ?: ""),
         )).requireSuccess()
         val lines = Files.readAllLines(receipt)
         require(lines.size == 2 && lines[0].matches(Regex("[0-9a-f]{40,64}"))) { "Invalid build receipt" }

@@ -1,7 +1,7 @@
 # QPlugin 正式服部署手册
 
 适用节点：`10.10.0.1`，SSH 端口 `66`，用户 `glowingstone`。记录日期：2026-10-30。
-部署顺序：**推送 Wrapper 修复 → 更新 Orin action → 构建一次 → 安装创造服 → 验证 → 安装生存服**。
+部署顺序：**推送修复后的源码 → 更新 Orin action 与构建 JDK → 构建一次 → 安装创造服 → 验证 → 安装生存服**。
 
 ## 1. 当前交接状态
 
@@ -11,13 +11,15 @@
 - 原有 `qapi-github-build` 配置保留；Runner 超时从 900 秒调整为 2400 秒。
 - Orin 已由你在 MCSManager 中手动启动，最近只读检查返回 HTTP 200。
 - QPlugin 构建代理已配置为 `http://127.0.0.1:7890`，实际验证可以读取 GitHub 的 `hot-update` 分支。
-- `40960c3`、`6254385` 已推送到 `hot-update`；**它们缺少受 Git 跟踪的 Wrapper JAR，不能作为本次部署版本**。
+- `075cf01` 的 Wrapper 修复已经推送，远端已经成功读取 Wrapper 并进入 Gradle 配置阶段。
+- 只读核对确认服务器 `/usr/lib/jvm/jdk-25.0.3+9` 包含完整编译器，版本为 `javac 25.0.3`。
 
 尚未完成：
 
 - 两个游戏服仍使用旧插件，尚未安装热更新宿主；本次没有替换插件、没有重启游戏服。
-- 远端完整构建尚未成功：修复 GitHub 直连问题后，最新失败点为 `Unable to access jarfile .../gradle/wrapper/gradle-wrapper.jar`。
-- 本文附带 Wrapper 修复和部署客户端，需先提交、推送到远端，再重新构建。
+- 远端完整构建尚未成功：最新失败点为 `No Java compiler found`，Orin 进程继承的是 Java 22 JRE。
+- 本次新增构建专用 JDK 选择，需推送并同步 build/deploy action，然后在 `qplugin.env` 设置 `QPLUGIN_JAVA_HOME` 后重试。
+- `40960c3`、`6254385` 缺少受 Git 跟踪的 Wrapper JAR，仍不能作为本次部署版本。
 - GitHub push 自动发布尚未启用；当前 Pipeline 接受 manual/cluster 触发。
 
 已有配置备份：
@@ -64,25 +66,28 @@ git ls-files --error-unmatch gradle/wrapper/gradle-wrapper.jar
 shasum -a 256 gradle/wrapper/gradle-wrapper.jar
 ```
 
-本次重新生成的 Gradle 9.7.1 Wrapper JAR 校验值为：
+`075cf01` 已包含的 Gradle 9.7.1 Wrapper JAR 校验值为：
 
 ```text
 7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d
 ```
 
-本地修复同时将 `.gitignore` 的 Wrapper 例外放到 `*.jar` 之后，防止干净 checkout 再次缺失文件；
+该修复同时将 `.gitignore` 的 Wrapper 例外放到 `*.jar` 之后，防止干净 checkout 再次缺失文件；
 `gradle-wrapper.properties` 也已配置官方发行包 SHA-256。
 
-如果这些文件尚未提交，先提交 Wrapper、本文和新增触发客户端，再推送：
+如果本次 JDK 选择修复尚未提交，先提交这些文件，再推送：
 
 ```bash
 git add .gitignore gradle/wrapper/gradle-wrapper.jar \
   gradle/wrapper/gradle-wrapper.properties gradlew gradlew.bat \
   scripts/orin-trigger.py scripts/test_orin_trigger.py \
   docs/orin-production-deployment.md README.md ci/orin/README.md \
-  ci/orin/actions/qplugin-deploy/install-host.py
+  ci/orin/actions/qplugin-deploy/install-host.py \
+  ci/orin/actions/qplugin-build/build.sh ci/orin/actions/qplugin-build/main.kts \
+  ci/orin/actions/qplugin-deploy/main.kts ci/orin/orin.env.example \
+  scripts/test_orin_build_jdk.py test-support/orin/OrinTargetsSmoke.kt
 git diff --cached --stat
-git commit -m "Document production deployment and include the Gradle wrapper"
+git commit -m "Select a full JDK for QPlugin Orin builds"
 git push origin hot-update
 git rev-parse HEAD
 ```
@@ -170,6 +175,7 @@ action 和 `qplugin.env` 每次执行时读取，单独更新它们不需要重�
 ```properties
 QPLUGIN_REPOSITORY=https://github.com/glowingstone124/QPlugin-Survival2.git
 QPLUGIN_DEFAULT_REVISION=hot-update
+QPLUGIN_JAVA_HOME=/usr/lib/jvm/jdk-25.0.3+9
 QPLUGIN_RELEASE_STORE=/opt/server/orin/releases/qplugin
 QPLUGIN_DOWNLOADS=/opt/server/orin/downloads/qplugin
 QPLUGIN_HTTP_PROXY=http://127.0.0.1:7890
@@ -177,6 +183,22 @@ QPLUGIN_HTTP_PROXY=http://127.0.0.1:7890
 
 本机为单实例构建部署，`QPLUGIN_BUILD_NODE` 留空或不配置。
 代理仅传给 QPlugin 构建子进程，Git 与 Java/Gradle 下载都会使用；不改动其他项目的环境。
+
+确认完整 JDK 的两个可执行文件均存在：
+
+```bash
+test -x /usr/lib/jvm/jdk-25.0.3+9/bin/java
+test -x /usr/lib/jvm/jdk-25.0.3+9/bin/javac
+/usr/lib/jvm/jdk-25.0.3+9/bin/java -version
+/usr/lib/jvm/jdk-25.0.3+9/bin/javac -version
+```
+
+最新 build.sh 会在 checkout 之前检查完整 JDK，并给构建子进程设置 `JAVA_HOME`、`PATH` 和
+`-Dorg.gradle.java.home`。这会覆盖 Orin 继承的 Java 22 JRE，无需修改 MCSManager 中 Orin 的启动 JRE。
+只添加配置行还不够，第 5 步必须同步 build.sh 及 build/deploy 两个 main.kts；否则旧 action 不会传递该设置。
+Orin 的 KTS 调试日志仍可能显示 Java 22 JRE，这不代表 Gradle 使用同一个 JVM；
+在构建日志中确认 `QPlugin build JAVA_HOME` 和 java/javac 的版本输出即可。
+配置优先级参照 [Gradle 构建环境说明](https://docs.gradle.org/current/userguide/build_environment.html)。
 
 `actions/qplugin-deploy/targets.properties` 应为：
 
@@ -414,6 +436,7 @@ cp /opt/server/orin/backups/qplugin-20261030-1793342855/config.toml \
 | --- | --- |
 | `curl 28`、GitHub 443 超时、`SSL_read ... unexpected eof` | 检查本机 7890 代理和 `qplugin.env` 的 `QPLUGIN_HTTP_PROXY`；Git 与 Java 都需要代理 |
 | `Unable to access jarfile .../gradle-wrapper.jar` | 使用包含 Wrapper 修复的新提交；先确认 `git ls-files` 能列出该 JAR |
+| `No Java compiler found` | 设置 `QPLUGIN_JAVA_HOME=/usr/lib/jvm/jdk-25.0.3+9`，同步最新 build.sh 与两个 main.kts，再触发构建；项目 toolchain 不能代替启动 Gradle 所需的编译器 |
 | `status.json` 不存在 | 尚未安装宿主，首次使用 `--install-host` |
 | `Wrong backend` | 检查 Pipeline 与 targets.properties；创造服数据目录仍是 `plugins/QuantumPlugin` |
 | `RESTART_REQUIRED` | 宿主不兼容，安排完整插件安装和重启 |
