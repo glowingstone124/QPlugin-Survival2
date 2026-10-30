@@ -22,7 +22,7 @@
 
 从真实 `SponsorPrefixModule` 源码编译 v1/v2 两版，显示名分别改为 `[V1]` / `[V2]`；
 同时加载真实 `daily-login` 模块。测试版额外注册逐 tick 计数与命令事件计数，用于观察旧回调是否停止。
-另一个候选在 `healthCheck()` 抛出异常。所有应用操作通过实际 `scripts/deploy-hot.py` 和宿主文件请求回执完成。
+另一个候选在 `healthCheck()` 抛出异常。所有应用操作通过实际 `scripts/deploy-hot.main.kts` 和宿主文件请求回执完成。
 
 验证结果：
 
@@ -46,7 +46,8 @@
 因此跨重启的玩家标记测试在停服前执行 `save-all`，测试工具在重建 CraftPlayer 后调用 Bukkit `loadData()`，
 走真实的玩家数据保存/读取路径；没有为这次验证修改生产假人行为。
 
-完整 Gradle 构建、打包及 **65 项 JVM 测试**通过，部署客户端 **8 项 Python 测试**通过。
+当时的完整 Gradle 构建、打包及 **65 项 JVM 测试**通过；当前部署客户端已迁为 KTS，
+由 `deploy-hot.main.kts --self-test` 和 Orin KTS smoke 覆盖同类安全边界。
 真实服的预期异常会在日志中留下健康检查或状态写入错误栈；这两种情况均验证了旧版本继续运行。
 
 ## 性能
@@ -103,7 +104,7 @@ MSPT 来自 Paper `ServerTickEndEvent.getTickDuration()`，每窗约 600 个 tic
 两个终端分别启动本机 API 桩及 Paper（将 JDK 路径按本机修改）：
 
 ```sh
-python3 scripts/paper_validation.py --server-dir build/paper-validation --serve-api
+kotlin scripts/paper-tools.main.kts serve-api --server-dir build/paper-validation
 ```
 
 ```sh
@@ -114,16 +115,16 @@ cd build/paper-validation
 等待完整插件 ready，再从仓库目录运行：
 
 ```sh
-python3 scripts/paper_fixtures.py --server-dir build/paper-validation \
+kotlin scripts/paper-tools.main.kts fixtures --server-dir build/paper-validation \
   --java-home /path/to/jdk25 --label paper-recheck-002
-python3 scripts/paper_exercise.py --server-dir build/paper-validation \
+kotlin scripts/paper-tools.main.kts exercise --server-dir build/paper-validation \
   --fixtures build/paper-validation/fixtures/paper-recheck-002/fixtures.json
-python3 scripts/paper_performance.py --server-dir build/paper-validation \
+kotlin scripts/paper-tools.main.kts performance --server-dir build/paper-validation \
   --fixtures build/paper-validation/fixtures/paper-recheck-002/fixtures.json --seconds 30
-python3 scripts/paper_validation.py --server-dir build/paper-validation stop
+kotlin scripts/paper-tools.main.kts rcon --server-dir build/paper-validation stop
 ```
 
-故障包仅用于此隔离目录。`paper_performance.py` 退出前恢复真实内置业务模块；
+故障包仅用于此隔离目录。`paper-tools.main.kts performance` 退出前恢复真实内置业务模块；
 测试完成后应停止 Paper 和 API 桩。需要重测宿主代码改动时，先正常停服、替换完整 JAR 再启动，并生成新的故障包。
 
 原始证据保存在测试目录的 `integration.json`、`performance.json`、`restart-validation.json`、`switch-ticks.json` 和 `logs/` 中。
@@ -145,7 +146,7 @@ Orin 的部署目标配置为生存服 `/opt/server/qo2`、创造服 `/opt/serve
 - `/qhot rollback` 正确恢复第一版。
 
 原始结果为该目录的 `creative-validation.json` 和日志；测试服及 API 桩均已停止。
-这次 Gradle 构建与 **66 项 JVM 测试**、部署客户端 **9 项 Python 测试**通过。
+这次 Gradle 构建与 **66 项 JVM 测试**通过；部署协议现由 KTS 自检与真实 Orin 执行器 smoke 验证。
 
 另使用现有 `Orin-all.jar` 的真实执行器验证两个目标 Pipeline。
 手动触发和 push 在现有 Orin 中不分配 jobId，因此 action 在这种情况下只使用持久存储中的产物；
@@ -172,12 +173,12 @@ cluster 触发继续登记可下载产物。
 记录位于该隔离目录的 `integration.json`、`module-split-validation.json` 和对应日志。复现时先使用当前完整宿主启动测试服，再执行：
 
 ```sh
-python3 scripts/paper_fixtures.py --server-dir build/paper-modules-20261030 \
+kotlin scripts/paper-tools.main.kts fixtures --server-dir build/paper-modules-20261030 \
   --java-home /path/to/jdk25 --label new-unique-label
-python3 scripts/paper_exercise.py --server-dir build/paper-modules-20261030 \
+kotlin scripts/paper-tools.main.kts exercise --server-dir build/paper-modules-20261030 \
   --fixtures build/paper-modules-20261030/fixtures/new-unique-label/fixtures.json
-python3 scripts/paper_module_split.py --server-dir build/paper-modules-20261030 \
+kotlin scripts/paper-tools.main.kts module-split --server-dir build/paper-modules-20261030 \
   --fixtures build/paper-modules-20261030/fixtures/new-unique-label/fixtures.json
 ```
 
-这些 Python 命令仅用于隔离 Paper 故障注入测试；生产更新继续由 main push → Orin KTS 自动触发。
+这些 KTS 命令仅用于隔离 Paper 故障注入测试；生产更新继续由 main push → Orin KTS 自动触发。

@@ -17,7 +17,8 @@ The [manual recovery runbook](docs/orin-production-deployment.md) remains availa
 
 ```sh
 ./gradlew build packageHotRelease -PreleaseId=<commit-or-unique-build-id>
-python3 -m unittest discover -s scripts -p 'test_*.py' -v
+kotlin scripts/deploy-hot.main.kts --self-test
+kotlin scripts/orin-trigger.main.kts --self-test
 ```
 
 Versioned release archives are written to `build/releases/`. The initial installation

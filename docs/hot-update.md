@@ -23,7 +23,7 @@
 
 ```sh
 ./gradlew --no-daemon build packageHotRelease -PreleaseId=<commit>
-python3 -m unittest discover -s scripts -p 'test_*.py' -v
+kotlin scripts/deploy-hot.main.kts --self-test
 ```
 
 `build/releases/<commit>/` 和同名 ZIP 包含：
@@ -77,7 +77,7 @@ plugins/QuantumPlugin/hot/
 热更不转移短暂的粒子尾迹和待提前引爆队列；已有烟花继续按实体自身 fuse 运行，爆竹/烟花的保护标记由新模块识别。
 
 从 API 1 升级到 API 2 时，需要一次完整宿主更新与后端重启。Orin 的 `qplugin-ci` 会根据宿主指纹自动选择该路径；
-首次升级前需把新版 `scripts/deploy-hot.py` 同步到 build/deploy 节点的 action 目录。新版客户端同时识别 API 1、2，
+首次升级前需通过 `ci/orin/install-actions.sh` 同步新版 KTS action。新版客户端同时识别 API 1、2，
 两者不一致时要求安装宿主，不向旧 API 宿主提交新模块请求。后续仅改上述模块实现可以继续在线更新。
 
 ## 在线应用与回滚
@@ -96,7 +96,7 @@ plugins/QuantumPlugin/hot/
 部署脚本可以直接接收 Gradle 生成的 ZIP：
 
 ```sh
-python3 scripts/deploy-hot.py \
+kotlin scripts/deploy-hot.main.kts \
   --release build/releases/<commit>.zip \
   --hot-dir /srv/minecraft/plugins/QuantumPlugin/hot \
   --host-name QuantumPlugin \

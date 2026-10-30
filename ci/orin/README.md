@@ -5,7 +5,7 @@
 
 QPlugin 的构建、测试、产物存储和部署均由现有 Orin 执行。
 这些 action 使用现有 Orin 的 `executeSh`、`publishArtifact`、`remote().trigger()`、`await()` 和 `downloadArtifact()`。
-日常使用 [main 推送自动部署](../../docs/orin-auto-deployment.md)，由 `qplugin-ci` KTS action 构建一次并依次部署两个后端，无需手工运行 Python 触发器。
+日常使用 [main 推送自动部署](../../docs/orin-auto-deployment.md)，由 `qplugin-ci` KTS action 构建一次并依次部署两个后端，不依赖 Python。
 Orin 需暴露 GitHub 分支、SHA、删除标记及完整仓库名；没有新增公网管理端口。Bukkit 端通过插件数据目录中的文件请求接收部署。
 
 现有节点为 `10.10.0.1`（SSH 端口 66），Orin 工作目录为 `/opt/server/orin`，由 MCSManager 管理。
@@ -42,12 +42,12 @@ sudo bash /opt/server/orin/setup-orin-sudo.sh glowingstone
 从受信任、已审核的 QPlugin 工作区复制到 Orin 目录（以下路径按部署环境修改）：
 
 ```sh
-cp -R ci/orin/actions/qplugin-build /opt/server/orin/actions/
-cp -R ci/orin/actions/qplugin-deploy /opt/server/orin/actions/
-cp -R ci/orin/actions/qplugin-status /opt/server/orin/actions/
-cp ci/orin/actions/qplugin-build/build.sh /opt/server/orin/actions/qplugin-deploy/
-cp scripts/deploy-hot.py /opt/server/orin/actions/qplugin-deploy/
+bash ci/orin/install-actions.sh /opt/server/orin
 ```
+
+安装器会备份现有 action，将同一份已审核的 `qplugin-deploy/main.kts` 安装为
+`qplugin-ci/main.kts`，避免自动部署与手动部署逻辑漂移；`qplugin-status` 同样是原生 KTS。
+它还会同步固定目标的 Bash sudo helper 源文件，但不会自行修改 sudoers 或重启服务。
 
 将 [pipelines.example.toml](pipelines.example.toml) 的 Pipeline 段合并进现有 `config.toml`，
 使用各自的真实 manualToken；Runner 超时建议至少 2400 秒。不要用此片段覆盖完整 Orin 配置。
@@ -66,7 +66,8 @@ Orin 进程环境变量：
 | `QPLUGIN_BUILD_NODE` | 可选，现有 Orin Remote 节点名；省略时就在当前实例构建并部署 |
 | `QPLUGIN_HTTP_PROXY` | 可选，QPlugin 构建子进程专用 HTTP 代理；同时配置 Git 与 Java/Gradle 下载 |
 
-构建节点安装 JDK 25、Git、Python 3，并能访问构建依赖。部署节点安装 Python 3，运行账号需能写入该后端的热更新目录。
+构建节点安装 JDK 25、Git 并能访问构建依赖。部署节点无需 Python；运行账号需能写入对应热更新目录、
+读取容器状态，并有权向该容器中经过 PID/start-token 双重确认的 Java 进程发送 SIGTERM。
 可将 [orin.env.example](orin.env.example) 中的值加入当前 Orin 服务环境；默认分支为 `main`。
 也可直接将该文件复制到 Orin 工作目录的 `qplugin.env`，使用不带引号的 `KEY=value` 格式；
 action 会读取这个文件，已设置的进程环境变量优先。MCSManager 启动参数无需为此修改。

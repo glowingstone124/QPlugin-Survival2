@@ -1,1 +1,4 @@
-entry = "main.sh"
+entry = "main.kts"
+
+[kts]
+expose = ["paths"]

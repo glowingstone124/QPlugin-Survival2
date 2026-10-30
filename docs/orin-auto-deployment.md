@@ -12,7 +12,7 @@ git push origin main
 ```
 
 GitHub push → 已有 Orin 的 `qplugin-ci` → 构建、测试、打包一次 → 创造服 → 生存服。
-无需手工运行 `orin-trigger.py`，无需每次复制插件 JAR。
+无需手工运行 `orin-trigger.main.kts`，无需每次复制插件 JAR。
 GitHub Actions 继续提供独立构建报告；生产部署由 Orin 执行。
 
 只接受 `glowingstone124/QPlugin-Survival2` 的 `refs/heads/main`，忽略其他分支、标签和分支删除。

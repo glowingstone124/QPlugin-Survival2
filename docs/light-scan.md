@@ -55,24 +55,10 @@ CSV 使用 UTF-8，文本字段以双引号转义，能保留含逗号的方块�
 
 空间亮度热力图可用 `block_light_sum / scanned_blocks` 作区块平均方块光，用 `block_light_0 / scanned_blocks` 作零方块光比例。两者均包含固体方块内部；如果关心通道或玩家活动空间，可分批读取 `lighting.csv.gz`，按材质（如空气）及高度筛选后再聚合。
 
-例如生成供绘图库读取的区块二维矩阵（需要 pandas）：
-
-```python
-import pandas as pd
-
-chunks = pd.read_csv("chunks.csv")
-matrix = chunks.pivot(index="chunk_z", columns="chunk_x", values="source_count")
-matrix = matrix.reindex(
-    index=range(chunks.chunk_z.min(), chunks.chunk_z.max() + 1),
-    columns=range(chunks.chunk_x.min(), chunks.chunk_x.max() + 1),
-)
-matrix.to_csv("heatmap-grid.csv")  # 缺失格子保留为空，不填零
-
-# 小范围的指定高度亮度热力图
-lighting = pd.read_csv("lighting.csv.gz")
-layer = lighting[lighting.y == 64]
-layer.pivot(index="z", columns="x", values="block_light").to_csv("light-y64.csv")
-```
+一般查看光源分布无需额外脚本：扫描完成后直接打开 `sources.png`。需要重新聚合时，
+可在支持透视表的表格工具中以 `chunk_z` 为行、`chunk_x` 为列、`source_count` 为值；
+缺失格子保持为空，不要填零。指定高度的细粒度图则先按 `lighting.csv.gz` 的 `y` 过滤，
+再以 `z`、`x` 和 `block_light` 建立透视表。
 
 ## 完整性与取消
 
