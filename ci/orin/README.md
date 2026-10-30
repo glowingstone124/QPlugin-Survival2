@@ -1,5 +1,8 @@
 # 接入 Orin
 
+现有 `10.10.0.1` 节点的逐步操作、当前交接状态及回滚命令见
+[正式服部署手册](../../docs/orin-production-deployment.md)。
+
 QPlugin 的构建、测试、产物存储和部署均由现有 Orin 执行。
 这些 action 使用现有 Orin 的 `executeSh`、`publishArtifact`、`remote().trigger()`、`await()` 和 `downloadArtifact()`。
 无需修改 Orin 核心，也没有新增公网管理端口。Bukkit 端通过插件数据目录中的文件请求接收部署。
@@ -14,7 +17,8 @@ sudo bash /opt/server/orin/setup-orin-sudo.sh glowingstone
 脚本来源为 [setup-orin-sudo.sh](setup-orin-sudo.sh)，安装 root 所有的固定目标管理器和两条命令规则：
 `sudo -n /usr/local/sbin/qplugin-orin-admin status`、`sudo -n /usr/local/sbin/qplugin-orin-admin restart`。
 管理器只匹配该工作目录中的 `Orin-all.jar` Java 进程，有子进程时拒绝重启；空闲时发送 SIGTERM，
-由 MCSManager 按已配置的守护策略重新启动。执行脚本本身不会重启服务。
+自动恢复取决于 MCSManager 守护配置；本机实测 SIGTERM 后未自动恢复，需在面板手动启动。
+安装脚本本身不会重启服务。
 
 ## 后端目标
 
@@ -29,7 +33,7 @@ sudo bash /opt/server/orin/setup-orin-sudo.sh glowingstone
 
 路径集中在 [targets.properties](actions/qplugin-deploy/targets.properties)，由 Pipeline 名称选择。
 不再使用进程级 `QPLUGIN_HOT_DIR`，避免同一个 Orin 实例的两个任务落到同一后端。
-手动触发请求只接收构建 revision，不能通过输入覆盖目标路径或宿主类型。
+手动触发请求接收构建/发布提交标识和显式宿主安装开关，不能通过输入覆盖目标路径或宿主类型。
 部署节点必须实际能访问这些目录；若分属不同服务器，在相应 Orin 节点安装对应 Pipeline。
 
 ## 安装 action
@@ -37,10 +41,11 @@ sudo bash /opt/server/orin/setup-orin-sudo.sh glowingstone
 从受信任、已审核的 QPlugin 工作区复制到 Orin 目录（以下路径按部署环境修改）：
 
 ```sh
-cp -R ci/orin/actions/qplugin-build /opt/orin/actions/
-cp -R ci/orin/actions/qplugin-deploy /opt/orin/actions/
-cp ci/orin/actions/qplugin-build/build.sh /opt/orin/actions/qplugin-deploy/
-cp scripts/deploy-hot.py /opt/orin/actions/qplugin-deploy/
+cp -R ci/orin/actions/qplugin-build /opt/server/orin/actions/
+cp -R ci/orin/actions/qplugin-deploy /opt/server/orin/actions/
+cp -R ci/orin/actions/qplugin-status /opt/server/orin/actions/
+cp ci/orin/actions/qplugin-build/build.sh /opt/server/orin/actions/qplugin-deploy/
+cp scripts/deploy-hot.py /opt/server/orin/actions/qplugin-deploy/
 ```
 
 将 [pipelines.example.toml](pipelines.example.toml) 的 Pipeline 段合并进现有 `config.toml`，
@@ -53,9 +58,9 @@ Orin 进程环境变量：
 | 变量 | 用途 |
 | --- | --- |
 | `QPLUGIN_REPOSITORY` | 构建节点信任的 Git 仓库地址；本项目为 `https://github.com/glowingstone124/QPlugin-Survival2.git` |
-| `QPLUGIN_RELEASE_STORE` | 绝对路径，不可变产物长期存储目录，例如 `/opt/orin/releases/qplugin` |
+| `QPLUGIN_RELEASE_STORE` | 绝对路径，不可变产物长期存储目录，例如 `/opt/server/orin/releases/qplugin` |
 | `QPLUGIN_DEFAULT_REVISION` | 默认构建分支，缺省 `main`；分支试验可设为 `hot-update` |
-| `QPLUGIN_DOWNLOADS` | 部署节点的绝对下载目录，例如 `/opt/orin/downloads/qplugin` |
+| `QPLUGIN_DOWNLOADS` | 部署节点的绝对下载目录，例如 `/opt/server/orin/downloads/qplugin` |
 | `QPLUGIN_BUILD_NODE` | 可选，现有 Orin Remote 节点名；省略时就在当前实例构建并部署 |
 | `QPLUGIN_HTTP_PROXY` | 可选，QPlugin 构建子进程专用 HTTP 代理；同时配置 Git 与 Java/Gradle 下载 |
 
@@ -79,7 +84,7 @@ manual/github.push 触发仍将 ZIP 保存在同一个持久目录，并记录�
 可以远程触发构建节点并下载产物，也可以在当前节点完成构建；随后执行部署客户端。
 客户端同时检查目标目录和预期宿主标识，传错后端在创建发布或请求之前失败。
 只有 Bukkit 端确认 active 版本、健康检查及状态持久化成功，action 才成功。
-宿主代码不兼容或清理失败时 action 返回失败，提示安排后端重启；不自动停服或操作 Velocity。
+默认模块部署在宿主不兼容或清理失败时返回失败并提示重启；显式宿主安装流程才会停止对应后端，Velocity 保持运行。
 
 示例 Pipeline 默认只开放认证的手动/集群触发，方便先在测试服验证。
 确认后可在部署 Pipeline 增加 `github.push` 触发，并设置正确的仓库名；原有 GitHub HMAC 校验继续由 Orin 执行。

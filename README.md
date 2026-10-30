@@ -12,6 +12,8 @@ and [Orin pipeline templates](ci/orin/README.md).
 Real Paper update/rollback checks and performance measurements are recorded in
 [local Paper validation](docs/paper-validation.md).
 
+For the existing production node, follow the [production deployment runbook](docs/orin-production-deployment.md).
+
 ```sh
 ./gradlew build packageHotRelease -PreleaseId=<commit-or-unique-build-id>
 python3 -m unittest discover -s scripts -p 'test_*.py' -v

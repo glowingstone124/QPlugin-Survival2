@@ -35,9 +35,13 @@ def find_container(directory):
     return matches[0]
 
 
-def java_process(container_id):
+def java_pids(container_id):
     lines = docker('top', container_id, '-eo', 'pid,comm').splitlines()[1:]
-    pids = [int(parts[0]) for line in lines if len(parts := line.split()) == 2 and parts[1] == 'java']
+    return [int(parts[0]) for line in lines if len(parts := line.split()) == 2 and parts[1] == 'java']
+
+
+def java_process(container_id):
+    pids = java_pids(container_id)
     if len(pids) != 1: raise RuntimeError('Expected exactly one Java process in the backend container')
     proc = Path('/proc') / str(pids[0])
     token = (proc / 'stat').read_text().rsplit(')', 1)[1].split()[19]
@@ -127,12 +131,9 @@ def install(archive, hot, host):
             time.sleep(1)
         state = json.loads(docker('inspect', container['Id']))[0]['State']
         if state['Running']:
-            # A wrapper can remain after Java has exited; avoid stopping a JVM already restored by a supervisor.
-            try:
-                fresh = json.loads((hot / 'status.json').read_text())
-                restored = fresh.get('running') and fresh.get('hostCodeSha256') == manifest['hosts'][host]
-            except (OSError, ValueError): restored = False
-            if not restored: docker('restart', '--time=30', container['Id'])
+            # A supervisor may already have restored Java. Never restart it again or force-kill a wrapper.
+            if not java_pids(container['Id']):
+                raise RuntimeError('Java saved and exited, but the container wrapper remains running; stop/start it manually. Backup: ' + str(backup))
         else: docker('start', container['Id'])
         deadline = time.monotonic() + 240
         while time.monotonic() < deadline:
