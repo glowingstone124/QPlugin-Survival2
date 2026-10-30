@@ -5,6 +5,20 @@ QPLUGIN_RELEASE_STORE="${ORIN_CONTEXT_RELEASE_STORE:-${QPLUGIN_RELEASE_STORE:-}}
 : "${QPLUGIN_REPOSITORY:?Set a trusted Git repository URL on the build node}"
 : "${QPLUGIN_RELEASE_STORE:?Set an absolute persistent release-store directory}"
 : "${ORIN_CONTEXT_RECEIPT:?Orin action must provide a build receipt path}"
+qplugin_proxy="${ORIN_CONTEXT_HTTP_PROXY:-${QPLUGIN_HTTP_PROXY:-}}"
+if [[ -n "$qplugin_proxy" ]]; then
+  export http_proxy="$qplugin_proxy" https_proxy="$qplugin_proxy" HTTP_PROXY="$qplugin_proxy" HTTPS_PROXY="$qplugin_proxy"
+  qplugin_java_proxy="$(python3 - "$qplugin_proxy" <<'PY'
+import sys, urllib.parse
+p = urllib.parse.urlsplit(sys.argv[1])
+if p.scheme not in ('http', 'https') or not p.hostname:
+    raise SystemExit('QPLUGIN_HTTP_PROXY must be an HTTP proxy URL')
+port = p.port or (443 if p.scheme == 'https' else 80)
+print('-Dhttp.proxyHost=%s -Dhttp.proxyPort=%s -Dhttps.proxyHost=%s -Dhttps.proxyPort=%s -Dhttp.nonProxyHosts=localhost|127.*|[::1]' % (p.hostname, port, p.hostname, port))
+PY
+)"
+  export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:+$JAVA_TOOL_OPTIONS }$qplugin_java_proxy"
+fi
 revision="${ORIN_CONTEXT_REVISION:-main}"
 [[ "$revision" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$ && "$revision" != *..* ]] || { echo 'Invalid revision' >&2; exit 1; }
 [[ "$QPLUGIN_RELEASE_STORE" == /* ]] || { echo 'Release store must be absolute' >&2; exit 1; }
@@ -12,7 +26,7 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/qplugin-build.XXXXXXXX")"
 trap 'rm -rf -- "$work"' EXIT
 git init --quiet "$work/repo"
 git -C "$work/repo" remote add origin "$QPLUGIN_REPOSITORY"
-git -C "$work/repo" fetch --depth=1 origin "$revision"
+git -C "$work/repo" -c http.lowSpeedLimit=1024 -c http.lowSpeedTime=60 fetch --depth=1 origin "$revision"
 git -C "$work/repo" checkout --quiet --detach FETCH_HEAD
 commit="$(git -C "$work/repo" rev-parse --verify HEAD)"
 (

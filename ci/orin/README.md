@@ -57,6 +57,7 @@ Orin 进程环境变量：
 | `QPLUGIN_DEFAULT_REVISION` | 默认构建分支，缺省 `main`；分支试验可设为 `hot-update` |
 | `QPLUGIN_DOWNLOADS` | 部署节点的绝对下载目录，例如 `/opt/orin/downloads/qplugin` |
 | `QPLUGIN_BUILD_NODE` | 可选，现有 Orin Remote 节点名；省略时就在当前实例构建并部署 |
+| `QPLUGIN_HTTP_PROXY` | 可选，QPlugin 构建子进程专用 HTTP 代理；同时配置 Git 与 Java/Gradle 下载 |
 
 构建节点安装 JDK 25、Git、Python 3，并能访问构建依赖。部署节点安装 Python 3，运行账号需能写入该后端的热更新目录。
 可将 [orin.env.example](orin.env.example) 中的值加入当前 Orin 服务环境；示例使用 `hot-update` 分支。
@@ -92,6 +93,8 @@ manual/github.push 触发仍将 ZIP 保存在同一个持久目录，并记录�
 ```
 
 两边发布同一版时传入相同 SHA；每个后端独立确认或回滚，没有跨服务器的事务回滚。
+如果已经通过 `qplugin-build` 构建完成，可传入 `"release_commit":"完整提交 SHA"`，
+直接使用持久目录中该提交的不可变 ZIP；部署前会验证包内 releaseId，两个后端无需重复编译。
 首次安装或需要重启的宿主升级，可以显式提交 `"install_host":"true"`：
 
 ```json
