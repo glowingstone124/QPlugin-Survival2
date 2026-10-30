@@ -7,10 +7,30 @@ authors: [ glowingstone124 ]
 description: Multi-chamber Minecraft registration tests for Quantum Original
 website: https://glowingstone.cn/
 commands:
+  qhot:
+    description: 管理业务模块热更新与回滚
+    usage: /<command> <status|apply|rollback> [releaseId]
+    permission: quantum.hotupdate
+  qmodstatus:
+    description: 查询当前连接的 QMod 响应与版本
+    usage: /<command> [player]
+    permission: quantum.qmodstatus
+  builder:
+    description: 选择建筑区域并导入 Kotshi Builder
+    usage: /<command> <pos1|pos2|export|clear>
+    permission: quantum.builder
   chambers:
     description: 管理多测试室验证流程
     usage: /<command> <start|leave|status|build|reload>
 permissions:
+  quantum.hotupdate:
+    description: 应用受信任的模块发布版本
+    default: op
+  quantum.qmodstatus:
+    description: 查询玩家是否响应 QMod 探测
+    default: op
+  quantum.builder:
+    default: true
   qplugin.chambers.admin:
     description: 允许管理测试室流程
     default: op

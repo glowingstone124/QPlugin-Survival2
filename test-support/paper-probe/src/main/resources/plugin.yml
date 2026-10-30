@@ -1,0 +1,12 @@
+name: QHotProbe
+version: '1.0'
+main: vip.qoriginal.validation.PaperProbe
+api-version: '26.1.2'
+softdepend: [QuantumPlugin, QuantumPlugin-Creative]
+commands:
+  qprobe:
+    description: Local validation commands; never install this probe on a public server
+    permission: qhot.probe
+permissions:
+  qhot.probe:
+    default: op

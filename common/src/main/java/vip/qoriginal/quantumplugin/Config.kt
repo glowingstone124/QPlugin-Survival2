@@ -38,7 +38,7 @@ object Config {
 						println("[Config] 检测到配置文件更新，重新加载中...")
 						try {
 							configData = loadConfig()
-							println("[Config] 配置已更新: $configData")
+							println("[Config] 配置已更新")
 						} catch (e: Exception) {
 							println("[Config] 加载配置失败: ${e.message}")
 						}
@@ -52,6 +52,9 @@ object Config {
 	fun get(key: String): Any? {
 		return configData[key]
 	}
+
+	fun qmodPasswordlessLoginEnabled(): Boolean =
+		configData["QMOD_PASSWORDLESS_LOGIN_ENABLED"]?.toString()?.equals("true", ignoreCase = true) == true
 
 	val API_ENDPOINT: String
 		get() = (configData["API_ENDPOINT"] ?: "http://127.0.0.1:8080") as String

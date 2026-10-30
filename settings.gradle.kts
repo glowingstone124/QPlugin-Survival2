@@ -12,6 +12,8 @@ include(":survival")
 include(":creative")
 include(":chambers")
 include(":processor")
+include(":hot-api", ":hot-runtime", ":modules:sponsor-prefix", ":modules:daily-login")
+include(":test-support:paper-probe")
 
 plugins {
 	id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"

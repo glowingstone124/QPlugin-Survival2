@@ -35,7 +35,8 @@ allprojects {
 	}
 }
 
-val javaProjects = listOf(project(":common"), project(":survival"), project(":creative"), project(":chambers"))
+val hotModules = listOf("sponsor-prefix", "daily-login")
+val javaProjects = (listOf("common", "survival", "creative", "chambers", "hot-api", "hot-runtime", "test-support:paper-probe") + hotModules.map { "modules:$it" }).map { project(":$it") }
 val gsonDependency = libs.com.google.code.gson.gson
 val kotlinStdlibDependency = libs.org.jetbrains.kotlin.kotlin.stdlib
 val kotlinReflectDependency = libs.org.jetbrains.kotlin.kotlin.reflect
@@ -72,6 +73,8 @@ configure(javaProjects) {
 	}
 
 	tasks.withType<org.gradle.jvm.tasks.Jar>().configureEach {
+		isPreserveFileTimestamps = false
+		isReproducibleFileOrder = true
 		from(listOf(rootProject.file("LICENSE"), rootProject.file("COPYING"))) {
 			into("META-INF/licenses/${project.name}")
 		}
@@ -165,11 +168,73 @@ project(":common") {
 	}
 
 	dependencies {
+		"implementation"(project(":hot-runtime"))
 		"paperweightDevelopmentBundle"("io.papermc.paper:dev-bundle:26.2.build.+")
 		"testImplementation"(kotlin("test"))
 	}
 }
 
+project(":hot-runtime") {
+	dependencies {
+		"api"(project(":hot-api"))
+		"testImplementation"(kotlin("test"))
+		"testImplementation"(paperApiDependency)
+	}
+}
+
+val hotReleaseId = providers.gradleProperty("releaseId").orElse("development")
+configure(hotModules.map { project(":modules:$it") }) {
+	dependencies {
+		"compileOnly"(project(":hot-api"))
+		"testImplementation"(kotlin("test"))
+		"testImplementation"(project(":hot-api"))
+		"testImplementation"(paperApiDependency)
+	}
+	tasks.withType<ProcessResources>().configureEach {
+		val moduleVersion = hotReleaseId.get()
+		inputs.property("releaseId", moduleVersion)
+		filesMatching("META-INF/qplugin-module.properties") {
+			expand("moduleVersion" to moduleVersion)
+		}
+	}
+}
+
+project(":common").tasks.named<ProcessResources>("processResources") {
+	hotModules.forEach { module ->
+		dependsOn(":modules:$module:jar")
+		from(project(":modules:$module").tasks.named("jar")) {
+			into("hot-modules")
+			rename { "$module.jar" }
+		}
+	}
+}
+
+val hotReleaseRuntime = configurations.create("hotReleaseRuntime") {
+	isCanBeConsumed = false
+	isCanBeResolved = true
+}
+dependencies { add(hotReleaseRuntime.name, project(":hot-runtime")) }
+
+tasks.register<JavaExec>("packageHotRelease") {
+	group = "distribution"
+	description = "Build immutable plugin/module release and SHA-256 manifest (-PreleaseId=<commit>)."
+	dependsOn(":hot-runtime:classes", ":survival:shadowJar", ":creative:shadowJar", ":chambers:shadowJar")
+	dependsOn(hotModules.map { ":modules:$it:jar" })
+	classpath = hotReleaseRuntime
+	mainClass.set("vip.qoriginal.quantumplugin.hot.runtime.ReleasePackager")
+	javaLauncher.set(project(":hot-runtime").extensions.getByType<JavaToolchainService>().launcherFor {
+		languageVersion.set(JavaLanguageVersion.of(25))
+	})
+	args(hotReleaseId.get(), layout.buildDirectory.dir("releases").get().asFile.absolutePath)
+	hotModules.forEach { module ->
+		args("--module", project(":modules:$module").layout.buildDirectory.file("libs/$module-$qpluginVersion.jar").get().asFile.absolutePath)
+	}
+	pluginProjects.forEach { (target, name) ->
+		args("--host", name, project(":$target").layout.buildDirectory.file("libs/$name-$qpluginVersion.jar").get().asFile.absolutePath)
+	}
+}
+
 tasks.named("build") {
-	dependsOn(":survival:shadowJar", ":creative:shadowJar", ":chambers:shadowJar")
+	dependsOn(":survival:shadowJar", ":creative:shadowJar", ":chambers:shadowJar", ":hot-runtime:build")
+	dependsOn(hotModules.map { ":modules:$it:build" })
 }

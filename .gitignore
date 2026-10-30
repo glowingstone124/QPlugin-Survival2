@@ -20,6 +20,8 @@ build/
 
 # Compiled class file
 *.class
+__pycache__/
+*.py[cod]
 
 # Log file
 *.log

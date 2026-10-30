@@ -91,20 +91,23 @@ class Login : Listener {
 				JsonParser.parseString(
 					Request.sendPostRequest(
 						Config.API_ENDPOINT + "/qo/game/login",
-						gson.toJson(mapOf("username" to player.name, "password" to password, "ip" to ip, "web" to false))
+						gson.toJson(mapOf(
+							"username" to player.name,
+							"password" to password,
+							"ip" to ip,
+							"web" to false,
+							"clientId" to "game",
+						))
 					)
 						.get()
 				).asJsonObject
 			}
 			if (loginResult.get("result").asBoolean) {
-				player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
-				if (player.scoreboardTags.contains("guest")) {
-					abstractLoginLogic(player)
-					player.removeScoreboardTag("guest")
-					sendLoginAttempt(player, true)
-				} else if (player.scoreboardTags.contains("visitor")) {
-					player.removeScoreboardTag("visitor")
-					player.addScoreboardTag("visitor_login")
+				Utils.runTaskOnMainThread {
+					if (!completeGuestLogin(player, "登录成功", true) && player.isOnline && player.removeScoreboardTag("visitor")) {
+						player.addScoreboardTag("visitor_login")
+						player.sendTitlePart(TitlePart.TITLE, Component.text("登录成功").color(NamedTextColor.GREEN))
+					}
 				}
 			} else {
 				logger.log("${player.name} kicked due to wrong password.")
@@ -131,22 +134,38 @@ class Login : Listener {
 						!player.scoreboardTags.contains("guest") ||
 						AutoLoginClient.playerIp(player) != ip
 					) return@runTaskOnMainThread
-					player.sendTitlePart(
-						TitlePart.TITLE,
-						Component.text("自动登录成功").color(NamedTextColor.GREEN)
-					)
-					player.removeScoreboardTag("guest")
-					scope.launch { abstractLoginLogic(player) }
+					completeGuestLogin(player, "自动登录成功", false)
 				}
 			}
 		} else {
 			player.addScoreboardTag("visitor")
 		}
-		Bukkit.getScheduler().runTaskTimer(PluginContext.getPlugin(), Runnable {
-			if (player.scoreboardTags.contains("guest") || player.scoreboardTags.contains("visitor")) {
-				player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
-			}
-		}, 0, 20)
+		QModBridge.begin(player)
+        object : BukkitRunnable() {
+            override fun run() {
+                if (!player.isOnline || (!player.scoreboardTags.contains("guest") && !player.scoreboardTags.contains("visitor"))) {
+                    cancel()
+                    return
+                }
+                player.sendTitlePart(TitlePart.TITLE, Component.text("输入/login <密码> 来登录"))
+            }
+        }.runTaskTimer(PluginContext.getPlugin(), 0, 20)
+
+	}
+
+	fun completeQModLogin(player: Player): Boolean = completeGuestLogin(player, "QMod 免密码登录成功", true)
+
+	private fun completeGuestLogin(player: Player, title: String, recordAttempt: Boolean): Boolean {
+		check(Bukkit.isPrimaryThread())
+		if (!player.isOnline || !player.removeScoreboardTag("guest")) return false
+		QModBridge.loginCompleted(player)
+		playerLoginMap.remove(player)
+		player.sendTitlePart(TitlePart.TITLE, Component.text(title).color(NamedTextColor.GREEN))
+		scope.launch {
+			if (recordAttempt) sendLoginAttempt(player, true)
+			runCatching { abstractLoginLogic(player) }.onFailure { logger.log("Login greeting unavailable for ${player.name}") }
+		}
+		return true
 	}
 
 	@EventHandler

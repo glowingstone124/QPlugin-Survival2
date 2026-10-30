@@ -16,9 +16,10 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class NamePrefix implements Listener {
+public class NamePrefix implements Listener, AutoCloseable {
     private List<String> sponsorsList = new ArrayList<>();
     Timer timer = new Timer();
+    @Override public void close() { timer.cancel(); timer.purge(); }
     public NamePrefix() {
         PluginContext.getPlugin().getLogger().info("NamePrefix now up and running.");
         timer.schedule(update, 0L, 1000 * 60L);

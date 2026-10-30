@@ -9,7 +9,14 @@ public final class PluginContext {
     }
 
     public static void setPlugin(JavaPlugin plugin) {
+        setPlugin(plugin, plugin.getName());
+    }
+
+    public static void setPlugin(JavaPlugin plugin, String hotHostName) {
         PluginContext.plugin = plugin;
+        BuilderCommand.register(plugin);
+        QModBridge.register(plugin);
+        vip.qoriginal.quantumplugin.hot.BukkitHotModules.register(plugin, hotHostName);
     }
 
     public static JavaPlugin getPlugin() {

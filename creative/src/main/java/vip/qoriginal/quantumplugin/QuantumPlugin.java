@@ -39,8 +39,8 @@ public final class QuantumPlugin extends JavaPlugin {
     public void onEnable() {
         ChatSync.configure(4, false);
         instance = this;
-        PluginContext.setPlugin(this);
-        DailyLoginAdvertisement.init(this);
+        // Keep the legacy Bukkit name/data directory, but select the creative release fingerprint.
+        PluginContext.setPlugin(this, "QuantumPlugin-Creative");
         servuxEntityDataBridge = new ServuxEntityDataBridge(this);
         PlayerEventListener.setMessageSink(message -> new ChatSync().sendChatMsg(message));
         CommandSuggester.register(this, List.of(
@@ -76,7 +76,6 @@ public final class QuantumPlugin extends JavaPlugin {
                 chatSync,
                 /*new Chat(),*/
                 new SpeedMonitor(this),
-                new NamePrefix(),
                 new PlayerEventListener(),
                 new CustomItemStack(),
                 new Locker()

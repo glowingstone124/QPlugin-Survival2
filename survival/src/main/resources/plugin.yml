@@ -7,10 +7,22 @@ authors: [ glowingstone124 ]
 description: Plugin for Quantum Original
 website: https://glowingstone.cn/
 commands:
+  qhot:
+    description: 管理业务模块热更新与回滚
+    usage: /<command> <status|apply|rollback> [releaseId]
+    permission: quantum.hotupdate
+  qmodstatus:
+    description: 查询当前连接的 QMod 响应与版本
+    usage: /<command> [player]
+    permission: quantum.qmodstatus
   lightscan:
     description: 扫描指定世界光源和空间亮度并导出 CSV
     usage: /<command> <scan|status|cancel> [world] [x1 z1 x2 z2 [minY maxY]]
     permission: quantum.lightscan
+  builder:
+    description: 选择建筑区域并导入 Kotshi Builder
+    usage: /<command> <pos1|pos2|export|clear>
+    permission: quantum.builder
   suicide:
     description: 结束自己的生命
     usage: /<command>
@@ -67,6 +79,14 @@ commands:
     usage: /<command> <spawn|remove|list|inventory|attack|use|look> ...
 
 permissions:
+  quantum.hotupdate:
+    description: 应用受信任的模块发布版本
+    default: op
+  quantum.qmodstatus:
+    description: 查询玩家是否响应 QMod 探测
+    default: op
   quantum.lightscan:
     description: 扫描世界光源和空间亮度并导出统计数据
     default: op
+  quantum.builder:
+    default: true

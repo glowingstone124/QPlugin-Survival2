@@ -1,0 +1,32 @@
+# Merge these sections into your existing Orin configuration; replace the manual tokens.
+# Set Runner.actionTimeoutSeconds >= 2400 in the existing [Runner] section.
+
+[[Pipeline]]
+name = "qplugin-build"
+enabled = true
+triggers = ["manual", "cluster"]
+manualToken = "replace-with-build-trigger-secret"
+actions = ["qplugin-build"]
+
+[[Pipeline]]
+name = "qplugin-deploy-survival"
+enabled = true
+repository = "QPlugin-Survival2"
+triggers = ["manual", "cluster"]
+manualToken = "replace-with-survival-deploy-trigger-secret"
+actions = ["qplugin-deploy"]
+
+[[Pipeline]]
+name = "qplugin-status"
+enabled = true
+triggers = ["manual", "cluster"]
+manualToken = "replace-with-status-trigger-secret"
+actions = ["qplugin-status"]
+
+[[Pipeline]]
+name = "qplugin-deploy-creative"
+enabled = true
+repository = "QPlugin-Survival2"
+triggers = ["manual", "cluster"]
+manualToken = "replace-with-creative-deploy-trigger-secret"
+actions = ["qplugin-deploy"]

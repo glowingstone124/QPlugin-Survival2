@@ -83,7 +83,6 @@ public final class QuantumPlugin extends JavaPlugin {
                 this,
                 ServicePriority.Normal
         );
-        DailyLoginAdvertisement.init(this);
         servuxEntityDataBridge = new ServuxEntityDataBridge(this);
         StatusUpload.setPlayerFilter(player ->
                 !FakePlayerManager.isFakePlayer(player)
@@ -140,7 +139,6 @@ public final class QuantumPlugin extends JavaPlugin {
                         vehicle -> vehicle instanceof HappyGhast,
                         vehicle -> vehicle instanceof Minecart minecart && ExperimentalAcceleration.isActive(minecart)
                 ),
-                new NamePrefix(),
                 new PlayerEventListener(),
                 new SurvivalPlayerEventListener(),
                 new PlayerInventoryViewer(),
