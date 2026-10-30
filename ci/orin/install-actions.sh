@@ -8,7 +8,10 @@ mkdir -p "$backup"
 chmod 700 "$backup"
 for action in qplugin-build qplugin-deploy qplugin-status qplugin-ci; do
   if [[ -d "$workspace/actions/$action" ]]; then cp -R "$workspace/actions/$action" "$backup/"; fi
-  cp -R "$source_root/ci/orin/actions/$action" "$workspace/actions/"
+  mkdir -p "$workspace/actions/$action"
+  for file in "$source_root/ci/orin/actions/$action/"*; do
+    if [[ -f "$file" ]]; then cp "$file" "$workspace/actions/$action/"; fi
+  done
 done
 for action in qplugin-deploy qplugin-ci; do
   cp "$source_root/ci/orin/actions/qplugin-build/build.sh" "$workspace/actions/$action/"
