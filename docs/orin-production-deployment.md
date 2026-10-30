@@ -272,7 +272,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
 PY
 ```
 
-应包含三个完整插件、`sponsor-prefix.jar`、`daily-login.jar` 和 `manifest.json`。
+应包含三个完整插件、五个模块（`sponsor-prefix`、`daily-login`、`combat-feedback`、`text-displays`、`seasonal-events`）的 JAR 和 `manifest.json`。
 不要安装本地 `paper-validation/fixtures/` 中的 v1/v2/故障测试包，也不要把 `QHotProbe` 放入正式服。
 
 这里的 `sudo` 由你本人正常认证。当前免密规则只授权 Orin 管理器，不授予任意 Docker 或文件管理命令。
@@ -334,7 +334,7 @@ PY
 
 还应确认：
 
-- `activeRelease` 等于 `$QPLUGIN_COMMIT`，两个模块均在列表中。
+- `activeRelease` 等于 `$QPLUGIN_COMMIT`，五个模块均在列表中，`apiVersion` 为 2；各模块按后端类型决定是否注册业务。
 - 创造服可以连接，`/login` 正常；前缀和每日公告行为符合配置。
 - 游戏服控制台 `/qhot status` 正常，启动日志没有 QPlugin 启用异常或随即禁用。
 - 已记录本次 `backups/qplugin/` 下的备份目录。
@@ -369,7 +369,7 @@ python3 "$QPLUGIN_SOURCE/scripts/orin-trigger.py" \
 默认控制文件即 `/opt/server/orin/qplugin-control.json`，所以可以省略 `--config`。
 以上没有 `--install-host`，只应用兼容模块，不会自行停止游戏服。
 
-- 只改 `sponsor-prefix`、`daily-login` 实现：通常可在线更新。
+- 只改 `sponsor-prefix`、`daily-login`、`combat-feedback`、`text-displays`、`seasonal-events` 实现：宿主指纹不变时可在线更新。
 - 改宿主、登录、QMod 桥接、NMS、公共依赖或插件声明：指纹变化会返回 `RESTART_REQUIRED`，
   需要维护窗口中显式使用 `--install-host`。
 - 只改每日公告内容：直接编辑后端工作目录的 `daily-login-ad.json`，正常 TPS 下约 5 秒刷新。
@@ -476,7 +476,7 @@ cp /opt/server/orin/backups/qplugin-20261030-1793342855/config.toml \
 - 指定 SHA 的构建任务为 `SUCCESS`，对应 ZIP 已保留。
 - 创造服、生存服均可连接，完整插件没有启用异常。
 - 两边 `status.json` 的 hostName 正确，running 为 true，phase 为 ready，restartRequired 为 false。
-- 两边 activeRelease 均为指定 SHA，模块包含 sponsor-prefix 和 daily-login。
+- 两边 activeRelease 均为指定 SHA，API 2 的五个模块均在发布列表中；创造服不会注册仅生存服使用的文字和新年活动业务。
 - 已记录两个后端的备份路径，并知道模块回滚与完整插件回滚的区别。
 
 本地 Paper 验证细节见 [验证记录](paper-validation.md)，模块 API 和边界见 [热更新说明](hot-update.md)。
