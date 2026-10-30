@@ -63,7 +63,7 @@ fun deployPush() {
             zip.getInputStream(entry).use { JsonParser.parseString(String(it.readNBytes(65537), Charsets.UTF_8)).asJsonObject }
         }
         require(manifest.get("releaseId").asString == revision) { "Release differs from pushed commit" }
-        if (context.jobId != null) orin.publishArtifact("qplugin-release", archive.toString())
+        orin.log("QPlugin CI immutable release: $archive")
         // Deploy the quieter backend first. A failure prevents the second backend from changing.
         for ((role, host) in listOf("creative" to "QuantumPlugin-Creative", "survival" to "QuantumPlugin")) {
             val hot = Path.of(targets.getProperty("qplugin-deploy-$role.hotDir") ?: error("Missing $role target")).normalize()
