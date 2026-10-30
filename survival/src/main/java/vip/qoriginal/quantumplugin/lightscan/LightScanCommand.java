@@ -2,6 +2,7 @@ package vip.qoriginal.quantumplugin.lightscan;
 
 import com.google.gson.GsonBuilder;
 import org.bukkit.ChunkSnapshot;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.command.Command;
@@ -14,25 +15,30 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
-/** One job at a time, one snapshot in flight; all world access stays on the server thread. */
+/** One job at a time, bounded chunk-load batches; all world access stays on the server thread. */
 public final class LightScanCommand implements TabExecutor, AutoCloseable {
     private static final String PERMISSION = "quantum.lightscan";
+    private static final int SNAPSHOT_BATCH_SIZE = 4;
     private final JavaPlugin plugin;
     private final LightScanWorker worker = new LightScanWorker();
     private volatile boolean closed;
@@ -109,7 +115,7 @@ public final class LightScanCommand implements TabExecutor, AutoCloseable {
         Job next = new Job(world, sender, bounds, loaded, worldFolder, dimension);
         job = next;
         worker.execute(() -> run(next));
-        CommandMessages.info(sender, "开始扫描世界 " + next.worldName + " 的光源和空间亮度；/lightscan status 查询进度。只读取已保存/已加载区块，不生成新地形。逐方块亮度数据量较大。");
+        CommandMessages.info(sender, "开始扫描世界 " + next.worldName + " 的光源和空间亮度；完成后同时生成最长边不超过 8K 的 sources.png。/lightscan status 查询进度。只读取已保存/已加载区块，不生成新地形。逐方块亮度数据量较大。");
     }
 
     private void run(Job current) {
@@ -125,8 +131,11 @@ public final class LightScanCommand implements TabExecutor, AutoCloseable {
             writeMetadata(current, "running", null);
             Path regions = current.worldFolder.resolve(current.dimension).resolve("region");
             if (!Files.exists(regions)) regions = current.worldFolder.resolve("region");
+            long discoveryStarted = System.nanoTime();
             var chunks = RegionChunkIndex.discover(regions, current.loaded, current.bounds, () -> current.cancelled || closed);
+            current.discoveryNanos = System.nanoTime() - discoveryStarted;
             current.total = chunks.size();
+            current.sourceMap = LightSourceMap.create(current.requestedBounds, chunks);
             current.state = "scanning";
             try (var sources = Files.newBufferedWriter(current.output.resolve("sources.csv"), StandardCharsets.UTF_8);
                  var summary = Files.newBufferedWriter(current.output.resolve("chunks.csv"), StandardCharsets.UTF_8);
@@ -134,29 +143,43 @@ public final class LightScanCommand implements TabExecutor, AutoCloseable {
                 sources.write(LightScanCsv.SOURCES_HEADER);
                 summary.write(LightScanCsv.CHUNKS_HEADER);
                 lighting.write(LightScanCsv.LIGHTING_HEADER);
-                for (var pos : chunks) {
+                var positions = chunks.iterator();
+                while (positions.hasNext()) {
                     checkCancelled(current);
-                    ChunkSnapshot snapshot;
-                    var request = snapshot(current, pos);
-                    try {
-                        snapshot = request.get(60, TimeUnit.SECONDS);
-                    } finally {
-                        request.cancel(false);
-                        current.pendingSnapshot = null;
+                    List<RegionChunkIndex.Position> batch = new ArrayList<>(SNAPSHOT_BATCH_SIZE);
+                    while (positions.hasNext() && batch.size() < SNAPSHOT_BATCH_SIZE) {
+                        batch.add(positions.next());
                     }
-                    if (snapshot == null) {
-                        current.skipped++;
-                        continue;
+                    List<CompletableFuture<ChunkSnapshot>> requests = snapshots(current, batch);
+                    for (int index = 0; index < batch.size(); index++) {
+                        RegionChunkIndex.Position pos = batch.get(index);
+                        CompletableFuture<ChunkSnapshot> request = requests.get(index);
+                        ChunkSnapshot snapshot;
+                        long waitStarted = System.nanoTime();
+                        try {
+                            snapshot = request.get(60, TimeUnit.SECONDS);
+                        } finally {
+                            current.snapshotWaitNanos += System.nanoTime() - waitStarted;
+                            request.cancel(false);
+                            current.pendingSnapshots.remove(request);
+                        }
+                        if (snapshot == null) {
+                            current.skipped++;
+                            continue;
+                        }
+                        long processingStarted = System.nanoTime();
+                        var result = processSnapshot(current, pos, snapshot, sources, lighting);
+                        checkCancelled(current);
+                        summary.write(result.chunkCsv());
+                        result.materials().forEach((material, totals) -> current.materials.merge(material, totals, LightScanCsv::add));
+                        current.sourceMap.markScanned(pos.x(), pos.z(), current.bounds);
+                        current.sources += result.sources();
+                        current.scanned++;
+                        current.processingNanos += System.nanoTime() - processingStarted;
                     }
-                    var result = processSnapshot(current, pos, snapshot);
-                    checkCancelled(current);
-                    sources.write(result.sourcesCsv());
-                    lighting.write(result.lightingCsv());
-                    summary.write(result.chunkCsv());
-                    result.materials().forEach((material, totals) -> current.materials.merge(material, totals, LightScanCsv::add));
-                    current.sources += result.sources();
-                    current.scanned++;
                 }
+            } finally {
+                current.cancelPendingSnapshots();
             }
             checkCancelled(current);
         } catch (CancellationException | InterruptedException exception) {
@@ -174,12 +197,30 @@ public final class LightScanCommand implements TabExecutor, AutoCloseable {
                     try (var writer = Files.newBufferedWriter(current.output.resolve("materials.csv"), StandardCharsets.UTF_8)) {
                         LightScanCsv.writeMaterials(writer, current.materials);
                     }
+                    LightSourceMap sourceMap = current.sourceMap;
+                    if (sourceMap != null) {
+                        try {
+                            long mapStarted = System.nanoTime();
+                            sourceMap.write(current.output.resolve("sources.png"));
+                            current.sourceMapNanos = System.nanoTime() - mapStarted;
+                            current.sourceMapMetadata = sourceMap.metadata();
+                        } finally {
+                            // Completed jobs stay queryable through /lightscan status; do not retain up to 64 MiB.
+                            current.sourceMap = null;
+                        }
+                    }
                     if (current.cancelled || closed) outcome = "cancelled";
                     writeMetadata(current, outcome, Instant.now());
                 } catch (IOException exception) {
                     outcome = "failed";
                     current.error = "无法写入导出汇总: " + exception;
+                    current.sourceMap = null;
                     plugin.getLogger().log(Level.WARNING, current.error, exception);
+                    try {
+                        writeMetadata(current, outcome, Instant.now());
+                    } catch (IOException metadataException) {
+                        plugin.getLogger().log(Level.WARNING, "无法更新失败任务的 metadata.json", metadataException);
+                    }
                 }
             }
             current.state = outcome;
@@ -187,65 +228,99 @@ public final class LightScanCommand implements TabExecutor, AutoCloseable {
         }
     }
 
-    private LightScanCsv.Result processSnapshot(Job current, RegionChunkIndex.Position pos, ChunkSnapshot snapshot) {
+    private LightScanCsv.Summary processSnapshot(Job current, RegionChunkIndex.Position pos, ChunkSnapshot snapshot,
+                                                 java.io.Writer sources, java.io.Writer lighting) throws IOException {
         worker.requireWorkerThread();
-        Map<BlockData, LightScanCsv.State> states = new HashMap<>();
-        return LightScanCsv.scan(current.worldName, pos.x(), pos.z(), snapshot.getCaptureFullTime(),
+        Map<Material, LightScanCsv.State[]> airStates = new EnumMap<>(Material.class);
+        Map<BlockData, LightScanCsv.State[]> states = new HashMap<>();
+        return LightScanCsv.scanTo(current.worldName, pos.x(), pos.z(), snapshot.getCaptureFullTime(),
                 current.bounds, (x, y, z) -> {
                     var material = snapshot.getBlockType(x, y, z);
-                    LightScanCsv.State state;
-                    if (material.isAir()) state = new LightScanCsv.State(material.name(), "", 0, 0, 0);
-                    else {
+                    int blockLight = snapshot.getBlockEmittedLight(x, y, z);
+                    int skyLight = snapshot.getBlockSkyLight(x, y, z);
+                    int lightIndex = blockLight * 16 + skyLight;
+                    LightScanCsv.State[] variants;
+                    if (material.isAir()) {
+                        variants = airStates.computeIfAbsent(material, ignored -> new LightScanCsv.State[256]);
+                    } else {
                         BlockData data = snapshot.getBlockData(x, y, z);
-                        state = states.computeIfAbsent(data, key -> new LightScanCsv.State(key.getMaterial().name(),
-                                key.getLightEmission() > 0 ? key.getAsString() : "", key.getLightEmission(), 0, 0));
+                        variants = states.computeIfAbsent(data, ignored -> new LightScanCsv.State[256]);
+                        LightScanCsv.State cached = variants[lightIndex];
+                        if (cached != null) return cached;
+                        int emission = data.getLightEmission();
+                        cached = new LightScanCsv.State(material.name(), emission > 0 ? data.getAsString() : "",
+                                emission, blockLight, skyLight);
+                        variants[lightIndex] = cached;
+                        return cached;
                     }
-                    return new LightScanCsv.State(state.material(), state.data(), state.emission(),
-                            snapshot.getBlockEmittedLight(x, y, z), snapshot.getBlockSkyLight(x, y, z));
-                }, () -> current.cancelled || closed || Thread.currentThread().isInterrupted());
+                    LightScanCsv.State cached = variants[lightIndex];
+                    if (cached == null) {
+                        cached = new LightScanCsv.State(material.name(), "", 0, blockLight, skyLight);
+                        variants[lightIndex] = cached;
+                    }
+                    return cached;
+                }, () -> current.cancelled || closed || Thread.currentThread().isInterrupted(), sources, lighting,
+                current.sourceMap::add);
     }
 
-    private CompletableFuture<ChunkSnapshot> snapshot(Job current, RegionChunkIndex.Position pos) {
-        CompletableFuture<ChunkSnapshot> result = new CompletableFuture<>();
-        current.pendingSnapshot = result;
+    private List<CompletableFuture<ChunkSnapshot>> snapshots(Job current,
+                                                              List<RegionChunkIndex.Position> positions) {
+        List<CompletableFuture<ChunkSnapshot>> results = new ArrayList<>(positions.size());
+        for (int ignored = 0; ignored < positions.size(); ignored++) {
+            CompletableFuture<ChunkSnapshot> result = new CompletableFuture<>();
+            results.add(result);
+            current.pendingSnapshots.add(result);
+        }
         if (closed || current.cancelled) {
-            result.cancel(false);
-            return result;
+            results.forEach(result -> result.cancel(false));
+            return results;
         }
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             if (closed || current.cancelled || !current.running()) {
-                result.cancel(false);
+                results.forEach(result -> result.cancel(false));
                 return;
             }
             if (plugin.getServer().getWorld(current.worldId) != current.world) {
-                result.completeExceptionally(new IllegalStateException("扫描世界已卸载。"));
+                var exception = new IllegalStateException("扫描世界已卸载。");
+                results.forEach(result -> result.completeExceptionally(exception));
                 return;
             }
-            boolean previouslyLoaded = current.world.isChunkLoaded(pos.x(), pos.z());
-            try {
-                current.world.getChunkAtAsync(pos.x(), pos.z(), false).whenComplete((chunk, error) -> {
-                    // Paper completes chunk loads on the main thread.
-                    try {
-                        if (error != null) result.completeExceptionally(error);
-                        else if (closed || current.cancelled || !current.running() || result.isCancelled()) result.cancel(false);
-                        else result.complete(chunk == null ? null : chunk.getChunkSnapshot(false, false, false, true));
-                    } catch (Exception exception) {
-                        result.completeExceptionally(exception);
-                    } finally {
-                        if (chunk != null && !previouslyLoaded) current.world.unloadChunkRequest(pos.x(), pos.z());
-                    }
-                });
-            } catch (Exception exception) {
-                result.completeExceptionally(exception);
+            for (int index = 0; index < positions.size(); index++) {
+                requestSnapshot(current, positions.get(index), results.get(index));
             }
         });
-        return result;
+        return results;
+    }
+
+    private void requestSnapshot(Job current, RegionChunkIndex.Position pos,
+                                 CompletableFuture<ChunkSnapshot> result) {
+        if (closed || current.cancelled || !current.running() || result.isCancelled()) {
+            result.cancel(false);
+            return;
+        }
+        boolean previouslyLoaded = current.world.isChunkLoaded(pos.x(), pos.z());
+        try {
+            current.world.getChunkAtAsync(pos.x(), pos.z(), false).whenComplete((chunk, error) -> {
+                // Paper completes chunk loads on the main thread.
+                try {
+                    if (error != null) result.completeExceptionally(error);
+                    else if (closed || current.cancelled || !current.running() || result.isCancelled()) result.cancel(false);
+                    else result.complete(chunk == null ? null : chunk.getChunkSnapshot(false, false, false, true));
+                } catch (Exception exception) {
+                    result.completeExceptionally(exception);
+                } finally {
+                    if (chunk != null && !previouslyLoaded) current.world.unloadChunkRequest(pos.x(), pos.z());
+                }
+            });
+        } catch (Exception exception) {
+            result.completeExceptionally(exception);
+        }
     }
 
     private void writeMetadata(Job current, String state, Instant finished) throws IOException {
         worker.requireWorkerThread();
         Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("schema_version", 1);
+        meta.put("schema_version", 2);
         meta.put("status", state);
         meta.put("complete", state.equals("completed") && current.skipped == 0);
         meta.put("world", current.worldName);
@@ -260,6 +335,17 @@ public final class LightScanCommand implements TabExecutor, AutoCloseable {
         meta.put("source_count", current.sources);
         meta.put("source_definition", "BlockData.getLightEmission() > 0; includes natural and artificial block sources; excludes skylight and entity/dynamic lighting");
         meta.put("lighting_definition", "Every block position including air and zero light; stored propagated block light and raw skylight, both 0-15. max_stored_light=max(block_light,sky_light), without time/weather skylight darkening.");
+        meta.put("source_map", current.sourceMapMetadata);
+        Instant measuredUntil = finished == null ? Instant.now() : finished;
+        long elapsedMillis = Math.max(0, Duration.between(current.started, measuredUntil).toMillis());
+        Map<String, Object> performance = new LinkedHashMap<>();
+        performance.put("elapsed_ms", elapsedMillis);
+        performance.put("discovery_ms", TimeUnit.NANOSECONDS.toMillis(current.discoveryNanos));
+        performance.put("snapshot_stall_ms", TimeUnit.NANOSECONDS.toMillis(current.snapshotWaitNanos));
+        performance.put("scan_and_export_ms", TimeUnit.NANOSECONDS.toMillis(current.processingNanos));
+        performance.put("source_map_write_ms", TimeUnit.NANOSECONDS.toMillis(current.sourceMapNanos));
+        performance.put("scanned_chunks_per_second", elapsedMillis == 0 ? 0.0 : current.scanned * 1000.0 / elapsedMillis);
+        meta.put("performance", performance);
         meta.put("consistency", "Per-chunk snapshots over time, not an atomic world snapshot. New chunks after discovery are not included.");
         meta.put("error", current.error);
         try (var writer = Files.newBufferedWriter(current.output.resolve("metadata.json"), StandardCharsets.UTF_8)) {
@@ -278,7 +364,7 @@ public final class LightScanCommand implements TabExecutor, AutoCloseable {
 
     private void help(CommandSender sender) {
         CommandMessages.info(sender, "/lightscan scan <世界> [x1 z1 x2 z2 [minY maxY]]");
-        CommandMessages.info(sender, "/lightscan status | cancel；导出到插件目录 light-scans/，含光源 CSV、空间亮度 CSV.gz、区块热力图数据和材质统计。");
+        CommandMessages.info(sender, "/lightscan status | cancel；导出到插件目录 light-scans/，含光源 CSV/PNG、空间亮度 CSV.gz、区块热力图数据和材质统计。");
     }
 
     @Override
@@ -311,13 +397,19 @@ public final class LightScanCommand implements TabExecutor, AutoCloseable {
         final Instant started = Instant.now();
         final Map<String, LightScanCsv.Totals> materials = new HashMap<>();
         volatile boolean cancelled;
-        volatile CompletableFuture<ChunkSnapshot> pendingSnapshot;
+        final Set<CompletableFuture<ChunkSnapshot>> pendingSnapshots = ConcurrentHashMap.newKeySet();
+        volatile LightSourceMap sourceMap;
+        volatile Map<String, Object> sourceMapMetadata;
         volatile String state = "discovering";
         volatile Path output;
         volatile int total;
         volatile int scanned;
         volatile int skipped;
         volatile long sources;
+        volatile long discoveryNanos;
+        volatile long snapshotWaitNanos;
+        volatile long processingNanos;
+        volatile long sourceMapNanos;
         volatile String error;
 
         Job(World world, CommandSender sender, ScanBounds bounds, List<RegionChunkIndex.Position> loaded,
@@ -340,8 +432,12 @@ public final class LightScanCommand implements TabExecutor, AutoCloseable {
 
         void cancel() {
             cancelled = true;
-            var pending = pendingSnapshot;
-            if (pending != null) pending.cancel(false);
+            cancelPendingSnapshots();
+        }
+
+        void cancelPendingSnapshots() {
+            pendingSnapshots.forEach(pending -> pending.cancel(false));
+            pendingSnapshots.clear();
         }
 
         String describe() {

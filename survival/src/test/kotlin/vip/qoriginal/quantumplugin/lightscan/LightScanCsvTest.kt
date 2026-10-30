@@ -72,6 +72,40 @@ class LightScanCsvTest {
     }
 
     @Test
+    fun `streaming export commits rows and source points only after a complete chunk`() {
+        val sources = StringWriter()
+        val lighting = StringWriter()
+        var calls = 0
+        val observed = mutableListOf<Triple<Int, Int, Int>>()
+        assertFailsWith<CancellationException> {
+            LightScanCsv.scanTo("world", 0, 0, 123, ScanBounds(0, 0, 0, 0, 1, 0),
+                { _, _, _ ->
+                    calls++
+                    LightScanCsv.State("TORCH", "minecraft:torch", 14, 14, 0)
+                }, { calls > 0 }, sources, lighting) { x, z, emission ->
+                    observed += Triple(x, z, emission)
+                }
+        }
+        assertEquals("", sources.toString())
+        assertEquals("", lighting.toString())
+        assertEquals(emptyList(), observed)
+    }
+
+    @Test
+    fun `streaming export reports source coordinates without reparsing csv`() {
+        val sources = StringWriter()
+        val lighting = StringWriter()
+        val observed = mutableListOf<Triple<Int, Int, Int>>()
+        val summary = LightScanCsv.scanTo("world", -1, 0, 123, ScanBounds(-16, 0, 0, -15, 0, 0),
+            { x, _, _ -> if (x == 0) LightScanCsv.State("TORCH", "minecraft:torch", 14, 14, 0) else dark },
+            { false }, sources, lighting) { x, z, emission -> observed += Triple(x, z, emission) }
+        assertEquals(listOf(Triple(-16, 0, 14)), observed)
+        assertEquals(1, summary.sources())
+        assertTrue(sources.toString().startsWith("\"world\",-16,0,0"))
+        assertEquals(2, lighting.toString().lines().count { it.isNotEmpty() })
+    }
+
+    @Test
     fun `spatial lighting includes dark air and distinguishes propagated light from emission`() {
         val result = scan(ScanBounds(0, 0, 0, 2, 0, 0)) { x, _, _ ->
             when (x) {
