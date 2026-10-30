@@ -45,7 +45,7 @@ public final class QuantumPlugin extends JavaPlugin {
         PlayerEventListener.setMessageSink(message -> new ChatSync().sendChatMsg(message));
         CommandSuggester.register(this, List.of(
                 "shutup", "myloc", "highlight", "showitem", "querybind",
-                "bindauth", "bind", "login", "damageindicator"
+                "bindauth", "bind", "login"
         ));
         System.out.println("Quantum Plugin for Creative Server 1.14.5.5.1 Started. Please do not use this in main server.");
         try {
@@ -255,32 +255,6 @@ public final class QuantumPlugin extends JavaPlugin {
             }
             login.performLogin(s, args[0]);
             return true;
-        } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("damageindicator")) {
-            if (args.length != 1) {
-                sender.sendMessage("[query] 查询开启状态 [enable]开启 [disable]关闭");
-                return true;
-            }
-            switch (args[0]) {
-                case "query":
-                    if (isIndicatorEnabled(s)) {
-                        sender.sendMessage("当前状态：开启");
-                    } else {
-                        sender.sendMessage("当前状态：关闭");
-                    }
-                    break;
-                case "enable":
-                    if (!isIndicatorEnabled(s)) {
-                        s.addScoreboardTag("di");
-                    }
-                    sender.sendMessage("成功");
-                    break;
-                case "disable":
-                    if (isIndicatorEnabled(s)) {
-                        s.removeScoreboardTag("di");
-                    }
-                    sender.sendMessage("成功");
-                    break;
-            }
         }
         return false;
     }
@@ -291,12 +265,5 @@ public final class QuantumPlugin extends JavaPlugin {
         return istagged;
     }
 
-    public static boolean isIndicatorEnabled(Player player) {
-        AtomicBoolean istagged = new AtomicBoolean(false);
-        player.getScoreboardTags().forEach(tag -> {
-            if (tag.contentEquals("di")) istagged.set(true);
-        });
-        return istagged.get();
-    }
 
 }

@@ -41,6 +41,22 @@ class DeploymentTest(unittest.TestCase):
         (self.hot / "status.json").write_text(json.dumps(self.status), encoding="utf-8")
 
     def test_waits_for_matching_host_confirmation(self):
+        self.assert_confirmed_deployment()
+
+    def test_api_two_release_uses_the_same_confirmed_deployment_protocol(self):
+        self.manifest["apiVersion"] = 2
+        (self.release / "manifest.json").write_text(json.dumps(self.manifest))
+        self.status["apiVersion"] = 2
+        self.save_status()
+        self.assert_confirmed_deployment()
+
+    def test_api_upgrade_requires_host_installation_before_any_request(self):
+        self.manifest["apiVersion"] = 2
+        (self.release / "manifest.json").write_text(json.dumps(self.manifest))
+        self.assertEqual("RESTART_REQUIRED", deploy_hot.deploy(self.release, self.hot)["code"])
+        self.assertFalse((self.hot / "requests").exists())
+
+    def assert_confirmed_deployment(self):
         errors = []
 
         def host():

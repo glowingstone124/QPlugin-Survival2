@@ -54,7 +54,6 @@ public final class QuantumPlugin extends JavaPlugin {
     private static QuantumPlugin instance;
     private BukkitTask webMsgGetterTask;
     PlayerInventoryViewer piv = new PlayerInventoryViewer();
-    private TextDisplay td = new TextDisplay();
     LeaveMessageComponent leaveMessageComponent = new LeaveMessageComponent();
     Login login = new Login();
     ChatSync cs = new ChatSync();
@@ -93,8 +92,8 @@ public final class QuantumPlugin extends JavaPlugin {
         MSPTCalculator.setTickHook(new SurvivalTickWork());
         CommandSuggester.register(this, List.of(
                 "suicide", "shutup", "myloc", "highlight", "showitem", "querybind",
-                "viewInventory", "summontext", "login", "damageindicator", "leavemessage",
-                "elite", "gm", "firework", "newyeartnt", "newyeardumplings", "flight", "fakeplayer"
+                "viewInventory", "login", "leavemessage",
+                "elite", "gm", "flight", "fakeplayer"
         ));
         Trigger trigger = new Trigger();
         System.out.println("starting scanning triggers");
@@ -142,9 +141,7 @@ public final class QuantumPlugin extends JavaPlugin {
                 new PlayerEventListener(),
                 new SurvivalPlayerEventListener(),
                 new PlayerInventoryViewer(),
-                new BuffSnowball(),
                 new CustomItemStack(),
-                new FriendlyTnt(),
                 new Locker(),
                 new Trigger(),
                 eliteWeaponListener,
@@ -211,9 +208,6 @@ public final class QuantumPlugin extends JavaPlugin {
             }
         }
         Objects.requireNonNull(this.getCommand("elite")).setExecutor(new EliteWeaponCmd());
-        Objects.requireNonNull(this.getCommand("firework")).setExecutor(new Firework());
-        Objects.requireNonNull(this.getCommand("newyeartnt")).setExecutor(new FriendlyTnt());
-        Objects.requireNonNull(this.getCommand("newyeardumplings")).setExecutor(new BuffSnowball());
         Objects.requireNonNull(this.getCommand("gm")).setExecutor(new CustomGamemodeCmd());
         Objects.requireNonNull(this.getCommand("flight")).setExecutor(new FlightCommandExecutor());
         Objects.requireNonNull(this.getCommand("fakeplayer")).setExecutor(new FakePlayerCommand(this, fakePlayerManager));
@@ -407,13 +401,6 @@ public final class QuantumPlugin extends JavaPlugin {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        } else if (sender instanceof Player player && command.getName().equalsIgnoreCase("summontext")) {
-            if (args.length >= 1) {
-                String jsonText = String.join(" ", args);
-                td.exec(player, jsonText);
-            } else {
-                player.sendMessage("请提供要显示的文本。");
-            }
         } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("login")) {
             if (args.length != 1) {
                 CommandMessages.warning(sender, "用法: /login <password>");
@@ -421,35 +408,6 @@ public final class QuantumPlugin extends JavaPlugin {
             }
             login.performLogin(s, args[0]);
             return true;
-        } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("damageindicator")) {
-            if (args.length != 1) {
-                CommandMessages.warning(sender, "用法: /damageindicator <query|enable|disable>");
-                return true;
-            }
-            switch (args[0]) {
-                case "query":
-                    if (isIndicatorEnabled(s)) {
-                        CommandMessages.info(sender, "伤害提示当前状态: 开启");
-                    } else {
-                        CommandMessages.info(sender, "伤害提示当前状态: 关闭");
-                    }
-                    break;
-                case "enable":
-                    if (!isIndicatorEnabled(s)) {
-                        s.addScoreboardTag("di");
-                    }
-                    CommandMessages.success(sender, "伤害提示已开启。");
-                    break;
-                case "disable":
-                    if (isIndicatorEnabled(s)) {
-                        s.removeScoreboardTag("di");
-                    }
-                    CommandMessages.success(sender, "伤害提示已关闭。");
-                    break;
-                default:
-                    CommandMessages.warning(sender, "用法: /damageindicator <query|enable|disable>");
-                    break;
-            }
         } else if (sender instanceof Player s && command.getName().equalsIgnoreCase("leavemessage")) {
             if (args.length != 2) {
                 CommandMessages.warning(sender, "用法: /leavemessage <player> <message>");
@@ -464,8 +422,5 @@ public final class QuantumPlugin extends JavaPlugin {
         return player.getScoreboardTags().contains("muteqq");
     }
 
-    public static boolean isIndicatorEnabled(Player player) {
-        return player.getScoreboardTags().contains("di");
-    }
 
 }

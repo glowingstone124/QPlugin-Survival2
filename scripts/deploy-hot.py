@@ -16,6 +16,7 @@ import zipfile
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
+SUPPORTED_API_VERSIONS = (1, 2)
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 
 
@@ -46,7 +47,7 @@ def validate(directory):
     if directory.is_symlink():
         raise ValueError("Release directory is a symlink")
     manifest = read_json(directory / "manifest.json")
-    if manifest.get("formatVersion") != 1 or manifest.get("apiVersion") != 1:
+    if manifest.get("formatVersion") != 1 or manifest.get("apiVersion") not in SUPPORTED_API_VERSIONS:
         raise ValueError("Unsupported release format/API")
     safe_name(manifest.get("releaseId"))
     hosts = manifest.get("hosts")
@@ -148,13 +149,14 @@ def deploy(source, root, timeout=60, expected_host=None):
     status = read_json(root / "status.json")
     if expected_host is not None and status.get("hostName") != safe_name(expected_host):
         raise ValueError(f"Wrong backend: expected {expected_host}, found {status.get('hostName')}")
-    if (status.get("formatVersion") != 1 or status.get("apiVersion") != 1 or not status.get("running")
+    if (status.get("formatVersion") != 1 or status.get("apiVersion") not in SUPPORTED_API_VERSIONS or not status.get("running")
             or status.get("phase") != "ready" or status.get("restartRequired")
             or abs(time.time() * 1000 - status.get("updatedAt", 0)) > 30000):
         raise ValueError("Host is stopped, stale, busy or requires restart")
     with unpack(source) as directory:
         manifest = validate(directory)
-        if manifest["hosts"].get(status.get("hostName")) != status.get("hostCodeSha256"):
+        if (manifest["apiVersion"] != status["apiVersion"]
+                or manifest["hosts"].get(status.get("hostName")) != status.get("hostCodeSha256")):
             return {"ok": False, "code": "RESTART_REQUIRED", "releaseId": manifest["releaseId"],
                     "message": "Host code/dependencies changed; deploy the full plugin JAR during a backend restart"}
         stage(directory, root, manifest)

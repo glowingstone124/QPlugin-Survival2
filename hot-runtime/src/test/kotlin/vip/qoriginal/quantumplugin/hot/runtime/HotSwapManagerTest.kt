@@ -209,7 +209,7 @@ class HotSwapManagerTest {
         assertFailsWith<IllegalArgumentException> { ReleaseManifest.requireName("a/b") }
         val release = publish("v1")
         val file = release.resolve("manifest.json")
-        Files.writeString(file, Files.readString(file).replace("\"apiVersion\": 1", "\"apiVersion\": 999"))
+        Files.writeString(file, Files.readString(file).replace("\"apiVersion\": ${HotModule.API_VERSION}", "\"apiVersion\": 999"))
         assertFailsWith<IOException> { manager.prepare(release) }
     }
 
@@ -238,7 +238,7 @@ class HotSwapManagerTest {
         JarOutputStream(Files.newOutputStream(target)).use { jar ->
             jar.putNextEntry(JarEntry("fixture/Entry.class")); jar.write(Files.readAllBytes(build.resolve("fixture/Entry.class"))); jar.closeEntry()
             jar.putNextEntry(JarEntry("META-INF/qplugin-module.properties"))
-            jar.write("id=$id\nversion=$version\napiVersion=1\nentrypoint=fixture.Entry\n".toByteArray()); jar.closeEntry()
+            jar.write("id=$id\nversion=$version\napiVersion=${HotModule.API_VERSION}\nentrypoint=fixture.Entry\n".toByteArray()); jar.closeEntry()
         }
         return target
     }

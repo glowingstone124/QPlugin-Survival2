@@ -1,4 +1,4 @@
-package vip.qoriginal.quantumplugin.patch;
+package vip.qoriginal.modules.text;
 
 import net.kyori.adventure.text.Component;
 import org.bukkit.FluidCollisionMode;

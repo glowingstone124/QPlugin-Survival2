@@ -1,4 +1,4 @@
-package vip.qoriginal.quantumplugin.patch
+package vip.qoriginal.modules.seasonal
 
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -18,10 +18,9 @@ import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
-import vip.qoriginal.quantumplugin.QuantumPlugin
 
 class FriendlyTnt : CommandExecutor, Listener {
-	val customTntKey = NamespacedKey(QuantumPlugin.getInstance(), "custom_tnt")
+	val customTntKey = NamespacedKey("quantumplugin", "custom_tnt")
 	override fun onCommand(
 		sender: CommandSender,
 		command: Command,

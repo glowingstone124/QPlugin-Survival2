@@ -1,11 +1,20 @@
 # QPlugin 业务模块热更新
 
-当前实现将玩家名称前缀（赞助者、Master、ADMIN）拆成 `sponsor-prefix` 模块，
-将每日登录公告拆成 `daily-login` 模块；一个发布以事务方式切换所有模块。
+当前有五个模块；一个发布以事务方式切换所有模块：
+
+| 模块 | 业务 | 后端 |
+| --- | --- | --- |
+| `sponsor-prefix` | 赞助者、Master、ADMIN 前缀 | 生存 / 创造 |
+| `daily-login` | 每日首次登录公告 | 生存 / 创造 |
+| `combat-feedback` | 弓箭命中和伤害提示、`damageindicator` 指令及补全 | 生存 / 创造 |
+| `text-displays` | `summontext` 文字展示指令与朝向计算 | 生存 |
+| `seasonal-events` | 烟花、团子、爆竹及对应命令、事件与粒子任务 | 生存 |
+
+发布包同时携带五个模块，各模块按宿主标识决定是否注册业务；Chambers 不启用上述业务。
 主插件作为常驻宿主，保留登录限制、QMod 游戏票据和 NMS 功能。
 模块通过独立 ClassLoader 加载，更新过程中无需卸载 JavaPlugin 或重启世界。
 
-这是项目自己控制的业务模块协议。当前 API 支持受管理的同步 Bukkit 事件、主线程定时回调和文本文件后台读取。
+这是项目自己控制的业务模块协议。当前 API 2 支持受管理的同步 Bukkit 事件、命令/补全、主线程定时回调和文本文件后台读取。
 完整插件 JAR、宿主 API、公共依赖或宿主中的 NMS 实现发生变化时，部署程序会返回 `RESTART_REQUIRED`。
 
 ## 构建和首次安装
@@ -22,6 +31,7 @@ python3 -m unittest discover -s scripts -p 'test_*.py' -v
 - `manifest.json`：发布 ID、API 版本、模块版本、文件长度、SHA-256 和宿主代码指纹。
 - `sponsor-prefix.jar`：可在线替换的业务模块，不包含宿主 API 副本。
 - `daily-login.jar`：每日登录公告，保留玩家已有的每日发送标记。
+- `combat-feedback.jar`、`text-displays.jar`、`seasonal-events.jar`：本轮拆出的业务模块。
 - `QuantumPlugin.jar` / `QuantumPlugin-Creative.jar` / `QuantumPlugin-Chambers.jar`：各服完整插件，供首次安装及需要重启的升级使用。
 
 同一发布 ID 的目录和 ZIP 不允许覆盖为不同内容。工作区有未提交修改时，应使用新的本地测试 ID，
@@ -37,6 +47,9 @@ plugins/QuantumPlugin/hot/
   releases/<releaseId>/manifest.json
   releases/<releaseId>/sponsor-prefix.jar
   releases/<releaseId>/daily-login.jar
+  releases/<releaseId>/combat-feedback.jar
+  releases/<releaseId>/text-displays.jar
+  releases/<releaseId>/seasonal-events.jar
   data/sponsor-prefix/
   data/daily-login/
   state.json
@@ -56,6 +69,16 @@ plugins/QuantumPlugin/hot/
 非法 JSON 或时区保留上一次有效配置，删除或清空文件恢复默认值。
 生存服和创造服原 Bukkit 插件名都为 `QuantumPlugin`，玩家的 `quantumplugin:daily_login_ad_last_shown` PDC 标记保持原命名；
 模块替换或回滚不会清除标记，因此同一天不会重复发送，也不会撤销已发送的公告。
+
+伤害提示沿用玩家的 `di` scoreboard tag。文字展示实体保留在世界中，替换命令实现不会删除已创建的文字。
+活动模块保持原 2026 新年活动日期和 `quantumplugin` PDC key；不会因拆分重新开放已结束的活动。
+`newyear.txt` 每 100 tick 后台刷新，最多 64 KiB，缺失或空文件使用“新年快乐！”作为祝福语。
+团子的粒子尾迹改用单个宿主管理的逐 tick 任务，落地/死亡时移出队列；热更关闭旧队列。
+热更不转移短暂的粒子尾迹和待提前引爆队列；已有烟花继续按实体自身 fuse 运行，爆竹/烟花的保护标记由新模块识别。
+
+从 API 1 升级到 API 2 时，需要一次完整宿主更新与后端重启。Orin 的 `qplugin-ci` 会根据宿主指纹自动选择该路径；
+首次升级前需把新版 `scripts/deploy-hot.py` 同步到 build/deploy 节点的 action 目录。新版客户端同时识别 API 1、2，
+两者不一致时要求安装宿主，不向旧 API 宿主提交新模块请求。后续仅改上述模块实现可以继续在线更新。
 
 ## 在线应用与回滚
 
@@ -112,16 +135,19 @@ Orin 的两个独立 Pipeline 会传入预期宿主标识，路径指向另一�
 ## 开发模块
 
 模块项目仅 `compileOnly` 依赖 `:hot-api` 和宿主已经提供的 Bukkit / Adventure API。
+Gradle 的 `hotModules` 列表同时生成内置模块索引，宿主从索引安装默认发布；新增模块不需要再修改 Java 加载器中的模块名称列表。
 模块 JAR 提供 `META-INF/qplugin-module.properties`：
 
 ```properties
 id=sponsor-prefix
 version=<unique-version>
-apiVersion=1
+apiVersion=2
 entrypoint=vip.qoriginal.modules.sponsors.SponsorPrefixModule
 ```
 
-实现 `HotModule.prepare(ModuleContext)`，通过 `context.listen`、`repeatSync`、`watchTextFile` 登记回调。
+实现 `HotModule.prepare(ModuleContext)`，通过 `context.listen`、`command`、`repeatSync`、`watchTextFile` 登记回调。
+`context.command(name, executor, completer)` 只能绑定当前宿主 `plugin.yml` 已声明的命令，权限和别名仍由 Bukkit 检查；
+暂停时还原原始处理器，恢复时重新绑定，新旧命令与补全回调同样受 epoch 保护。重复的命令归属会使激活失败并回滚。
 在线更新时 `prepare` 在后台准备线程执行（首次启动可在 onEnable 中执行），不得操作世界或玩家；
 `healthCheck` 和已激活的回调在主线程执行。异步 Bukkit 事件需先增加专门的宿主适配器，不能直接交给当前 `listen` API。
 `close` 对已激活模块在主线程调用，准备失败时可能在准备线程调用；应可安全清理部分初始化状态。

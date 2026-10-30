@@ -1,4 +1,4 @@
-package vip.qoriginal.quantumplugin.patch
+package vip.qoriginal.modules.seasonal
 
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -13,14 +13,11 @@ import org.bukkit.entity.Firework
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.FireworkMeta
-import org.w3c.dom.Text
-import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.properties.Delegates
 import kotlin.random.Random
 
-class Firework : CommandExecutor {
-	val list = Files.readString(Path.of("newyear.txt")).split("\n".toRegex())
+class Firework(private val runtime: SeasonalRuntime) : CommandExecutor {
+	val list get() = runtime.greetings
 	override fun onCommand(p0: CommandSender, p1: Command, p2: String, p3: Array<out String>): Boolean {
 		if (!EventTiming.isEventActive(Events.NEWYEAR_2026)) {
 			p0.sendMessage("该活动还未开始。")

@@ -13,6 +13,7 @@ include(":creative")
 include(":chambers")
 include(":processor")
 include(":hot-api", ":hot-runtime", ":modules:sponsor-prefix", ":modules:daily-login")
+include(":modules:combat-feedback", ":modules:text-displays", ":modules:seasonal-events")
 include(":test-support:paper-probe")
 
 plugins {

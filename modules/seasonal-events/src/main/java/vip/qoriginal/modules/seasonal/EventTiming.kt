@@ -1,4 +1,4 @@
-package vip.qoriginal.quantumplugin.patch
+package vip.qoriginal.modules.seasonal
 
 import java.time.*
 import java.time.format.DateTimeFormatter
@@ -13,7 +13,8 @@ object EventTiming {
 
 	fun isEventActive(
 		event: Events,
-		zone: ZoneId = ZoneId.of("Asia/Shanghai")
+		zone: ZoneId = ZoneId.of("Asia/Shanghai"),
+		now: Instant = Instant.now()
 	): Boolean {
 		val raw = eventMap[event] ?: return false
 
@@ -31,9 +32,9 @@ object EventTiming {
 			return false
 		}
 
-		val now = ZonedDateTime.now(zone)
+		val instant = now.atZone(zone)
 
-		return !now.isBefore(start) && !now.isAfter(end)
+		return !instant.isBefore(start) && !instant.isAfter(end)
 	}
 }
 

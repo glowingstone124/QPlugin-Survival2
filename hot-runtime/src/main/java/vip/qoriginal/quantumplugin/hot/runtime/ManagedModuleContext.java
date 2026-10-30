@@ -2,6 +2,8 @@ package vip.qoriginal.quantumplugin.hot.runtime;
 
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.TabCompleter;
 import vip.qoriginal.quantumplugin.hot.api.ModuleContext;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -36,6 +38,15 @@ final class ManagedModuleContext implements ModuleContext {
         staging();
         if (delayTicks < 0 || periodTicks < 1) throw new IllegalArgumentException("Invalid tick interval");
         bindings.add(token -> platform.repeatSync(() -> { if (current(token)) callback.run(); }, delayTicks, periodTicks));
+    }
+    @Override public void command(String name, CommandExecutor executor, TabCompleter completer) {
+        staging();
+        if (name == null || !name.matches("[a-z][a-z0-9_-]{0,63}")) throw new IllegalArgumentException("Invalid command name");
+        java.util.Objects.requireNonNull(executor);
+        bindings.add(token -> platform.command(name,
+            (sender, command, label, args) -> !current(token) || executor.onCommand(sender, command, label, args),
+            (sender, command, alias, args) -> current(token) && completer != null
+                ? completer.onTabComplete(sender, command, alias, args) : List.of()));
     }
     @Override public void watchTextFile(Path file, int maxBytes, long periodTicks, Consumer<String> callback) {
         staging();

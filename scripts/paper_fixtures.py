@@ -22,6 +22,7 @@ def build(repo, server, java_home, label):
     status = json.loads((server / "plugins/QuantumPlugin/hot/status.json").read_text())
     if not status["running"] or not status["phase"] == "ready":
         raise RuntimeError("Start the compatible local host before making fixtures")
+    api_version = status["apiVersion"]
     output = server / "fixtures" / label
     output.mkdir(parents=True, exist_ok=False)
     host = server / "plugins/QuantumPlugin.jar"
@@ -58,7 +59,7 @@ def build(repo, server, java_home, label):
         with zipfile.ZipFile(module, "w", zipfile.ZIP_DEFLATED) as jar:
             for file in sorted(classes.rglob("*.class")):
                 jar.write(file, file.relative_to(classes))
-            jar.writestr("META-INF/qplugin-module.properties", f"id=sponsor-prefix\nversion={release_id}\napiVersion=1\nentrypoint=vip.qoriginal.modules.sponsors.SponsorPrefixModule\n")
+            jar.writestr("META-INF/qplugin-module.properties", f"id=sponsor-prefix\nversion={release_id}\napiVersion={api_version}\nentrypoint=vip.qoriginal.modules.sponsors.SponsorPrefixModule\n")
         modules = [module]
         # The original baseline had only a prefix module. Later hosts also embed daily-login.
         with zipfile.ZipFile(host) as jar:
@@ -67,6 +68,33 @@ def build(repo, server, java_home, label):
                     file = release / Path(name).name
                     file.write_bytes(jar.read(name))
                     modules.append(file)
+        # Exercise real command implementation replacement, not just module/version metadata.
+        for identifier, entrypoint, source_file, before, after in (
+            ('combat-feedback', 'vip.qoriginal.modules.combat.CombatFeedbackModule',
+             'modules/combat-feedback/src/main/java/vip/qoriginal/modules/combat/CombatFeedbackModule.java',
+             '伤害提示已开启。', '伤害提示已开启[' + version.upper() + ']。'),
+            ('text-displays', 'vip.qoriginal.modules.text.TextDisplaysModule',
+             'modules/text-displays/src/main/java/vip/qoriginal/modules/text/TextDisplaysModule.java',
+             'displays.exec(player, String.join(" ", args))', 'displays.exec(player, "' + version.upper() + ':" + String.join(" ", args))'),
+        ):
+            module_file = release / (identifier + '.jar')
+            if not module_file.exists(): continue
+            build_dir = directory / identifier
+            build_dir.mkdir()
+            source_text = (repo / source_file).read_text()
+            if before not in source_text: raise RuntimeError('Fixture source marker changed: ' + identifier)
+            entry_source = build_dir / (entrypoint.rsplit('.', 1)[1] + '.java')
+            entry_source.write_text(source_text.replace(before, after))
+            subprocess.run([str(java_home / 'bin/javac'), '-encoding', 'UTF-8', '-cp', cp + os.pathsep + str(module_file), '-d', str(build_dir), str(entry_source)], check=True)
+            original = module_file.read_bytes()
+            import io
+            with zipfile.ZipFile(io.BytesIO(original)) as incoming, zipfile.ZipFile(module_file, 'w', zipfile.ZIP_DEFLATED) as outgoing:
+                changed_name = entrypoint.replace('.', '/') + '.class'
+                for name in incoming.namelist():
+                    if name not in (changed_name, 'META-INF/qplugin-module.properties'):
+                        outgoing.writestr(name, incoming.read(name))
+                outgoing.write(build_dir / changed_name, changed_name)
+                outgoing.writestr('META-INF/qplugin-module.properties', f'id={identifier}\nversion={release_id}\napiVersion={api_version}\nentrypoint={entrypoint}\n')
         def artifact(file, identifier, version):
             return dict(id=identifier, version=version, file=file.name, sha256=sha(file), size=file.stat().st_size)
         descriptors = []
@@ -75,7 +103,7 @@ def build(repo, server, java_home, label):
                 props = dict(line.split("=", 1) for line in jar.read("META-INF/qplugin-module.properties").decode().splitlines() if "=" in line)
             descriptors.append(artifact(file, props["id"], props["version"]))
         shutil.copy2(host, release / "QuantumPlugin.jar")
-        manifest = dict(formatVersion=1, apiVersion=1, releaseId=release_id,
+        manifest = dict(formatVersion=1, apiVersion=api_version, releaseId=release_id,
                         hosts={"QuantumPlugin": status["hostCodeSha256"]}, modules=descriptors,
                         plugins=[artifact(release / "QuantumPlugin.jar", "QuantumPlugin", release_id)])
         (release / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
@@ -94,7 +122,7 @@ def build(repo, server, java_home, label):
     idle_id = label + "-idle"
     with zipfile.ZipFile(idle_jar, "w", zipfile.ZIP_DEFLATED) as jar:
         jar.write(idle_build / "fixture/IdleModule.class", "fixture/IdleModule.class")
-        jar.writestr("META-INF/qplugin-module.properties", f"id=validation-idle\nversion={idle_id}\napiVersion=1\nentrypoint=fixture.IdleModule\n")
+        jar.writestr("META-INF/qplugin-module.properties", f"id=validation-idle\nversion={idle_id}\napiVersion={api_version}\nentrypoint=fixture.IdleModule\n")
     manifest["releaseId"] = idle_id
     manifest["modules"] = [artifact(idle_jar, "validation-idle", idle_id)]
     idle_archive = output / (idle_id + ".zip")

@@ -88,7 +88,7 @@ MSPT 来自 Paper `ServerTickEndEvent.getTickDuration()`，每窗约 600 个 tic
 
 ## 复现
 
-测试工具独立于生产包。`packageHotRelease` 只包含三个完整插件、两个业务模块及 manifest，不包含 QHotProbe 或故障模块。
+测试工具独立于生产包。当前 `packageHotRelease` 包含三个完整插件、五个业务模块及 manifest，不包含 QHotProbe 或故障模块。
 
 ```sh
 ./gradlew build packageHotRelease :test-support:paper-probe:jar -PreleaseId=<unique-local-id>
@@ -153,3 +153,31 @@ cluster 触发继续登记可下载产物。
 实际执行器检查覆盖手动构建、两个后端独立部署、错误路径拒绝、输入不能覆盖目标、未知 Pipeline 拒绝及 cluster 产物登记。
 构建和末端部署使用桩，不代表线上 Orin 已安装这些配置。
 复现程序位于 `test-support/orin/`，运行记录为 `build/orin-targets-validation/runner.log`。
+
+## 2026-10-30：五模块与受管理命令
+
+本轮新增 `combat-feedback`、`text-displays`、`seasonal-events`，模块 API 升为 2，命令和补全纳入与事件相同的暂存、激活、撤销和 epoch 保护。
+
+在独立的 `build/paper-modules-20261030/` Paper 26.2 build 134 中，加载完整生存服宿主和五个真实模块，QAPI 仅连接本机桩。
+测试使用真实 CraftPlayer、Bukkit 命令、事件、世界文字实体和调度器；没有连接网络 Minecraft 客户端。
+
+- 原完整更新/回滚检查通过 47 项：两版代码切换、健康失败、磁盘写入失败、手动回滚、摘要/宿主拒绝、反复部署和玩家公告标记保留。
+- 新增命令检查通过 20 项：`damageindicator` 在 V1/V2 中返回不同实现文本，补全有效；失败候选回滚后恢复 V2 命令，手动回滚后恢复 V1。
+- 弓箭命中事件始终只产生一次聊天和一次 actionbar；玩家 `di` tag 跨更新保留。
+- `summontext` 从 V1/V2 生成不同文本，旧文字实体在更新后仍存在。
+- 三个新年活动命令保持原活动窗口：当前已过期，不会因为模块迁移而重新开放。活动窗口内烟花发放、团子碰撞和爆竹爆炸没有通过网络客户端验证。
+- 新检查共追踪 70 个加载器，GC 后只剩当前 5 个；常驻宿主任务数保持 18，没有随更新次数增加。
+- 整个在线切换期间宿主 `instanceId` 不变。
+
+记录位于该隔离目录的 `integration.json`、`module-split-validation.json` 和对应日志。复现时先使用当前完整宿主启动测试服，再执行：
+
+```sh
+python3 scripts/paper_fixtures.py --server-dir build/paper-modules-20261030 \
+  --java-home /path/to/jdk25 --label new-unique-label
+python3 scripts/paper_exercise.py --server-dir build/paper-modules-20261030 \
+  --fixtures build/paper-modules-20261030/fixtures/new-unique-label/fixtures.json
+python3 scripts/paper_module_split.py --server-dir build/paper-modules-20261030 \
+  --fixtures build/paper-modules-20261030/fixtures/new-unique-label/fixtures.json
+```
+
+这些 Python 命令仅用于隔离 Paper 故障注入测试；生产更新继续由 main push → Orin KTS 自动触发。

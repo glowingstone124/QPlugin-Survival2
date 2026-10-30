@@ -5,7 +5,7 @@ Minecraft Paper server plugins for Quantum Original.
 ## CI/CD and hot updates
 
 The `main` branch includes a permanent module host and independently loaded
-`sponsor-prefix` and `daily-login` business modules. Existing login, QMod verification and NMS services
+`sponsor-prefix`, `daily-login`, `combat-feedback`, `text-displays` and `seasonal-events` business modules. Existing login, QMod verification and NMS services
 remain in the host. See [hot-update deployment and development](docs/hot-update.md)
 and [Orin pipeline templates](ci/orin/README.md).
 

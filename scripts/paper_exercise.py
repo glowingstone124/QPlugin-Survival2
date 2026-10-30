@@ -25,6 +25,8 @@ def exercise(server, fixture_file):
     def status():
         return json.loads((hot / "status.json").read_text())
 
+    initial = status()
+
     def check(name, condition):
         if not condition:
             raise AssertionError(name)
@@ -76,7 +78,7 @@ def exercise(server, fixture_file):
         failed = deploy("broken", 1)
         check("health failure confirmed rollback", json.loads(failed.stdout)["code"] == "ROLLED_BACK")
         check("failed transaction kept persistent pointers", json.loads((hot / "state.json").read_text()) == old_state)
-        check("old business handlers restored", "[V2]" in client.probe("hot-event QHotTester")["display"] and len(status()["modules"]) == 2)
+        check("old business handlers restored", "[V2]" in client.probe("hot-event QHotTester")["display"] and len(status()["modules"]) == len(initial["modules"]))
         client.command("qhot rollback")
         deadline = time.monotonic() + 15
         while status()["activeRelease"] != old_state["previous"] and time.monotonic() < deadline:
@@ -101,7 +103,7 @@ def exercise(server, fixture_file):
         check("listener and task counts stable", all(final[key] == before[key] for key in ("hostTasks", "modulePlayerJoinHandlers", "moduleCommandHandlers")))
         client.probe("gc"); time.sleep(1); client.probe("gc"); time.sleep(1)
         evidence["resources"] = client.probe("resources")
-        check("only active module loaders remain", evidence["resources"]["aliveTrackedLoaders"] == 2)
+        check("only active module loaders remain", evidence["resources"]["aliveTrackedLoaders"] == len(initial["modules"]))
 
         # Corrupt candidates use unique IDs and never alter immutable releases already on the host.
         base = Path(fixtures["v2"])

@@ -57,9 +57,57 @@ public final class PaperProbe extends JavaPlugin implements Listener {
             case "spawn" -> spawn(args.length > 1 ? args[1] : "QHotTester");
             case "join" -> join(args.length > 1 ? args[1] : "QHotTester", false, false);
             case "hot-event" -> join(args.length > 1 ? args[1] : "QHotTester", true, args.length > 2 && args[2].equals("clear"));
+            case "module-command" -> moduleCommand(args);
+            case "module-tab" -> moduleTab(args);
+            case "combat-event" -> combatEvent(args[1]);
+            case "text-target" -> textTarget(args[1]);
+            case "text-count" -> Map.of("texts", Objects.requireNonNull(Bukkit.getWorld("world")).getEntitiesByClass(org.bukkit.entity.TextDisplay.class)
+                .stream().map(display -> PlainTextComponentSerializer.plainText().serialize(display.text())).toList());
             case "benchmark" -> { benchmark(sender, args.length > 1 ? Integer.parseInt(args[1]) : 20000, args.length > 2 ? Integer.parseInt(args[2]) : 60); yield null; }
             default -> Map.of("error", "Unknown probe command");
         };
+    }
+    private Player view(Player real, List<String> messages) {
+        return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[]{Player.class}, (proxy, method, values) -> {
+            if ((method.getName().equals("sendMessage") || method.getName().equals("sendActionBar")) && values != null && values.length > 0) {
+                Object value = values[0];
+                if (value instanceof Component text) messages.add(PlainTextComponentSerializer.plainText().serialize(text));
+                else if (value instanceof String text) messages.add(text);
+                return null;
+            }
+            return method.invoke(real, values);
+        });
+    }
+    private Object moduleCommand(String[] args) {
+        Player real = Objects.requireNonNull(Bukkit.getPlayerExact(args[1]));
+        List<String> messages = new ArrayList<>();
+        var command = Objects.requireNonNull(((JavaPlugin) Objects.requireNonNull(host())).getCommand(args[2]));
+        boolean result = command.execute(view(real, messages), args[2], Arrays.copyOfRange(args, 3, args.length));
+        return Map.of("result", result, "messages", messages, "indicator", real.getScoreboardTags().contains("di"));
+    }
+    private Object moduleTab(String[] args) {
+        Player player = Objects.requireNonNull(Bukkit.getPlayerExact(args[1]));
+        var command = Objects.requireNonNull(((JavaPlugin) Objects.requireNonNull(host())).getCommand(args[2]));
+        return Map.of("suggestions", command.tabComplete(player, args[2], Arrays.copyOfRange(args, 3, args.length)));
+    }
+    private Object combatEvent(String name) throws Exception {
+        Player real = Objects.requireNonNull(Bukkit.getPlayerExact(name));
+        List<String> messages = new ArrayList<>();
+        Player view = view(real, messages);
+        var arrow = (org.bukkit.entity.Arrow) Proxy.newProxyInstance(org.bukkit.entity.Arrow.class.getClassLoader(), new Class<?>[]{org.bukkit.entity.Arrow.class},
+            (proxy, method, values) -> method.getName().equals("getShooter") ? view : null);
+        Bukkit.getPluginManager().callEvent(new org.bukkit.event.entity.ProjectileHitEvent(arrow, real));
+        return Map.of("messages", messages);
+    }
+    private Object textTarget(String name) {
+        Player player = Objects.requireNonNull(Bukkit.getPlayerExact(name));
+        var world = Objects.requireNonNull(Bukkit.getWorld("world"));
+        var point = world.getSpawnLocation().add(0.5, 0, 0.5);
+        point.setYaw(0); point.setPitch(0);
+        player.teleport(point);
+        var eye = player.getEyeLocation();
+        world.getBlockAt(eye.getBlockX(), eye.getBlockY(), eye.getBlockZ() + 3).setType(org.bukkit.Material.STONE);
+        return Map.of("target", true);
     }
     private Object spawn(String name) throws Exception {
         if (Bukkit.getPlayerExact(name) != null) return Map.of("player", name, "existing", true);

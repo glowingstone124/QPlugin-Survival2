@@ -2,6 +2,8 @@ package vip.qoriginal.quantumplugin.hot;
 
 import org.bukkit.Bukkit;
 import org.bukkit.event.*;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.plugin.java.JavaPlugin;
 import vip.qoriginal.quantumplugin.hot.runtime.ModulePlatform;
 import java.io.IOException;
@@ -16,6 +18,7 @@ final class BukkitModulePlatform implements ModulePlatform {
     private final JavaPlugin plugin;
     private final Path root;
     private final String hostName;
+    private final java.util.Set<String> boundCommands = new java.util.HashSet<>();
     BukkitModulePlatform(JavaPlugin plugin, Path root, String hostName) {
         this.plugin = plugin; this.root = root; this.hostName = hostName;
     }
@@ -41,6 +44,22 @@ final class BukkitModulePlatform implements ModulePlatform {
         requireMainThread();
         var task = Bukkit.getScheduler().runTaskTimer(plugin, callback, delayTicks, periodTicks);
         return task::cancel;
+    }
+    @Override public AutoCloseable command(String name, CommandExecutor executor, TabCompleter completer) {
+        requireMainThread();
+        var command = plugin.getCommand(name);
+        if (command == null || command.getPlugin() != plugin) throw new IllegalArgumentException("Declare command in this host's plugin.yml: " + name);
+        if (!boundCommands.add(name)) throw new IllegalStateException("Command already owned by another module: " + name);
+        var previousExecutor = command.getExecutor();
+        var previousCompleter = command.getTabCompleter();
+        command.setExecutor(executor);
+        command.setTabCompleter(completer);
+        return () -> {
+            requireMainThread();
+            if (command.getExecutor() == executor) command.setExecutor(previousExecutor);
+            if (command.getTabCompleter() == completer) command.setTabCompleter(previousCompleter);
+            boundCommands.remove(name);
+        };
     }
     @Override public AutoCloseable watchTextFile(Path file, int maxBytes, long periodTicks, Consumer<String> callback) {
         requireMainThread();

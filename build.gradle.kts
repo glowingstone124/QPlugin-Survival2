@@ -35,7 +35,7 @@ allprojects {
 	}
 }
 
-val hotModules = listOf("sponsor-prefix", "daily-login")
+val hotModules = listOf("sponsor-prefix", "daily-login", "combat-feedback", "text-displays", "seasonal-events")
 val javaProjects = (listOf("common", "survival", "creative", "chambers", "hot-api", "hot-runtime", "test-support:paper-probe") + hotModules.map { "modules:$it" }).map { project(":$it") }
 val gsonDependency = libs.com.google.code.gson.gson
 val kotlinStdlibDependency = libs.org.jetbrains.kotlin.kotlin.stdlib
@@ -194,12 +194,20 @@ configure(hotModules.map { project(":modules:$it") }) {
 		val moduleVersion = hotReleaseId.get()
 		inputs.property("releaseId", moduleVersion)
 		filesMatching("META-INF/qplugin-module.properties") {
-			expand("moduleVersion" to moduleVersion)
+			expand("moduleVersion" to moduleVersion, "apiVersion" to 2)
 		}
 	}
 }
 
+val hotModuleIndexOutput = layout.buildDirectory.file("generated/hot-modules/modules.properties")
+val writeHotModuleIndex = tasks.register<WriteProperties>("writeHotModuleIndex") {
+	destinationFile.set(hotModuleIndexOutput)
+	property("modules", hotModules.joinToString(","))
+}
+
 project(":common").tasks.named<ProcessResources>("processResources") {
+	dependsOn(writeHotModuleIndex)
+	from(hotModuleIndexOutput) { into("hot-modules") }
 	hotModules.forEach { module ->
 		dependsOn(":modules:$module:jar")
 		from(project(":modules:$module").tasks.named("jar")) {

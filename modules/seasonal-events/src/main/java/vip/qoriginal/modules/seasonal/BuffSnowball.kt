@@ -1,10 +1,9 @@
-package vip.qoriginal.quantumplugin.patch
+package vip.qoriginal.modules.seasonal
 
 
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
-import org.bukkit.Bukkit
 import org.bukkit.FireworkEffect
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
@@ -25,15 +24,12 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
-import vip.qoriginal.quantumplugin.QuantumPlugin
-import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.random.Random
 
-class BuffSnowball: CommandExecutor, Listener {
-	val list = Files.readString(Path.of("newyear.txt")).split("\n".toRegex())
-	val customSnowball = NamespacedKey(QuantumPlugin.getInstance(), "buff_snowball")
-	val customSnowballTriggeredFirework = NamespacedKey(QuantumPlugin.getInstance(), "buff_snowball_firework")
+class BuffSnowball(private val runtime: SeasonalRuntime): CommandExecutor, Listener {
+	val list get() = runtime.greetings
+	val customSnowball = NamespacedKey("quantumplugin", "buff_snowball")
+	val customSnowballTriggeredFirework = NamespacedKey("quantumplugin", "buff_snowball_firework")
 	override fun onCommand(
 		sender: CommandSender,
 		command: Command,
@@ -82,19 +78,7 @@ class BuffSnowball: CommandExecutor, Listener {
 						projectile.velocity = v.clone().setX(v.x * horizontalMultiplier)
 							.setZ(v.z * horizontalMultiplier)
 						projectile.persistentDataContainer.set(customSnowball, PersistentDataType.BYTE, 1)
-						Bukkit.getScheduler().runTaskTimer(QuantumPlugin.getInstance(), Runnable {
-							if (!projectile.isDead && !projectile.isOnGround) {
-								projectile.world.spawnParticle(
-									Particle.FIREWORK,
-									projectile.location,
-									5,
-									0.2,
-									0.2,
-									0.2,
-									0.01
-								)
-							}
-						}, 0L, 1L)
+						runtime.track(projectile)
 					} else {
 						event.isCancelled = true
 						itemInHand.amount -= 1
@@ -128,9 +112,8 @@ class BuffSnowball: CommandExecutor, Listener {
 				)
 				firework.fireworkMeta = fireworkMeta
 
-				Bukkit.getScheduler().runTask(QuantumPlugin.getInstance(), Runnable {
-					firework.detonate()
-				})
+				firework.persistentDataContainer.set(customSnowballTriggeredFirework, PersistentDataType.BYTE, 1)
+				runtime.detonateNextTick(firework)
 
 				if (hitEntity is Player) {
 					hitEntity.addPotionEffect(effectList[Random.nextInt(effectList.size)])
@@ -149,7 +132,8 @@ class BuffSnowball: CommandExecutor, Listener {
 	}
 
 
-	val effectList = listOf(
+	// Bukkit potion registries are accessed only by an active main-thread event callback.
+	val effectList get() = listOf(
 		PotionEffect(
 			PotionEffectType.REGENERATION,
 			5 * 20,

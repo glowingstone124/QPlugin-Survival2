@@ -183,7 +183,7 @@ public final class BukkitHotModules implements Listener, AutoCloseable {
         Path temporary = Files.createTempDirectory(root.resolve("releases"), ".builtin-");
         try {
             List<ReleaseManifest.Artifact> artifacts = new ArrayList<>();
-            for (String name : List.of("sponsor-prefix", "daily-login")) {
+            for (String name : builtinModuleNames()) {
                 Path jar = temporary.resolve(name + ".jar");
                 try (var input = plugin.getResource("hot-modules/" + name + ".jar")) {
                     if (input == null) throw new IOException("Plugin JAR has no bundled " + name + " module");
@@ -208,6 +208,21 @@ public final class BukkitHotModules implements Listener, AutoCloseable {
                 for (Path file : files.sorted(Comparator.reverseOrder()).toList()) Files.delete(file);
             }
         }
+    }
+    private List<String> builtinModuleNames() throws IOException {
+        Properties index = new Properties();
+        try (var input = plugin.getResource("hot-modules/modules.properties")) {
+            if (input == null) throw new IOException("Plugin JAR has no module index");
+            index.load(input);
+        }
+        String[] names = index.getProperty("modules", "").split(",", -1);
+        if (names.length < 1 || names.length > 16) throw new IOException("Invalid bundled module count");
+        Set<String> unique = new HashSet<>();
+        for (String name : names) {
+            ReleaseManifest.requireName(name);
+            if (!unique.add(name)) throw new IOException("Duplicate bundled module");
+        }
+        return List.of(names);
     }
     private synchronized void writeStatus() throws IOException {
         var state = manager.status();

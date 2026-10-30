@@ -65,7 +65,7 @@ def inventory():
         try:
             hot = json.loads((directory / 'plugins/QuantumPlugin/hot/status.json').read_text())
             result['targets'][role]['hot'] = {key: hot.get(key) for key in (
-                'hostName', 'hostCodeSha256', 'running', 'phase', 'activeRelease', 'previousRelease',
+                'apiVersion', 'modules', 'hostName', 'hostCodeSha256', 'running', 'phase', 'activeRelease', 'previousRelease',
                 'restartRequired', 'updatedAt', 'instanceId')}
         except (OSError, ValueError): pass
     for proc in Path('/proc').glob('[0-9]*'):
