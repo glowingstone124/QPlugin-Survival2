@@ -4,7 +4,7 @@ Minecraft Paper server plugins for Quantum Original.
 
 ## CI/CD and hot updates
 
-The `hot-update` branch includes a permanent module host and independently loaded
+The `main` branch includes a permanent module host and independently loaded
 `sponsor-prefix` and `daily-login` business modules. Existing login, QMod verification and NMS services
 remain in the host. See [hot-update deployment and development](docs/hot-update.md)
 and [Orin pipeline templates](ci/orin/README.md).
@@ -12,7 +12,8 @@ and [Orin pipeline templates](ci/orin/README.md).
 Real Paper update/rollback checks and performance measurements are recorded in
 [local Paper validation](docs/paper-validation.md).
 
-For the existing production node, follow the [production deployment runbook](docs/orin-production-deployment.md).
+Pushes to `main` automatically build and deploy through Orin. See [automatic deployment](docs/orin-auto-deployment.md).
+The [manual recovery runbook](docs/orin-production-deployment.md) remains available for emergencies.
 
 ```sh
 ./gradlew build packageHotRelease -PreleaseId=<commit-or-unique-build-id>

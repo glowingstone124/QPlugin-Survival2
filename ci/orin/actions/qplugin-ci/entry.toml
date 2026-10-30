@@ -1,0 +1,4 @@
+entry = "main.kts"
+
+[kts]
+expose = ["pipeline", "trigger", "github", "inputs", "paths", "job"]

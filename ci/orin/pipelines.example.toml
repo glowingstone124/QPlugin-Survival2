@@ -2,6 +2,14 @@
 # Set Runner.actionTimeoutSeconds >= 2400 in the existing [Runner] section.
 
 [[Pipeline]]
+name = "qplugin-ci"
+enabled = true
+repository = "QPlugin-Survival2"
+triggers = ["github.push", "manual", "cluster"]
+manualToken = "replace-with-ci-trigger-secret"
+actions = ["qplugin-ci"]
+
+[[Pipeline]]
 name = "qplugin-build"
 enabled = true
 triggers = ["manual", "cluster"]

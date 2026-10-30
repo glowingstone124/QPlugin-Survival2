@@ -62,6 +62,12 @@ def inventory():
                 update_folder = line.split(':', 1)[1].strip().strip('"\'')
         result['targets'][role] = {'directory': str(directory), 'updateFolder': update_folder,
             'configuredPort': int(settings.get('server-port', 25565)), 'jars': [p.name for p in (directory / 'plugins').glob('*QuantumPlugin*.jar')]}
+        try:
+            hot = json.loads((directory / 'plugins/QuantumPlugin/hot/status.json').read_text())
+            result['targets'][role]['hot'] = {key: hot.get(key) for key in (
+                'hostName', 'hostCodeSha256', 'running', 'phase', 'activeRelease', 'previousRelease',
+                'restartRequired', 'updatedAt', 'instanceId')}
+        except (OSError, ValueError): pass
     for proc in Path('/proc').glob('[0-9]*'):
         try:
             executable = Path(os.readlink(proc / 'exe')).name
@@ -89,7 +95,8 @@ def inventory():
                 result['containers'].append({'id': container['Id'][:12], 'name': container['Name'], 'roles': roles,
                     'running': state.get('Running'), 'pid': state.get('Pid'), 'image': config.get('Image'),
                     'ports': container.get('NetworkSettings', {}).get('Ports'), 'mounts': mounts,
-                    'restartPolicy': container.get('HostConfig', {}).get('RestartPolicy')})
+                    'restartPolicy': container.get('HostConfig', {}).get('RestartPolicy'),
+                    'autoRemove': container.get('HostConfig', {}).get('AutoRemove')})
     for role, target in result['targets'].items():
         port = next((p.get('port', target['configuredPort']) for p in result['processes'] if p['cwd'] == target['directory']), target['configuredPort'])
         for container in result['containers']:

@@ -48,6 +48,30 @@ def java_process(container_id):
     return pids[0], token
 
 
+def resume_backend(directory, original):
+    """Follow MCSManager's replacement container, or start an unmanaged stopped container."""
+    deadline = time.monotonic() + 45
+    while time.monotonic() < deadline:
+        try:
+            current = find_container(directory)
+        except RuntimeError:
+            # MCSManager removes its old --rm container before creating the replacement.
+            time.sleep(1)
+            continue
+        if current['Id'] != original['Id']:
+            if (current.get('Name') != original.get('Name')
+                    or current.get('Config', {}).get('Image') != original.get('Config', {}).get('Image')
+                    or current.get('HostConfig', {}).get('PortBindings') != original.get('HostConfig', {}).get('PortBindings')):
+                raise RuntimeError('Replacement backend container has unexpected identity/configuration')
+        if current['State']['Running']:
+            if java_pids(current['Id']): return current
+        elif not original.get('HostConfig', {}).get('AutoRemove'):
+            docker('start', current['Id'])
+            return current
+        time.sleep(1)
+    raise RuntimeError('Backend supervisor did not restore Java within 45 seconds; no force restart was sent')
+
+
 def alive(pid, token):
     try:
         values = (Path('/proc') / str(pid) / 'stat').read_text().rsplit(')', 1)[1].split()
@@ -124,17 +148,8 @@ def install(archive, hot, host):
         deadline = time.monotonic() + 150
         while alive(pid, token) and time.monotonic() < deadline: time.sleep(1)
         if alive(pid, token): raise RuntimeError('Graceful shutdown exceeded 150 seconds; no SIGKILL was sent')
-        # Docker start preserves all existing ports, bind mounts and launch arguments.
-        for _ in range(10):
-            state = json.loads(docker('inspect', container['Id']))[0]['State']
-            if not state['Running']: break
-            time.sleep(1)
-        state = json.loads(docker('inspect', container['Id']))[0]['State']
-        if state['Running']:
-            # A supervisor may already have restored Java. Never restart it again or force-kill a wrapper.
-            if not java_pids(container['Id']):
-                raise RuntimeError('Java saved and exited, but the container wrapper remains running; stop/start it manually. Backup: ' + str(backup))
-        else: docker('start', container['Id'])
+        container = resume_backend(directory, container)
+        before['resumedContainer'] = container['Id'][:12]
         deadline = time.monotonic() + 240
         while time.monotonic() < deadline:
             try:

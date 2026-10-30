@@ -54,5 +54,26 @@ class HostInstallationTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'exactly one Java'):
                 installer.java_process('container')
 
+    def test_follows_mcs_recreated_container_without_starting_another(self):
+        original = {'Id': 'old', 'Name': '/creative', 'Config': {'Image': 'jdk25'}, 'HostConfig': {'AutoRemove': True}}
+        current = dict(original, Id='new', State={'Running': True})
+        with patch.object(installer, 'find_container', side_effect=[RuntimeError('not created'), current]), patch.object(installer, 'java_pids', return_value=[123]), patch.object(installer, 'docker') as docker, patch.object(installer.time, 'sleep'):
+            self.assertEqual('new', installer.resume_backend(self.root, original)['Id'])
+            docker.assert_not_called()
+
+    def test_recreated_container_must_preserve_identity(self):
+        original = {'Id': 'old', 'Name': '/creative', 'Config': {'Image': 'jdk25'}, 'HostConfig': {'AutoRemove': True}}
+        current = dict(original, Id='new', Name='/other', State={'Running': True})
+        with patch.object(installer, 'find_container', return_value=current), patch.object(installer, 'docker') as docker:
+            with self.assertRaisesRegex(RuntimeError, 'unexpected identity'):
+                installer.resume_backend(self.root, original)
+            docker.assert_not_called()
+
+    def test_starts_same_stopped_unmanaged_container(self):
+        current = {'Id': 'same', 'State': {'Running': False}, 'HostConfig': {'AutoRemove': False}}
+        with patch.object(installer, 'find_container', return_value=current), patch.object(installer, 'docker') as docker:
+            self.assertEqual('same', installer.resume_backend(self.root, current)['Id'])
+            docker.assert_called_once_with('start', 'same')
+
 
 if __name__ == '__main__': unittest.main()

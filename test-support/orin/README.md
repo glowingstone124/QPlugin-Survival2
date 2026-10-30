@@ -21,3 +21,7 @@ QPLUGIN_DOWNLOADS="$PWD/build/orin-smoke/downloads" QPLUGIN_BUILD_NODE= \
 ```
 
 两项故障注入会出现预期的失败日志；只有程序最终返回 0 并打印所有 `PASS` 才表示验证成功。
+
+`OrinCiSmoke.kt` 另验证 `qplugin-ci` 的 GitHub 精确 SHA、分支/仓库/删除过滤、构建一次、
+创造服先行、热模块与完整宿主模式选择，以及首台失败后停止。使用支持新 GitHub 上下文的 Orin JAR，
+同样编译该文件，再运行 `OrinCiSmokeKt <隔离目录> "$PWD/ci/orin/actions/qplugin-ci"`。

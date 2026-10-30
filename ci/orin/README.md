@@ -5,7 +5,8 @@
 
 QPlugin 的构建、测试、产物存储和部署均由现有 Orin 执行。
 这些 action 使用现有 Orin 的 `executeSh`、`publishArtifact`、`remote().trigger()`、`await()` 和 `downloadArtifact()`。
-无需修改 Orin 核心，也没有新增公网管理端口。Bukkit 端通过插件数据目录中的文件请求接收部署。
+日常使用 [main 推送自动部署](../../docs/orin-auto-deployment.md)，由 `qplugin-ci` KTS action 构建一次并依次部署两个后端，无需手工运行 Python 触发器。
+Orin 需暴露 GitHub 分支、SHA、删除标记及完整仓库名；没有新增公网管理端口。Bukkit 端通过插件数据目录中的文件请求接收部署。
 
 现有节点为 `10.10.0.1`（SSH 端口 66），Orin 工作目录为 `/opt/server/orin`，由 MCSManager 管理。
 如果部署账号需要免密检查和重启 Orin，由管理员执行一次：
@@ -66,7 +67,7 @@ Orin 进程环境变量：
 | `QPLUGIN_HTTP_PROXY` | 可选，QPlugin 构建子进程专用 HTTP 代理；同时配置 Git 与 Java/Gradle 下载 |
 
 构建节点安装 JDK 25、Git、Python 3，并能访问构建依赖。部署节点安装 Python 3，运行账号需能写入该后端的热更新目录。
-可将 [orin.env.example](orin.env.example) 中的值加入当前 Orin 服务环境；示例使用 `hot-update` 分支。
+可将 [orin.env.example](orin.env.example) 中的值加入当前 Orin 服务环境；默认分支为 `main`。
 也可直接将该文件复制到 Orin 工作目录的 `qplugin.env`，使用不带引号的 `KEY=value` 格式；
 action 会读取这个文件，已设置的进程环境变量优先。MCSManager 启动参数无需为此修改。
 构建脚本会检查 `bin/java` 和 `bin/javac`，单独设置子进程的 `JAVA_HOME`、`PATH`，并通过
@@ -91,10 +92,10 @@ manual/github.push 触发仍将 ZIP 保存在同一个持久目录，并记录�
 只有 Bukkit 端确认 active 版本、健康检查及状态持久化成功，action 才成功。
 默认模块部署在宿主不兼容或清理失败时返回失败并提示重启；显式宿主安装流程才会停止对应后端，Velocity 保持运行。
 
-示例 Pipeline 默认只开放认证的手动/集群触发，方便先在测试服验证。
-确认后可在部署 Pipeline 增加 `github.push` 触发，并设置正确的仓库名；原有 GitHub HMAC 校验继续由 Orin 执行。
-当前 Orin KTS 上下文没有 push 的 head SHA/分支字段，自动触发时构建抓取到的默认分支，并以实际抓取的 SHA 标识。
-需要精确部署某个提交时，通过认证手动触发的 `inputs.revision` 指定完整 SHA。
+`qplugin-ci` Pipeline 开放 GitHub push，通过原有 Orin HMAC 校验后，KTS action 核对完整仓库名、
+`refs/heads/main`、删除标记和完整 `after` SHA，构建该次推送并依次部署创造服、生存服。
+其余单独的 build/deploy Pipeline 保留认证手动/集群触发，供诊断及恢复使用。
+旧版 Orin 缺少上述上下文字段时必须先升级，不使用默认分支最新状态代替推送 SHA。
 
 例如分别向 `/trigger/qplugin-deploy-survival` 或 `/trigger/qplugin-deploy-creative` 提交：
 
